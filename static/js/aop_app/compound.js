@@ -29,19 +29,29 @@ $(document).ready(() => {
                     url: "",
                 };
             }
+
+            // Update compound_data and populate the table
+            compound_data[option.SMILES] = {
+                compoundCell: `<a href="${compoundMapping[option.SMILES].url}" class="compound-link" target="_blank">${option.Term}</a>`,
+                pubChemCell: `<a href="${compoundMapping[option.cid].url}" class="cid-link" target="_blank">${compoundMapping[option.cid].cid}</a>`
+            };
+
             tableBody.append(`
                 <tr>
                     <td>
                         <img src="https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi=${encodedSMILES}" 
                              alt="${option.SMILES}" />
-                        <p><a href="${compoundMapping[option.SMILES].url}" class="compound-link" target="_blank">${option.Term}</a></p> 
-                        <p>PubChem ID: <a href="${compoundMapping[option.cid].url}" class="cid-link" target="_blank">${compoundMapping[option.cid].cid}</a></p>
+                        <p>${compound_data[option.SMILES].compoundCell}</p> 
+                        <p>PubChem ID: ${compound_data[option.SMILES].pubChemCell}</p>
                     </td>
                 </tr>
             `);
         });
     }).fail(() => {
-        console.error("Failed to fetch compounds.");
+        console.error("Failed to fetch compounds. Retrying...");
+        setTimeout(() => {
+            location.reload();
+        }, 400); // Retry
     });
 
     // Enable row selection to filter the Cytoscape network by compound.
@@ -49,19 +59,15 @@ $(document).ready(() => {
         if ($(e.target).is("a") || $(e.target).is("button")) return; // Prevent row click when clicking on a link or button
         if (!fetched_preds) return;
 
-        const compoundLink = $(this).find(".compound-link"); // Select the compound-link element.
+        const compoundLink = $(this).find("td:first-child a"); // Adjusted selector to locate the compound link in the first <td>.
         if (compoundLink.length) {
-            console.log('compoundLink', compoundLink);
             compoundLink.toggleClass("selected"); // Toggle the 'selected' class on the compound-link element.
 
             const compoundName = compoundLink.text().trim(); // Get the compound name from the link text.
             if (compoundName) {
                 const cyNode = cy.nodes(`[label="${compoundName}"]`); // Find the Cytoscape node with the same label.
                 if (cyNode.length) {
-                    console.log(cyNode);
                     cyNode.toggleClass("selected"); // Toggle the 'selected' class on the Cytoscape node.
-                } else {
-                    console.log('no cy node');
                 }
             }
         }
@@ -99,7 +105,7 @@ function updateCytoscapeSubset() {
 
     // Collect the names of compounds that are selected in the table.
     $("#compound_table tbody tr").each(function () {
-        const compoundLink = $(this).find(".compound-link");
+        const compoundLink = $(this).find("td:first-child a");
         if (compoundLink.hasClass("selected")) {
             const compoundName = compoundLink.text().trim();
             if (compoundName) {

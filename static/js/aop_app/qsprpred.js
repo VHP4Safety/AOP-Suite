@@ -1,6 +1,3 @@
-let compoundMapping = {};
-let modelToProteinInfo = {};
-let fetched_preds = false;
 var cy = cytoscape({
     container: document.getElementById('cy')
 });
@@ -72,18 +69,16 @@ $(document).ready(() => {
 
 function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMIE, response) {
     const table = $("#compound_table");
-    const tableHead = table.find("thead tr");
-    const tableBody = table.find("tbody");
+    const tableHead = table.find("thead").empty();
+    const tableBody = table.find("tbody").empty();
 
-    console.log("populateQsprPredMies called with response:", response);
-
-    if (!tableHead.find("th:contains('pChEMBL Target')").length) {
-        tableHead.append(`
-            <th>pChEMBL Target</th>
+    tableHead.append(`
+        <tr>
+            <th>Compound</th>
+            <th>Target</th>
             <th>Predicted pChEMBL</th>
-        `);
-        console.log("Added new columns to table header.");
-    }
+        </tr>
+    `);
 
     if (Array.isArray(response)) {
         const grouped = response.reduce((acc, pred) => {
@@ -92,44 +87,23 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
             return acc;
         }, {});
 
-        console.log("Grouped response by SMILES:", grouped);
-
-        const matchedRows = new Set();
         const cyElements = [];
-
         Object.entries(grouped).forEach(([smiles, predictions]) => {
-            console.log("Processing SMILES:", smiles, "with predictions:", predictions);
-
             const compound = compoundMapping[smiles];
-            const compoundId = (compound ? compound.term : smiles).trim();
-
-            console.log("Mapped compound:", compound, "Normalized Compound ID:", compoundId);
-
-            const compoundRow = tableBody.find("tr").filter(function () {
-                const rowSmiles = $(this).find("td img").attr("alt")?.trim();
-                console.log("Checking row SMILES:", rowSmiles, "against SMILES:", smiles);
-                return rowSmiles === smiles;
-            });
-
-            console.log("Found compoundRow for SMILES:", smiles, "Row:", compoundRow);
-
+            const compoundCell = compound ? `<a href="${compound.url}">${compound.term}</a>` : smiles;
             const targetCells = [];
             const pChEMBLCells = [];
 
             predictions.forEach(prediction => {
                 Object.entries(prediction).forEach(([model, value]) => {
-                    console.log("Processing prediction model:", model, "value:", value);
-
                     if (parseFloat(value) >= 6.5) {
                         const proteinInfo = modelToProteinInfo[model] || { proteinName: "Unknown Protein", uniprotId: "" };
                         const proteinLink = proteinInfo.uniprotId ? `<a href="https://www.uniprot.org/uniprotkb/${proteinInfo.uniprotId}" target="_blank">${proteinInfo.proteinName}</a>` : proteinInfo.proteinName;
-
-                        console.log("Protein info for model:", model, "Protein Info:", proteinInfo);
-
                         targetCells.push(`${proteinLink} (${model})`);
                         pChEMBLCells.push(value);
 
                         const targetNodeId = `https://identifiers.org/aop.events/${modelToMIE[model]}`;
+                        const compoundId = compound ? compound.term : smiles;
                         cyElements.push(
                             { data: { id: compoundId, label: compoundId, type: "chemical", smiles: smiles }, classes: "chemical-node" },
                             { data: { id: `${compoundId}-${targetNodeId}-${model}`, source: compoundId, target: `uniprot_${proteinInfo.uniprotId}`, value: value, type: "interaction", label: `pChEMBL: ${value} (${model})` } }
@@ -138,54 +112,33 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
                 });
             });
 
-            if (compoundRow.length) {
-                matchedRows.add(smiles);
-                console.log("Appending data to existing row for SMILES:", smiles);
-                compoundRow.append(`
-                    <td>${targetCells.join('<br>')}</td>
-                    <td>${pChEMBLCells.join('<br>')}</td>
-                `);
-            } else {
-                console.warn("No matching row found for SMILES:", smiles);
-            }
+            // Update compound_data and populate the table
+            compound_data[smiles] = {
+                compoundCell,
+                targetCells: targetCells.join('<br>'),
+                pChEMBLCells: pChEMBLCells.join('<br>')
+            };
+
+            tableBody.append(`
+                <tr>
+                    <td>
+                        <img src="https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=.4&annotate=cip&r=0&smi=${encodeURIComponent(smiles)}" 
+                             alt="${smiles}" />
+                        <br />
+                        ${compoundCell}
+                    </td>
+                    <td>${compound_data[smiles].targetCells}</td>
+                    <td>${compound_data[smiles].pChEMBLCells}</td>
+                </tr>
+            `);
         });
 
-        tableBody.find("tr").each(function () {
-            const rowSmiles = $(this).find("td img").attr("alt")?.trim();
-            if (!matchedRows.has(rowSmiles)) {
-                console.log("Appending empty columns for unmatched SMILES:", rowSmiles);
-                $(this).append(`
-                    <td></td>
-                    <td></td>
-                `);
-            }
-        });
-
-        console.log("Final Cytoscape elements to add:", cyElements);
-
-        const isMieNodes = cy.nodes().filter(node => node.data("is_mie")).toArray().map(node => node.id());
-
-        $.ajax({
-            url: `/add_qsprpred_compounds`,
-            type: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({ is_mie_nodes: isMieNodes, compound_mapping: compoundMapping, model_to_protein_info: modelToProteinInfo, model_to_mie: modelToMIE, response: response, cy_elements: cyElements }),
-            success: updatedCyElements => {
-                if (Array.isArray(updatedCyElements)) {
-                    console.log("Successfully updated Cytoscape elements:", updatedCyElements);
-                    cy.add(updatedCyElements);
-                    positionNodes(cy);
-                } else {
-                    console.error("Unexpected API response format:", updatedCyElements);
-                    alert("Error: Unexpected response format from server.");
-                }
-            },
-            error: (jqXHR, textStatus, errorThrown) => {
-                console.error("Error adding qsprpred compounds:", textStatus, errorThrown);
-                alert(`Error adding qsprpred compounds: ${textStatus} - ${errorThrown}`);
-            }
-        });
+        if (cyElements.length) {
+            cy.add(cyElements);
+            positionNodes(cy);
+        }
     } else {
-        console.error("Response is not an array:", response);
+        console.error("Unexpected API response format:", response);
+        alert("Error: Unexpected response format from server.");
     }
 }

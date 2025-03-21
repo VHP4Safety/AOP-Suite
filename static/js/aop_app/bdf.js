@@ -136,13 +136,47 @@ function populateBdfTableOT(data) {
 // Function to populate the Bgee table
 function populateBdfTableBgee(data) {
     const tableBody = $("#gene_table tbody");
+    const tableHead = $("#gene_table thead");
 
-    data.forEach(row => {
-        const geneRow = tableBody.find(`tr[data-gene="${row.identifier}"]`);
-        if (geneRow.length) {
-            const geneExpressionLevs = formatGeneExpressionLevs(row.Bgee_gene_expression_levels || []);
-            geneRow.find(".gene-expression-cell").html(geneExpressionLevs);
-        }
+    // Add headers if not already present
+    if (tableHead.find("tr").length === 1) {
+        tableHead.empty();
+        tableHead.append(`
+            <tr>
+                <th>Gene</th>
+                <th>Anatomical Entity</th>
+                <th>Confidence Level</th>
+                <th>Developmental Stage</th>
+                <th>Expression Level</th>
+            </tr>
+        `);
+    }
+
+    // Clear existing rows
+    tableBody.empty();
+
+    // Populate the table with data
+    Object.entries(data).forEach(([gene, geneData]) => {
+        const entries = geneData.Bgee_gene_expression_levels.map(entry => ({
+            gene: geneData.identifier,
+            anatomical_entity: `${entry.anatomical_entity_name || 'N/A'} (${entry.anatomical_entity_id || 'N/A'})`,
+            confidence_level: `${entry.confidence_level_name || 'N/A'} (${entry.confidence_level_id || 'N/A'})`,
+            developmental_stage: `${entry.developmental_stage_name || 'N/A'} (${entry.developmental_stage_id || 'N/A'})`,
+            expression_level: entry.expression_level !== undefined ? entry.expression_level.toFixed(2) : 'N/A'
+        }));
+
+        entries.forEach((entry, index) => {
+            const tr = $("<tr></tr>");
+            if (index === 0) {
+                // Add the gene name with rowspan for the first row of the group
+                tr.append(`<td rowspan="${entries.length}" class="gene-cell">${entry.gene}</td>`);
+            }
+            tr.append(`<td>${entry.anatomical_entity}</td>`);
+            tr.append(`<td>${entry.confidence_level}</td>`);
+            tr.append(`<td>${entry.developmental_stage}</td>`);
+            tr.append(`<td>${entry.expression_level}</td>`);
+            tableBody.append(tr);
+        });
     });
 
     console.log("Bgee data populated in the gene table.");

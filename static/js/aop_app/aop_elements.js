@@ -1,5 +1,3 @@
-let boundingBoxesVisible = false;
-let genesVisible = false;
 
 document.addEventListener("DOMContentLoaded", function () {
     // Fetch data for the AOP network.
@@ -29,10 +27,15 @@ document.addEventListener("DOMContentLoaded", function () {
             })),
             //layout: { name: "cose" }
         });
+
         
 
         console.debug("Cytoscape instance created with elements:", cy.elements());
         positionNodes(cy);
+        console.log('Update gene table');
+        toggleGeneView(cy);
+        positionNodes(cy);
+        populateGeneTable(cy);
 
         // Node click event.
         cy.on("tap", "node", function (evt) {
