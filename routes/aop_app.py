@@ -58,12 +58,12 @@ def get_compounds_q(q):
         return jsonify({"error": str(e)}), 500
     compound_list = []
     for _, row in compound_dat.iterrows():
-        cid = row.iloc[0] if row.iloc[0] else ""
+        cid = row.iloc[3] if row.iloc[3] else ""
         compound_list.append({
-            "ID": row.iloc[2],
-            "Term": row.iloc[3],
-            "SMILES": row.iloc[1],
-            "cid": str(cid)
+            "ID": row.iloc[1] if pd.notnull(row.iloc[1]) else "NA",
+            "Term": row.iloc[2] if pd.notnull(row.iloc[2]) else "NA",
+            "SMILES": row.iloc[0] if pd.notnull(row.iloc[0]) else "NA",
+            "cid": str(cid) if pd.notnull(cid) else "NA"
         })
     return jsonify(compound_list), 200
 
