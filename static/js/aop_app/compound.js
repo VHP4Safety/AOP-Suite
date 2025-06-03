@@ -1,73 +1,57 @@
 $(document).ready(() => {
-    // Load the compound table with clickable links.
-    const qid = $("#compound-container").data("qid"); // Corrected selector for 'qid'
+    const qid = $("#compound-container").data("qid");
     if (!qid) {
         console.error("No 'qid' found in #compound-container.");
         return;
     }
 
-    $.getJSON(`/get_compounds/${qid}`, data => {
-        console.log(data);
-        const loadingElement = document.getElementById("loading_compound");
-        if (loadingElement) {
-            loadingElement.style.display = "none";
-        }
-
-        const tableBody = $("#compound_table tbody").empty(); // Ensure correct table is targeted
-        data.forEach(option => {
-            const encodedSMILES = encodeURIComponent(option.SMILES);
-            compoundMapping[option.SMILES] = { term: option.Term, url: `/compound/${option.ID}`, target: "_blank" };
-            if (option.cid && option.cid !== "nan") {
-                compoundMapping[option.cid] = {
-                    cid: option.cid,
-                    url: `https://pubchem.ncbi.nlm.nih.gov/compound/${option.cid}`,
-                    target: "_blank"
-                };
-            } else {
-                compoundMapping[option.cid] = {
-                    cid: option.cid,
-                    url: "",
-                };
+    // Load compound table using backend endpoint
+    $.ajax({
+        url: `/populate_compound_table/${qid}`,
+        type: "GET",
+        success: response => {
+            const loadingElement = document.getElementById("loading_compound");
+            if (loadingElement) {
+                loadingElement.style.display = "none";
             }
 
-            // Update compound_data and populate the table
-            compound_data[option.SMILES] = {
-                compoundCell: `<a href="${compoundMapping[option.SMILES].url}" class="compound-link" target="_blank">${option.Term}</a>`,
-                pubChemCell: `<a href="${compoundMapping[option.cid].url}" class="cid-link" target="_blank">${compoundMapping[option.cid].cid}</a>`
-            };
-
-            tableBody.append(`
-                <tr>
-                    <td>
-                        <img src="https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi=${encodedSMILES}" 
-                             alt="${option.SMILES}" />
-                        <p>${compound_data[option.SMILES].compoundCell}</p> 
-                        <p>PubChem ID: ${compound_data[option.SMILES].pubChemCell}</p>
-                    </td>
-                </tr>
-            `);
-        });
-    }).fail(() => {
-        console.error("Failed to fetch compounds. Retrying...");
-        setTimeout(() => {
-            location.reload();
-        }, 400); // Retry
+            window.compoundMapping = response.compound_mapping;
+            window.compoundTableData = response.table_data;
+            
+            const tableBody = $("#compound_table tbody").empty();
+            response.table_data.forEach(compound => {
+                tableBody.append(`
+                    <tr>
+                        <td>
+                            <img src="${compound.img_url}" alt="${compound.smiles}" />
+                            <p>${compound.compound_cell}</p> 
+                            <p>PubChem ID: ${compound.pubchem_cell}</p>
+                        </td>
+                    </tr>
+                `);
+            });
+        },
+        error: () => {
+            console.error("Failed to fetch compounds. Retrying...");
+            setTimeout(() => {
+                location.reload();
+            }, 400);
+        }
     });
 
     // Enable row selection to filter the Cytoscape network by compound.
     $("#compound_table").on("click", "tbody tr", function (e) {
-        if ($(e.target).is("a") || $(e.target).is("button")) return; // Prevent row click when clicking on a link or button
+        if ($(e.target).is("a") || $(e.target).is("button")) return;
         if (!fetched_preds) return;
 
-        const compoundLink = $(this).find("td:first-child a"); // Adjusted selector to locate the compound link in the first <td>.
+        const compoundLink = $(this).find("td:first-child a");
         if (compoundLink.length) {
-            compoundLink.toggleClass("selected"); // Toggle the 'selected' class on the compound-link element.
-
-            const compoundName = compoundLink.text().trim(); // Get the compound name from the link text.
+            compoundLink.toggleClass("selected");
+            const compoundName = compoundLink.text().trim();
             if (compoundName) {
-                const cyNode = cy.nodes(`[label="${compoundName}"]`); // Find the Cytoscape node with the same label.
+                const cyNode = cy.nodes(`[label="${compoundName}"]`);
                 if (cyNode.length) {
-                    cyNode.toggleClass("selected"); // Toggle the 'selected' class on the Cytoscape node.
+                    cyNode.toggleClass("selected");
                 }
             }
         }
@@ -86,18 +70,26 @@ $(document).ready(() => {
 
 // function to collect all cids
 function getAllCIDs() {
-    const cids = [];
-    $("#compound_table tbody tr").each((_, tr) => {
-        const cidLink = $(tr).find(".cid-link");
-        if (cidLink.length) {
-            const cid = cidLink.text().trim();
-            if (cid) {
-                cids.push(cid);
-            }
+    return new Promise((resolve, reject) => {
+        if (!window.compoundTableData) {
+            reject("Compound table data not loaded");
+            return;
         }
+
+        $.ajax({
+            url: "/get_all_cids",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ table_data: window.compoundTableData }),
+            success: response => {
+                console.log('retrieved cids', response.cids);
+                resolve(response.cids);
+            },
+            error: () => {
+                reject("Error fetching CIDs");
+            }
+        });
     });
-    console.log('retrieved cids', cids);
-    return cids;
 }
 
 function updateCytoscapeSubset() {

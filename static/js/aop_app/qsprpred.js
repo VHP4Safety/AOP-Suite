@@ -45,6 +45,7 @@ $(document).ready(() => {
                     if (smiles) smilesList.push(smiles);
                 });
                 const models = Object.keys(modelToMIE);
+                console.log(models);
                 if (!models.length) return alert("Error: No models available for prediction.");
                 const thresholdElement = document.getElementById("threshold_pchembl");
                 const thresholdValue = parseFloat(thresholdElement ? thresholdElement.value : "6.5");

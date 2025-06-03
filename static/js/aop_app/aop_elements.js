@@ -1,4 +1,3 @@
-
 document.addEventListener("DOMContentLoaded", function () {
     // Fetch data for the AOP network.
     function fetchAOPData(mies) {
@@ -14,7 +13,6 @@ document.addEventListener("DOMContentLoaded", function () {
     function renderAOPNetwork(elements) {
         console.debug("Rendering AOP network with elements:", elements);
         document.getElementById("loading_aop").style.display = "none";
-        //document.getElementById("cy").style.backgroundColor = "#FFFFFF";
 
         // Create Cytoscape instance.
         cy = cytoscape({
@@ -25,17 +23,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     ...ele.data
                 }
             })),
-            //layout: { name: "cose" }
         });
-
-        
 
         console.debug("Cytoscape instance created with elements:", cy.elements());
         positionNodes(cy);
         console.log('Update gene table');
         toggleGeneView(cy);
         positionNodes(cy);
-        populateGeneTable(cy);
+        populateGeneTable();
 
         // Node click event.
         cy.on("tap", "node", function (evt) {
@@ -65,7 +60,6 @@ document.addEventListener("DOMContentLoaded", function () {
             console.debug(`Node added: ${evt.target.id()}`);
             positionNodes(cy);
         });
-
 
         // Toggle Bounding Boxes (AOP boxes) button functionality.
         $("#toggle_bounding_boxes").on("click", function () {
@@ -102,7 +96,6 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
 
-        // Update the style for bounding boxes (if dynamic changes are needed).
         positionNodes(cy);
     }
 
@@ -140,138 +133,73 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function updateCytoscapeSubset() {
-    const selectedIds = $("#compound_table tbody tr.selected")
-        .map((_, row) => $(row).find(".compound-link").text().trim())
-        .get();
-
-    if (!selectedIds.length) {
-        cy.elements().show();
-        cy.fit(cy.elements(), 50);
-        return;
-    }
-
-    const visited = new Set();
-    let activated = cy.collection();
-
-    // Depth-first search function, recursively traverse outgoing edges.
-    function dfs(node) {
-        if (visited.has(node.id())) return;
-        visited.add(node.id());
-        activated = activated.union(node);
-
-        node.outgoers('edge').forEach(edge => {
-            const target = edge.target();
-            // If target is a chemical node not in the selection, add it but don't traverse further.
-            if (target.hasClass('chemical-node') && !selectedIds.includes(target.id())) {
-                activated = activated.union(target);
-            } else {
-                dfs(target);
+    const selectedCompounds = [];
+    $("#compound_table tbody tr").each(function () {
+        const compoundLink = $(this).find("td:first-child a");
+        if (compoundLink.hasClass("selected")) {
+            const compoundName = compoundLink.text().trim();
+            if (compoundName) {
+                selectedCompounds.push(compoundName);
             }
-        });
-    }
-
-    // Start depth-first search only from selected chemical nodes.
-    selectedIds.forEach(id => {
-        const node = cy.getElementById(id);
-        if (!node.empty() && node.hasClass('chemical-node')) {
-            dfs(node);
         }
     });
 
-    // Keep only edges connecting activated nodes.
-    const activatedEdges = cy.edges().filter(edge =>
-        activated.contains(edge.source()) && activated.contains(edge.target())
-    );
-
-    cy.elements().hide();
-    activated.show();
-    activatedEdges.show();
-    cy.fit(activated, 50);
-    positionNodes(cy);
-}
-
-function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMIE, response) {
-    const table = $("#compound_table");
-    const tableHead = table.find("thead").empty();
-    const tableBody = table.find("tbody").empty();
-
-    tableHead.append(`
-            <tr>
-                <th>Compound</th>
-                <th>Target</th>
-                <th>Predicted pChEMBL</th>
-            </tr>
-        `);
-
-    if (Array.isArray(response)) {
-        const grouped = response.reduce((acc, pred) => {
-            const s = pred.smiles;
-            (acc[s] = acc[s] || []).push(pred);
-            return acc;
-        }, {});
-
-        const cyElements = [];
-        Object.entries(grouped).forEach(([smiles, predictions]) => {
-            const compound = compoundMapping[smiles];
-            const compoundCell = compound ? `<a href="${compound.url}">${compound.term}</a>` : smiles;
-            const targetCells = [];
-            const pChEMBLCells = [];
-
-            predictions.forEach(prediction => {
-                Object.entries(prediction).forEach(([model, value]) => {
-                    if (parseFloat(value) >= 6.5) {
-                        const proteinInfo = modelToProteinInfo[model] || { proteinName: "Unknown Protein", uniprotId: "" };
-                        const proteinLink = proteinInfo.uniprotId ? `<a href="https://www.uniprot.org/uniprotkb/${proteinInfo.uniprotId}" target="_blank">${proteinInfo.proteinName}</a>` : proteinInfo.proteinName;
-                        targetCells.push(`${proteinLink} (${model})`);
-                        pChEMBLCells.push(value);
-
-                        const targetNodeId = `https://identifiers.org/aop.events/${modelToMIE[model]}`;
-                        const compoundId = compound ? compound.term : smiles;
-                        cyElements.push(
-                            { data: { id: compoundId, label: compoundId, type: "chemical", smiles: smiles }, classes: "chemical-node" },
-                            { data: { id: `${compoundId}-${targetNodeId}-${model}`, source: compoundId, target: `uniprot_${proteinInfo.uniprotId}`, value: value, type: "interaction", label: `pChEMBL: ${value} (${model})` } }
-                        );
+    const cyElements = cy.elements().jsons();
+    
+    $.ajax({
+        url: "/update_cytoscape_subset",
+        type: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({
+            selected_compounds: selectedCompounds,
+            cy_elements: cyElements
+        }),
+        success: response => {
+            if (response.show_all) {
+                cy.elements().show();
+                cy.fit(cy.elements(), 50);
+            } else {
+                cy.elements().hide();
+                const visibleElements = cy.collection();
+                response.visible_elements.forEach(element => {
+                    const cyElement = cy.getElementById(element.data.id);
+                    if (!cyElement.empty()) {
+                        visibleElements.union(cyElement);
                     }
                 });
-            });
-
-            tableBody.append(`
-                <tr>
-                    <td>
-                        <img src="https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=.4&annotate=cip&r=0&smi=${encodeURIComponent(smiles)}" 
-                             alt="${smiles}" />
-                        <br />
-                        ${compoundCell}
-                    </td>
-                    <td>${targetCells.join('<br>')}</td>
-                    <td>${pChEMBLCells.join('<br>')}</td>
-                </tr>
-            `);
-        });
-
-        if (cyElements.length) {
-            cy.add(cyElements);
+                visibleElements.show();
+                cy.fit(visibleElements, 50);
+            }
             positionNodes(cy);
+        },
+        error: () => {
+            console.error("Error updating cytoscape subset");
         }
-    } else {
-        console.error("Unexpected API response format:", response);
-        alert("Error: Unexpected response format from server.");
-    }
+    });
 }
 
-function populateQaopTable(cy) {
-    const table = $("#qaop_table");
-    document.getElementById("loading_qaop_table").style.display = "none";
-    const tableBody = table.find("tbody").empty();
-    cy.edges().forEach(edge => {
-        if (edge.data('ker_label')) {
-            tableBody.append(`
-                <tr>
-                    <td><a href="${edge.source().data('id')}" target="_blank">${edge.source().data('label')}</a></td>
-                    <td>${edge.data('curie')}</td>
-                    <td><a href="${edge.target().data('id')}" target="_blank">${edge.target().data('label')}</a></td>
-                </tr>
-            `);
+function populateGeneTable() {
+    const cyElements = cy.elements().jsons();
+    
+    $.ajax({
+        url: "/populate_gene_table",
+        type: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ cy_elements: cyElements }),
+        success: response => {
+            const tableBody = $("#gene_table tbody").empty();
+            response.gene_data.forEach(gene => {
+                tableBody.append(`
+                    <tr data-gene="${gene.gene}">
+                        <td>${gene.gene}</td>
+                        <td class="gene-expression-cell">${gene.expression_cell}</td>
+                    </tr>
+                `);
+            });
+            console.log("Gene table populated.");
+        },
+        error: () => {
+            console.error("Error populating gene table");
         }
     });
 }
@@ -280,9 +208,38 @@ function populateQaopTable(cy) {
 $("#data-type-dropdown").on("change", function () {
     const selectedValue = $(this).val();
     if (selectedValue === "qaop_div") {
-        populateQaopTable(cy);
+        populateQaopTable();
     }
 });
+
+function populateQaopTable() {
+    const cyElements = cy.elements().jsons();
+    
+    $.ajax({
+        url: "/populate_qaop_table",
+        type: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ cy_elements: cyElements }),
+        success: response => {
+            const table = $("#qaop_table");
+            document.getElementById("loading_qaop_table").style.display = "none";
+            const tableBody = table.find("tbody").empty();
+            
+            response.qaop_data.forEach(item => {
+                tableBody.append(`
+                    <tr>
+                        <td><a href="${item.source_id}" target="_blank">${item.source_label}</a></td>
+                        <td>${item.curie}</td>
+                        <td><a href="${item.target_id}" target="_blank">${item.target_label}</a></td>
+                    </tr>
+                `);
+            });
+        },
+        error: () => {
+            console.error("Error populating QAOP table");
+        }
+    });
+}
 
 $("#see_genes").on("click", function () {
     if (genesVisible) {
@@ -296,7 +253,6 @@ $("#see_genes").on("click", function () {
         positionNodes(cy);
     }
 });
-
 
 function toggleGeneView(cy) {
     const mieNodeIds = cy.nodes().filter(node => node.data("is_mie")).map(node => node.id()).join(",");
@@ -315,6 +271,7 @@ function toggleGeneView(cy) {
                 cy.elements(".uniprot-node, .ensembl-node").show();
                 $("#see_genes").text("Hide Genes");
                 genesVisible = true;
+                populateGeneTable();
             } catch (error) {
                 console.warn("Error processing elements:", error);
             }

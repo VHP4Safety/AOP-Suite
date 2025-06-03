@@ -15,6 +15,12 @@ aop_app = Blueprint("aop_app", __name__)
 
 @aop_app.route("/get_dummy_data", methods=["GET"])
 def get_dummy_data():
+    """
+    Get dummy data for testing purposes.
+    
+    Returns:
+        tuple: JSON response with dummy compound data and status code 200
+    """
     results = [
         {"Compound": "Compound1", "SMILES": "Smile 1"},
         {"Compound": "Compound1", "SMILES": "Smile 1"},
@@ -70,11 +76,26 @@ def get_compounds_q(q):
 
 @aop_app.route("/get_compounds", methods=["GET"])
 def get_compounds_VHP():
+    """
+    Get compounds related to VHP (Q2059).
+    
+    Returns:
+        tuple: JSON response with compound data and status code
+    """
     return get_compounds_q("Q2059")
 
 
 @aop_app.route("/get_compound_identifiers/<cwid>")
 def show_compounds_identifiers_as_json(cwid):
+    """
+    Get compound identifiers for a specific compound.
+    
+    Args:
+        cwid (str): Compound Wikibase ID (must be valid QID format)
+        
+    Returns:
+        tuple: JSON response with property labels and values, or error message
+    """
     if not is_valid_qid(cwid):
         return jsonify({"error": "Invalid compound identifier"}), 400
     compoundwikiEP = "https://compoundcloud.wikibase.cloud/query/sparql"
@@ -105,6 +126,15 @@ def show_compounds_identifiers_as_json(cwid):
 
 @aop_app.route("/get_compound_expdata/<cwid>")
 def show_compounds_expdata_as_json(cwid):
+    """
+    Get experimental data for a specific compound from Wikidata.
+    
+    Args:
+        cwid (str): Compound Wikibase ID (must be valid QID format)
+        
+    Returns:
+        tuple: JSON response with experimental property data including values, units, sources, and DOIs
+    """
     if not is_valid_qid(cwid):
         return jsonify({"error": "Invalid compound identifier"}), 400
     compoundwikiEP = "https://compoundcloud.wikibase.cloud/query/sparql"
@@ -155,6 +185,15 @@ def show_compounds_expdata_as_json(cwid):
 
 @aop_app.route("/get_compound_properties/<cwid>")
 def show_compounds_properties_as_json(cwid):
+    """
+    Get basic properties for a specific compound including InChI key and SMILES.
+    
+    Args:
+        cwid (str): Compound Wikibase ID (must be valid QID format)
+        
+    Returns:
+        tuple: JSON response with compound properties or error message
+    """
     if not is_valid_qid(cwid):
         return jsonify({"error": "Invalid compound identifier"}), 400
     compoundwikiEP = "https://compoundcloud.wikibase.cloud/query/sparql"
@@ -191,6 +230,12 @@ def show_compounds_properties_as_json(cwid):
 
 @aop_app.route("/get_compounds_parkinson", methods=["GET"])
 def get_compounds_VHP_CS2():
+    """
+    Get compounds related to Parkinson's disease (Q5050).
+    
+    Returns:
+        tuple: JSON response with compound data and status code
+    """
     return get_compounds_q("Q5050")
 
 
@@ -243,10 +288,22 @@ def fetch_predictions(smiles, models, metadata, threshold=6.5):
 
 @aop_app.route("/get_predictions", methods=["POST"])
 def get_predictions():
+    """
+    Get QSPR predictions for compounds using specified models.
+    
+    Expected JSON payload:
+        smiles (list): List of SMILES strings
+        models (list): List of model names
+        metadata (dict): Model metadata
+        threshold (float, optional): Prediction threshold (default: 6.5)
+        
+    Returns:
+        tuple: JSON response with filtered predictions above threshold
+    """
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON input"}), 400
-    smiles = data.get("smiles", [])
+    smiles = [i for i in data.get("smiles", []) if i!= '']
     models = data.get("models", [])
     metadata = data.get("metadata", {})
     try:
@@ -324,7 +381,7 @@ def fetch_sparql_data(query):
                     "is_ao": ke_downstream == ao,
                     "uniprot_id": result.get("uniprot_id", {}).get("value", ""),
                     "protein_name": result.get("protein_name", {}).get("value", ""),
-                    "organ": result.get("KE_downstream_organ", {}).get("value", "nose"),
+                    "organ": result.get("KE_downstream_organ", {}).get("value", ""),
                     "aop": [aop] if aop else [],
                     "aop_title": [aop_title] if aop_title else [],
                 }
@@ -356,7 +413,19 @@ def fetch_sparql_data(query):
 
 @aop_app.route("/get_aop_network")
 def get_aop_network():
+    """
+    Get AOP (Adverse Outcome Pathway) network data for specified MIEs.
+    
+    Query Parameters:
+        mies (str): Space-separated list of MIE identifiers
+        
+    Returns:
+        tuple: JSON response with Cytoscape-formatted network elements
+    """
     mies = request.args.get("mies", "")
+    return get_aop_network_by_mies(mies)
+
+def get_aop_network_by_mies(mies):
     if not mies:
         return jsonify({"error": "MIEs parameter is required"}), 400
     AOPWIKIPARKINSONSPARQL_QUERY = (
@@ -383,6 +452,12 @@ def get_aop_network():
 
 @aop_app.route("/js/aop_app/populate_qsprpred.js")
 def serve_populate_qsprpred_js():
+    """
+    Serve the populate_qsprpred.js JavaScript file.
+    
+    Returns:
+        File response or error JSON
+    """
     try:
         return send_file("js/aop_app/populate_qsprpred.js")
     except Exception as e:
@@ -391,6 +466,12 @@ def serve_populate_qsprpred_js():
 
 @aop_app.route("/js/aop_app/populate_aop_network.js")
 def serve_populate_aop_network_js():
+    """
+    Serve the populate_aop_network.js JavaScript file.
+    
+    Returns:
+        File response or error JSON
+    """
     try:
         return send_file("js/aop_app/populate_aop_network.js")
     except Exception as e:
@@ -399,6 +480,12 @@ def serve_populate_aop_network_js():
 
 @aop_app.route("/js/aop_app/predict_qspr.js")
 def serve_predict_qspr_js():
+    """
+    Serve the predict_qspr.js JavaScript file.
+    
+    Returns:
+        File response or error JSON
+    """
     try:
         return send_file("js/aop_app/predict_qspr.js")
     except Exception as e:
@@ -407,6 +494,15 @@ def serve_predict_qspr_js():
 
 @aop_app.route("/get_compounds/<qid>", methods=["GET"])
 def get_compounds_by_qid(qid):
+    """
+    Get compounds for a specific QID.
+    
+    Args:
+        qid (str): Wikibase QID identifier
+        
+    Returns:
+        tuple: JSON response with compound data or error message
+    """
     if not is_valid_qid(qid):
         return jsonify({"error": "Invalid identifier format"}), 400
     return get_compounds_q(qid)
@@ -435,6 +531,15 @@ def load_case_mie_model(mie_query):
 
 @aop_app.route("/get_case_mie_model", methods=["GET"])
 def get_case_mie_model():
+    """
+    Get model to MIE mapping for case studies.
+    
+    Query Parameters:
+        mie_query (str): MIE query string containing AOP event identifiers
+        
+    Returns:
+        tuple: JSON response with model to MIE mapping dictionary
+    """
     mie_query = request.args.get("mie_query", "")
     if not mie_query:
         return jsonify({"error": "mie_query parameter is required"}), 400
@@ -450,11 +555,33 @@ def get_case_mie_model():
 
 @aop_app.route("/load_and_show_genes", methods=["GET"])
 def load_and_show_genes():
+    """
+    Load and return gene data (UniProt and Ensembl) for specified MIEs.
+    
+    Query Parameters:
+        mies (str): Space-separated list of MIE identifiers (e.g., "aop.events:1656 aop.events:2258")
+        
+    Returns:
+        tuple: JSON response with Cytoscape-formatted gene elements and edges
+    """
     mies = request.args.get("mies", "")
+    print(f"Received mies parameter: {mies}")
     if not mies:
         return jsonify({"error": "mies parameter is required"}), 400
-    mies_list = [quote(mie, safe="") for mie in mies.split(",")]
-    mies_list = [unquote(mie) for mie in mies_list]
+    
+    # Parse space-separated MIE identifiers and extract numeric IDs
+    mie_ids = []
+    for mie in mies.split():
+        if "aop.events:" in mie:
+            numeric_id = mie.split("aop.events:")[-1]
+            if numeric_id:
+                mie_ids.append(numeric_id)
+    
+    print(f"Extracted MIE IDs: {mie_ids}")
+    
+    if not mie_ids:
+        return jsonify({"error": "No valid MIE identifiers found"}), 400
+    
     gene_elements = []
     csv_path = os.path.join(
         os.path.dirname(__file__), "../static/data/caseMieModel.csv"
@@ -463,14 +590,16 @@ def load_and_show_genes():
         with open(csv_path, "r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
-                mie_id = "https://identifiers.org/aop.events/" + row.get(
-                    "MIE/KE identifier in AOP wiki", ""
-                )
-                uniprot_id = row.get("uniprot ID inferred from qspred name", "")
-                ensembl_id = row.get("Ensembl", "")
-                if mie_id and uniprot_id and ensembl_id and mie_id in mies_list:
+                csv_mie_id = row.get("MIE/KE identifier in AOP wiki", "").strip()
+                uniprot_id = row.get("uniprot ID inferred from qspred name", "").strip()
+                ensembl_id = row.get("Ensembl", "").strip()
+                
+                # Check if this row's MIE ID matches any of our requested IDs
+                if csv_mie_id in mie_ids and uniprot_id and ensembl_id:
+                    full_mie_id = f"https://identifiers.org/aop.events/{csv_mie_id}"
                     uniprot_node_id = f"uniprot_{uniprot_id}"
                     ensembl_node_id = f"ensembl_{ensembl_id}"
+                    
                     gene_elements.append(
                         {
                             "data": {
@@ -494,9 +623,9 @@ def load_and_show_genes():
                     gene_elements.append(
                         {
                             "data": {
-                                "id": f"edge_{mie_id}_{uniprot_node_id}",
+                                "id": f"edge_{full_mie_id}_{uniprot_node_id}",
                                 "source": uniprot_node_id,
-                                "target": mie_id,
+                                "target": full_mie_id,
                                 "label": "part of",
                             }
                         }
@@ -513,11 +642,26 @@ def load_and_show_genes():
                     )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+    print(f"Generated {len(gene_elements)} gene elements")
     return jsonify(gene_elements)
 
 
 @aop_app.route("/add_qsprpred_compounds", methods=["POST"])
 def add_qsprpred_compounds():
+    """
+    Add QSPR prediction compounds to Cytoscape network.
+    
+    Expected JSON payload:
+        compound_mapping (dict): Mapping of SMILES to compound data
+        model_to_protein_info (dict): Model to protein information mapping
+        model_to_mie (dict): Model to MIE mapping
+        response (list): Prediction response data
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with updated Cytoscape elements
+    """
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON input"}), 400
@@ -580,6 +724,18 @@ def add_qsprpred_compounds():
 
 @aop_app.route("/add_aop_bounding_box", methods=["POST"])
 def add_aop_bounding_box():
+    """
+    Add AOP bounding boxes to group related nodes in Cytoscape network.
+    
+    Query Parameters:
+        aop (str): AOP parameter flag
+        
+    Expected JSON payload:
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with elements including bounding boxes
+    """
     data = request.json
     aop = request.args.get('aop', '')
     cy_elements = data.get("cy_elements", [])
@@ -615,6 +771,18 @@ def add_aop_bounding_box():
 ## BioDatafuse
 @aop_app.route("/get_bridgedb_xref", methods=["POST"])
 def get_bridgedb_xref():
+    """
+    Get cross-references using BridgeDb service.
+    
+    Expected JSON payload:
+        identifiers (list): List of identifiers to map
+        input_species (str, optional): Input species (default: "Human")
+        input_datasource (str, optional): Input datasource (default: "PubChem Compound")
+        output_datasource (str, optional): Output datasource (default: "All")
+        
+    Returns:
+        tuple: JSON response with BridgeDb mapping results and metadata
+    """
     data = request.get_json(silent=True)
     if not data or "identifiers" not in data:
         return jsonify({"error": "Invalid input"}), 400
@@ -641,6 +809,15 @@ def get_bridgedb_xref():
 
 @aop_app.route("/add_bdf_opentargets", methods=["GET"])
 def add_bdf_opentargets():
+    """
+    Get compound-disease interactions from OpenTargets using BridgeDb data.
+    
+    Query Parameters:
+        bridgedb_data (str): JSON string of BridgeDb DataFrame data
+        
+    Returns:
+        tuple: JSON response with OpenTargets interaction data
+    """
     try:
         bridgedb_data = request.args.get("bridgedb_data", "")
         if not bridgedb_data:
@@ -659,6 +836,15 @@ def add_bdf_opentargets():
 
 @aop_app.route("/add_bdf_bgee", methods=["POST"])
 def add_bdf_bgee():
+    """
+    Get gene expression data from Bgee using BridgeDb data.
+    
+    Expected JSON payload:
+        bridgedb_data (list): BridgeDb DataFrame data as list of dictionaries
+        
+    Returns:
+        tuple: JSON response with Bgee gene expression data
+    """
     data = request.get_json(silent=True)
     if not data or "bridgedb_data" not in data:
         return jsonify({"error": "BridgeDb data is required"}), 400
@@ -676,5 +862,278 @@ def add_bdf_bgee():
         print("Result of /add_bdf_bgee:", result)
 
         return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@aop_app.route("/populate_compound_table/<qid>", methods=["GET"])
+def populate_compound_table(qid):
+    """
+    Populate compound table with formatted data for a specific QID.
+    
+    Args:
+        qid (str): Wikibase QID identifier
+        
+    Returns:
+        tuple: JSON response with compound mapping and formatted table data
+    """
+    try:
+        compound_data, status = get_compounds_q(qid)
+        if status != 200:
+            return compound_data, status
+        
+        compounds = compound_data.get_json()
+        compound_mapping = {}
+        table_data = []
+        
+        for compound in compounds:
+            smiles = compound.get("SMILES", "")
+            cid = compound.get("cid", "")
+            term = compound.get("Term", "")
+            compound_id = compound.get("ID", "")
+            
+            compound_mapping[smiles] = {
+                "term": term,
+                "url": f"/compound/{compound_id}",
+                "target": "_blank"
+            }
+            
+            if cid and cid != "nan":
+                pubchem_url = f"https://pubchem.ncbi.nlm.nih.gov/compound/{cid}"
+                pubchem_cell = f'<a href="{pubchem_url}" class="cid-link" target="_blank">{cid}</a>'
+            else:
+                pubchem_cell = f'<span class="cid-link">{cid}</span>'
+            
+            encoded_smiles = quote(smiles, safe="")
+            img_url = f"https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi={encoded_smiles}"
+            
+            table_data.append({
+                "smiles": smiles,
+                "term": term,
+                "cid": cid,
+                "compound_id": compound_id,
+                "img_url": img_url,
+                "compound_cell": f'<a href="/compound/{compound_id}" class="compound-link" target="_blank">{term}</a>',
+                "pubchem_cell": pubchem_cell
+            })
+        
+        return jsonify({
+            "compound_mapping": compound_mapping,
+            "table_data": table_data
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/populate_gene_table", methods=["POST"])
+def populate_gene_table():
+    """
+    Populate gene table from Cytoscape elements.
+    
+    Expected JSON payload:
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with gene data for table population
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data or "cy_elements" not in data:
+            return jsonify({"error": "Cytoscape elements required"}), 400
+        
+        cy_elements = data["cy_elements"]
+        print(cy_elements)
+        gene_data = []
+        
+        for element in cy_elements:
+            if element.get("classes") == "ensembl-node":
+                gene_label = element.get("data", {}).get("label", "")
+                if gene_label:
+                    gene_data.append({
+                        "gene": gene_label,
+                        "expression_cell": ""
+                    })
+        
+        return jsonify({"gene_data": gene_data}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/populate_qaop_table", methods=["POST"])
+def populate_qaop_table():
+    """
+    Populate QAOP (Quantitative AOP) table from Cytoscape elements.
+    
+    Expected JSON payload:
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with QAOP relationship data
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data or "cy_elements" not in data:
+            return jsonify({"error": "Cytoscape elements required"}), 400
+        
+        cy_elements = data["cy_elements"]
+        qaop_data = []
+        
+        for element in cy_elements:
+            if element.get("group") == "edges" and element.get("data", {}).get("ker_label"):
+                edge_data = element["data"]
+                source_id = edge_data.get("source", "")
+                target_id = edge_data.get("target", "")
+                ker_label = edge_data.get("ker_label", "")
+                curie = edge_data.get("curie", "")
+                
+                # Find source and target labels
+                source_label = source_id
+                target_label = target_id
+                for el in cy_elements:
+                    if el.get("data", {}).get("id") == source_id:
+                        source_label = el.get("data", {}).get("label", source_id)
+                    elif el.get("data", {}).get("id") == target_id:
+                        target_label = el.get("data", {}).get("label", target_id)
+                
+                qaop_data.append({
+                    "source_id": source_id,
+                    "source_label": source_label,
+                    "curie": curie,
+                    "target_id": target_id,
+                    "target_label": target_label
+                })
+        
+        return jsonify({"qaop_data": qaop_data}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/update_cytoscape_subset", methods=["POST"])
+def update_cytoscape_subset():
+    """
+    Filter Cytoscape network based on selected compounds using breadth-first search.
+    
+    Expected JSON payload:
+        selected_compounds (list): List of selected compound names
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with visibility instructions and filtered elements
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"error": "Invalid JSON input"}), 400
+        
+        selected_compounds = data.get("selected_compounds", [])
+        cy_elements = data.get("cy_elements", [])
+        
+        if not selected_compounds:
+            return jsonify({
+                "show_all": True,
+                "visible_elements": []
+            }), 200
+        
+        # Build graph structure
+        nodes = {el["data"]["id"]: el for el in cy_elements if el.get("group") != "edges"}
+        edges = [el for el in cy_elements if el.get("group") == "edges"]
+        
+        visited = set()
+        activated_nodes = []
+        activated_edges = []
+        
+        # BFS from selected compounds
+        def bfs(start_node_id):
+            if start_node_id in visited or start_node_id not in nodes:
+                return
+            
+            queue = [start_node_id]
+            while queue:
+                node_id = queue.pop(0)
+                if node_id in visited:
+                    continue
+                
+                visited.add(node_id)
+                activated_nodes.append(nodes[node_id])
+                
+                # Find outgoing edges
+                for edge in edges:
+                    if edge["data"]["source"] == node_id:
+                        target_id = edge["data"]["target"]
+                        if target_id not in visited:
+                            queue.append(target_id)
+        
+        # Start BFS from selected chemical nodes
+        for compound_name in selected_compounds:
+            for node_id, node in nodes.items():
+                if (node.get("classes") == "chemical-node" and 
+                    node["data"].get("label") == compound_name):
+                    bfs(node_id)
+        
+        # Add edges connecting activated nodes
+        activated_node_ids = {node["data"]["id"] for node in activated_nodes}
+        for edge in edges:
+            if (edge["data"]["source"] in activated_node_ids and 
+                edge["data"]["target"] in activated_node_ids):
+                activated_edges.append(edge)
+        
+        return jsonify({
+            "show_all": False,
+            "visible_elements": activated_nodes + activated_edges
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/get_all_cids", methods=["POST"])
+def get_all_cids():
+    """
+    Extract all PubChem CIDs from compound table data.
+    
+    Expected JSON payload:
+        table_data (list): Compound table data
+        
+    Returns:
+        tuple: JSON response with list of CIDs
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data or "table_data" not in data:
+            return jsonify({"error": "Table data required"}), 400
+        
+        table_data = data["table_data"]
+        cids = []
+        
+        for row in table_data:
+            cid = row.get("cid", "")
+            if cid and cid != "nan":
+                cids.append(cid)
+        
+        return jsonify({"cids": cids}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/get_all_genes", methods=["POST"])
+def get_all_genes():
+    """
+    Extract all gene identifiers from Cytoscape elements.
+    
+    Expected JSON payload:
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with list of gene identifiers
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data or "cy_elements" not in data:
+            return jsonify({"error": "Cytoscape elements required"}), 400
+        
+        cy_elements = data["cy_elements"]
+        genes = []
+        
+        for element in cy_elements:
+            if element.get("classes") == "ensembl-node":
+                gene_label = element.get("data", {}).get("label", "")
+                if gene_label and gene_label not in genes:
+                    genes.append(gene_label)
+        
+        return jsonify({"genes": genes}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500

@@ -8,16 +8,23 @@ async function getAllGenes() {
         await positionNodes(cy);
     }
 
-    const genes = [];
-    cy.nodes('.ensembl-node').forEach(node => {
-        const geneLabel = node.data('label');
-        if (!genes.includes(geneLabel)) {
-            genes.push(geneLabel);
-        }
+    return new Promise((resolve, reject) => {
+        const cyElements = cy.elements().jsons();
+        
+        $.ajax({
+            url: "/get_all_genes",
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ cy_elements: cyElements }),
+            success: response => {
+                console.log('retrieved genes', response.genes);
+                resolve(response.genes);
+            },
+            error: () => {
+                reject("Error fetching genes");
+            }
+        });
     });
-
-    console.log('retrieved genes', genes);
-    return genes;
 }
 
 function toggleGeneView(cy) {
@@ -38,8 +45,8 @@ function toggleGeneView(cy) {
                 $("#see_genes").text("Hide Genes");
                 genesVisible = true;
 
-                // Populate the gene table
-                populateGeneTable(cy);
+                // Populate the gene table via backend
+                populateGeneTable();
             } catch (error) {
                 console.warn("Error processing elements:", error);
             }
@@ -49,17 +56,29 @@ function toggleGeneView(cy) {
         });
 }
 
-// Function to populate the gene table with Ensembl nodes
-function populateGeneTable(cy) {
-    const tableBody = $("#gene_table tbody").empty();
-    cy.nodes(".ensembl-node").forEach(node => {
-        const geneLabel = node.data("label");
-        tableBody.append(`
-            <tr data-gene="${geneLabel}">
-                <td>${geneLabel}</td>
-                <td class="gene-expression-cell"></td>
-            </tr>
-        `);
+// Function to populate the gene table with Ensembl nodes - now calls backend
+function populateGeneTable() {
+    const cyElements = cy.elements().jsons();
+    
+    $.ajax({
+        url: "/populate_gene_table",
+        type: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({ cy_elements: cyElements }),
+        success: response => {
+            const tableBody = $("#gene_table tbody").empty();
+            response.gene_data.forEach(gene => {
+                tableBody.append(`
+                    <tr data-gene="${gene.gene}">
+                        <td>${gene.gene}</td>
+                        <td class="gene-expression-cell">${gene.expression_cell}</td>
+                    </tr>
+                `);
+            });
+            console.log("Gene table populated with Ensembl nodes.");
+        },
+        error: () => {
+            console.error("Error populating gene table");
+        }
     });
-    console.log("Gene table populated with Ensembl nodes.");
 }

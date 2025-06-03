@@ -97,14 +97,22 @@ async function addBdfBgeeWithBridgeDb(genes) {
 
 // Event listener for OpenTargets query button
 document.getElementById('query_opentargets').addEventListener('click', async () => {
-    const cids = getAllCIDs();
-    await addBdfOTWithBridgeDb(cids);
+    try {
+        const cids = await getAllCIDs();
+        await addBdfOTWithBridgeDb(cids);
+    } catch (error) {
+        console.error("Error getting CIDs:", error);
+    }
 });
 
 // Event listener for Bgee query button
 document.getElementById('query_bgee').addEventListener('click', async () => {
-    const genes = await getAllGenes();
-    await addBdfBgeeWithBridgeDb(genes);
+    try {
+        const genes = await getAllGenes();
+        await addBdfBgeeWithBridgeDb(genes);
+    } catch (error) {
+        console.error("Error getting genes:", error);
+    }
 });
 
 // Function to populate the OpenTargets table
