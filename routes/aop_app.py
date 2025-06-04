@@ -559,7 +559,8 @@ def load_and_show_genes():
     Load and return gene data (UniProt and Ensembl) for specified MIEs.
     
     Query Parameters:
-        mies (str): Space-separated list of MIE identifiers (e.g., "aop.events:1656 aop.events:2258")
+        mies (str): Comma or space-separated list of MIE identifiers 
+                   Supports formats: "aop.events:1656", "https://identifiers.org/aop.events/1656", "1656"
         
     Returns:
         tuple: JSON response with Cytoscape-formatted gene elements and edges
@@ -569,13 +570,33 @@ def load_and_show_genes():
     if not mies:
         return jsonify({"error": "mies parameter is required"}), 400
     
-    # Parse space-separated MIE identifiers and extract numeric IDs
+    # Parse comma or space-separated MIE identifiers and extract numeric IDs
     mie_ids = []
-    for mie in mies.split():
-        if "aop.events:" in mie:
+    # Split by comma or space
+    raw_mies = mies.replace(",", " ").split()
+    
+    for mie in raw_mies:
+        mie = mie.strip()
+        if not mie:
+            continue
+            
+        # Handle different formats:
+        # 1. https://identifiers.org/aop.events/1656
+        # 2. aop.events:1656  
+        # 3. 1656
+        if "https://identifiers.org/aop.events/" in mie:
+            numeric_id = mie.split("https://identifiers.org/aop.events/")[-1]
+        elif "aop.events:" in mie:
             numeric_id = mie.split("aop.events:")[-1]
-            if numeric_id:
-                mie_ids.append(numeric_id)
+        else:
+            # Assume it's already a numeric ID
+            numeric_id = mie
+            
+        # Validate that we have a numeric ID
+        if numeric_id and numeric_id.isdigit():
+            mie_ids.append(numeric_id)
+        else:
+            print(f"Warning: Could not extract numeric ID from: {mie}")
     
     print(f"Extracted MIE IDs: {mie_ids}")
     
@@ -670,6 +691,10 @@ def add_qsprpred_compounds():
     model_to_mie = data.get("model_to_mie", {})
     response_data = data.get("response", [])
     cy_elements = data.get("cy_elements", [])
+    
+    # Track added compounds to avoid duplicates
+    added_compounds = set()
+    
     if isinstance(response_data, list):
         grouped = {}
         for pred in response_data:
@@ -679,11 +704,28 @@ def add_qsprpred_compounds():
             if smiles not in grouped:
                 grouped[smiles] = []
             grouped[smiles].append(pred)
+            
         for smiles, predictions in grouped.items():
             compound = compound_mapping.get(smiles)
             compound_id = (
                 compound.get("term") if compound and "term" in compound else smiles
             )
+            
+            # Add compound node only once
+            if compound_id not in added_compounds:
+                cy_elements.append(
+                    {
+                        "data": {
+                            "id": compound_id,
+                            "label": compound_id,
+                            "type": "chemical",
+                            "smiles": smiles,
+                        },
+                        "classes": "chemical-node",
+                    }
+                )
+                added_compounds.add(compound_id)
+            
             for prediction in predictions:
                 for model, value in prediction.items():
                     if model != "smiles":
@@ -693,24 +735,16 @@ def add_qsprpred_compounds():
                                     model,
                                     {"proteinName": "Unknown Protein", "uniprotId": ""},
                                 )
-                                target_node_id = f"https://identifiers.org/aop.events/{model_to_mie.get(model, '')}"
+                                uniprot_target = f"uniprot_{protein_info.get('uniprotId', '')}"
+                                
+                                # Ensure the edge has a unique ID
+                                edge_id = f"{compound_id}-{uniprot_target}-{model}"
                                 cy_elements.append(
                                     {
                                         "data": {
-                                            "id": compound_id,
-                                            "label": compound_id,
-                                            "type": "chemical",
-                                            "smiles": smiles,
-                                        },
-                                        "classes": "chemical-node",
-                                    }
-                                )
-                                cy_elements.append(
-                                    {
-                                        "data": {
-                                            "id": f"{compound_id}-{target_node_id}-{model}",
+                                            "id": edge_id,
                                             "source": compound_id,
-                                            "target": f"uniprot_{protein_info.get('uniprotId', '')}",
+                                            "target": uniprot_target,
                                             "value": value,
                                             "type": "interaction",
                                             "label": f"pChEMBL: {value} ({model})",
@@ -744,13 +778,26 @@ def add_aop_bounding_box():
         return jsonify({"error": "AOP parameter is required"}), 400
 
     seen = set()
-    for node in cy_elements:
-        node_aop = node['data'].get('aop', [])
-        aop_titles = node['data'].get('aop_title', [])
+    # Only process nodes with valid AOP data
+    for element in cy_elements:
+        if element.get("group") == "edges" or element.get("classes") == "bounding-box":
+            continue
+            
+        element_data = element.get('data', {})
+        node_aop = element_data.get('aop', [])
+        aop_titles = element_data.get('aop_title', [])
+        
+        # Skip elements without AOP data
+        if not node_aop or not aop_titles:
+            continue
+            
         if not isinstance(node_aop, list):
             node_aop = [node_aop]
+        if not isinstance(aop_titles, list):
+            aop_titles = [aop_titles]
+            
         for aop_item, aop_title in zip(node_aop, aop_titles):
-            if aop_item not in seen:
+            if aop_item and aop_item not in seen:
                 bounding_boxes.append({
                     "group": "nodes",
                     "data": {
@@ -760,13 +807,26 @@ def add_aop_bounding_box():
                 })
                 seen.add(aop_item)
 
-    for node in cy_elements:
-        node_aop = node['data'].get('aop', [])
+    # Only assign parent to elements with valid AOP data
+    for element in cy_elements:
+        if element.get("group") == "edges" or element.get("classes") == "bounding-box":
+            continue
+            
+        element_data = element.get('data', {})
+        node_aop = element_data.get('aop', [])
+        
+        if not node_aop:
+            continue
+            
         if not isinstance(node_aop, list):
             node_aop = [node_aop]
         for aop_item in node_aop:
-            node['data']['parent'] = f"bounding-box-{aop_item}"
+            if aop_item:
+                element['data']['parent'] = f"bounding-box-{aop_item}"
+                break  # Only assign to first valid AOP
+                
     return jsonify(cy_elements + bounding_boxes), 200
+
 
 ## BioDatafuse
 @aop_app.route("/get_bridgedb_xref", methods=["POST"])
@@ -941,13 +1001,22 @@ def populate_gene_table():
             return jsonify({"error": "Cytoscape elements required"}), 400
         
         cy_elements = data["cy_elements"]
-        print(cy_elements)
         gene_data = []
         
         for element in cy_elements:
-            if element.get("classes") == "ensembl-node":
-                gene_label = element.get("data", {}).get("label", "")
-                if gene_label:
+            # Handle both direct element structure and nested data structure
+            element_data = element.get("data", element)
+            element_classes = element.get("classes", "")
+            element_type = element_data.get("type", "")
+            element_id = element_data.get("id", "")
+            
+            # Check for Ensembl nodes using multiple criteria
+            if (element_classes == "ensembl-node" or 
+                element_type == "ensembl" or
+                element_id.startswith("ensembl_")):
+                
+                gene_label = element_data.get("label", "")
+                if gene_label and gene_label not in [g["gene"] for g in gene_data]:
                     gene_data.append({
                         "gene": gene_label,
                         "expression_cell": ""
@@ -976,22 +1045,31 @@ def populate_qaop_table():
         cy_elements = data["cy_elements"]
         qaop_data = []
         
+        # Create a lookup for node labels
+        node_labels = {}
         for element in cy_elements:
-            if element.get("group") == "edges" and element.get("data", {}).get("ker_label"):
+            if element.get("group") != "edges" and element.get("classes") != "bounding-box":
+                element_data = element.get("data", {})
+                node_id = element_data.get("id")
+                node_label = element_data.get("label")
+                if node_id and node_label:
+                    node_labels[node_id] = node_label
+        
+        # Process edges with KER labels
+        for element in cy_elements:
+            if (element.get("group") == "edges" and 
+                element.get("data", {}).get("ker_label") and
+                element.get("data", {}).get("curie")):
+                
                 edge_data = element["data"]
                 source_id = edge_data.get("source", "")
                 target_id = edge_data.get("target", "")
                 ker_label = edge_data.get("ker_label", "")
                 curie = edge_data.get("curie", "")
                 
-                # Find source and target labels
-                source_label = source_id
-                target_label = target_id
-                for el in cy_elements:
-                    if el.get("data", {}).get("id") == source_id:
-                        source_label = el.get("data", {}).get("label", source_id)
-                    elif el.get("data", {}).get("id") == target_id:
-                        target_label = el.get("data", {}).get("label", target_id)
+                # Get labels from lookup
+                source_label = node_labels.get(source_id, source_id)
+                target_label = node_labels.get(target_id, target_id)
                 
                 qaop_data.append({
                     "source_id": source_id,
@@ -1005,120 +1083,16 @@ def populate_qaop_table():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@aop_app.route("/update_cytoscape_subset", methods=["POST"])
-def update_cytoscape_subset():
+@aop_app.route("/initialize_gene_view", methods=["POST"])
+def initialize_gene_view():
     """
-    Filter Cytoscape network based on selected compounds using breadth-first search.
-    
-    Expected JSON payload:
-        selected_compounds (list): List of selected compound names
-        cy_elements (list): Current Cytoscape elements
-        
-    Returns:
-        tuple: JSON response with visibility instructions and filtered elements
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data:
-            return jsonify({"error": "Invalid JSON input"}), 400
-        
-        selected_compounds = data.get("selected_compounds", [])
-        cy_elements = data.get("cy_elements", [])
-        
-        if not selected_compounds:
-            return jsonify({
-                "show_all": True,
-                "visible_elements": []
-            }), 200
-        
-        # Build graph structure
-        nodes = {el["data"]["id"]: el for el in cy_elements if el.get("group") != "edges"}
-        edges = [el for el in cy_elements if el.get("group") == "edges"]
-        
-        visited = set()
-        activated_nodes = []
-        activated_edges = []
-        
-        # BFS from selected compounds
-        def bfs(start_node_id):
-            if start_node_id in visited or start_node_id not in nodes:
-                return
-            
-            queue = [start_node_id]
-            while queue:
-                node_id = queue.pop(0)
-                if node_id in visited:
-                    continue
-                
-                visited.add(node_id)
-                activated_nodes.append(nodes[node_id])
-                
-                # Find outgoing edges
-                for edge in edges:
-                    if edge["data"]["source"] == node_id:
-                        target_id = edge["data"]["target"]
-                        if target_id not in visited:
-                            queue.append(target_id)
-        
-        # Start BFS from selected chemical nodes
-        for compound_name in selected_compounds:
-            for node_id, node in nodes.items():
-                if (node.get("classes") == "chemical-node" and 
-                    node["data"].get("label") == compound_name):
-                    bfs(node_id)
-        
-        # Add edges connecting activated nodes
-        activated_node_ids = {node["data"]["id"] for node in activated_nodes}
-        for edge in edges:
-            if (edge["data"]["source"] in activated_node_ids and 
-                edge["data"]["target"] in activated_node_ids):
-                activated_edges.append(edge)
-        
-        return jsonify({
-            "show_all": False,
-            "visible_elements": activated_nodes + activated_edges
-        }), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@aop_app.route("/get_all_cids", methods=["POST"])
-def get_all_cids():
-    """
-    Extract all PubChem CIDs from compound table data.
-    
-    Expected JSON payload:
-        table_data (list): Compound table data
-        
-    Returns:
-        tuple: JSON response with list of CIDs
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data or "table_data" not in data:
-            return jsonify({"error": "Table data required"}), 400
-        
-        table_data = data["table_data"]
-        cids = []
-        
-        for row in table_data:
-            cid = row.get("cid", "")
-            if cid and cid != "nan":
-                cids.append(cid)
-        
-        return jsonify({"cids": cids}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@aop_app.route("/get_all_genes", methods=["POST"])
-def get_all_genes():
-    """
-    Extract all gene identifiers from Cytoscape elements.
+    Initialize gene view by loading genes for MIE nodes.
     
     Expected JSON payload:
         cy_elements (list): Current Cytoscape elements
         
     Returns:
-        tuple: JSON response with list of gene identifiers
+        tuple: JSON response with gene elements to add
     """
     try:
         data = request.get_json(silent=True)
@@ -1126,14 +1100,426 @@ def get_all_genes():
             return jsonify({"error": "Cytoscape elements required"}), 400
         
         cy_elements = data["cy_elements"]
-        genes = []
         
+        # Extract MIE node IDs
+        mie_node_ids = []
         for element in cy_elements:
-            if element.get("classes") == "ensembl-node":
-                gene_label = element.get("data", {}).get("label", "")
-                if gene_label and gene_label not in genes:
-                    genes.append(gene_label)
+            if element.get("data", {}).get("is_mie"):
+                node_id = element["data"]["id"]
+                mie_node_ids.append(node_id)
         
-        return jsonify({"genes": genes}), 200
+        if not mie_node_ids:
+            return jsonify({"gene_elements": []}), 200
+        
+        # Extract numeric IDs from MIE node IDs
+        mie_ids = []
+        for mie_node_id in mie_node_ids:
+            if "https://identifiers.org/aop.events/" in mie_node_id:
+                numeric_id = mie_node_id.split("https://identifiers.org/aop.events/")[-1]
+                if numeric_id.isdigit():
+                    mie_ids.append(numeric_id)
+        
+        if not mie_ids:
+            return jsonify({"gene_elements": []}), 200
+        
+        # Use existing load_and_show_genes logic
+        gene_elements = []
+        
+        csv_path = os.path.join(os.path.dirname(__file__), "../static/data/caseMieModel.csv")
+        try:
+            with open(csv_path, "r", encoding="utf-8") as csvfile:
+                reader = csv.DictReader(csvfile)
+                for row in reader:
+                    csv_mie_id = row.get("MIE/KE identifier in AOP wiki", "").strip()
+                    uniprot_id = row.get("uniprot ID inferred from qspred name", "").strip()
+                    ensembl_id = row.get("Ensembl", "").strip()
+                    
+                    # Check if this row's MIE ID matches any requested
+                    if csv_mie_id in mie_ids and uniprot_id and ensembl_id:
+                        full_mie_id = f"https://identifiers.org/aop.events/{csv_mie_id}"
+                        uniprot_node_id = f"uniprot_{uniprot_id}"
+                        ensembl_node_id = f"ensembl_{ensembl_id}"
+                        
+                        gene_elements.extend([
+                            {
+                                "data": {
+                                    "id": uniprot_node_id,
+                                    "label": uniprot_id,
+                                    "type": "uniprot",
+                                },
+                                "classes": "uniprot-node",
+                            },
+                            {
+                                "data": {
+                                    "id": ensembl_node_id,
+                                    "label": ensembl_id,
+                                    "type": "ensembl",
+                                },
+                                "classes": "ensembl-node",
+                            },
+                            {
+                                "data": {
+                                    "id": f"edge_{full_mie_id}_{uniprot_node_id}",
+                                    "source": uniprot_node_id,
+                                    "target": full_mie_id,
+                                    "label": "part of",
+                                }
+                            },
+                            {
+                                "data": {
+                                    "id": f"edge_{uniprot_node_id}_{ensembl_node_id}",
+                                    "source": uniprot_node_id,
+                                    "target": ensembl_node_id,
+                                    "label": "translates to",
+                                }
+                            }
+                        ])
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+        
+        return jsonify({"gene_elements": gene_elements}), 200
     except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/toggle_genes", methods=["POST"])
+def toggle_genes():
+    """
+    Toggle gene visibility in the network.
+    
+    Expected JSON payload:
+        action (str): 'show' or 'hide'
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with gene elements (for show) or success message (for hide)
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data or "action" not in data:
+            return jsonify({"error": "Invalid input"}), 400
+        
+        action = data["action"]
+        
+        if action == "show":
+            cy_elements = data.get("cy_elements", [])
+            # Extract MIE node IDs and load genes
+            mie_node_ids = []
+            for element in cy_elements:
+                element_data = element.get("data", {})
+                if element_data.get("is_mie"):
+                    node_id = element_data["id"]
+                    mie_node_ids.append(node_id)
+            
+            if mie_node_ids:
+                # Extract numeric IDs from MIE node IDs
+                mie_ids = []
+                for mie_node_id in mie_node_ids:
+                    if "https://identifiers.org/aop.events/" in mie_node_id:
+                        numeric_id = mie_node_id.split("https://identifiers.org/aop.events/")[-1]
+                        if numeric_id.isdigit():
+                            mie_ids.append(numeric_id)
+                
+                if mie_ids:
+                    gene_elements = []
+                    csv_path = os.path.join(os.path.dirname(__file__), "../static/data/caseMieModel.csv")
+                    try:
+                        with open(csv_path, "r", encoding="utf-8") as csvfile:
+                            reader = csv.DictReader(csvfile)
+                            for row in reader:
+                                csv_mie_id = row.get("MIE/KE identifier in AOP wiki", "").strip()
+                                uniprot_id = row.get("uniprot ID inferred from qspred name", "").strip()
+                                ensembl_id = row.get("Ensembl", "").strip()
+                                
+                                if csv_mie_id in mie_ids and uniprot_id and ensembl_id:
+                                    full_mie_id = f"https://identifiers.org/aop.events/{csv_mie_id}"
+                                    uniprot_node_id = f"uniprot_{uniprot_id}"
+                                    ensembl_node_id = f"ensembl_{ensembl_id}"
+                                    
+                                    gene_elements.extend([
+                                        {
+                                            "data": {
+                                                "id": uniprot_node_id,
+                                                "label": uniprot_id,
+                                                "type": "uniprot",
+                                            },
+                                            "classes": "uniprot-node",
+                                        },
+                                        {
+                                            "data": {
+                                                "id": ensembl_node_id,
+                                                "label": ensembl_id,
+                                                "type": "ensembl",
+                                            },
+                                            "classes": "ensembl-node",
+                                        },
+                                        {
+                                            "data": {
+                                                "id": f"edge_{full_mie_id}_{uniprot_node_id}",
+                                                "source": uniprot_node_id,
+                                                "target": full_mie_id,
+                                                "label": "part of",
+                                            }
+                                        },
+                                        {
+                                            "data": {
+                                                "id": f"edge_{uniprot_node_id}_{ensembl_node_id}",
+                                                "source": uniprot_node_id,
+                                                "target": ensembl_node_id,
+                                                "label": "translates to",
+                                            }
+                                        }
+                                    ])
+                    except Exception as e:
+                        return jsonify({"error": str(e)}), 500
+                    
+                    return jsonify({"gene_elements": gene_elements}), 200
+            
+            return jsonify({"gene_elements": []}), 200
+        elif action == "hide":
+            # For hide action, just return success - let frontend handle the hiding
+            return jsonify({"success": True}), 200
+        else:
+            return jsonify({"error": "Invalid action"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/toggle_bounding_boxes", methods=["POST"])
+def toggle_bounding_boxes():
+    """
+    Toggle bounding boxes on/off in the network.
+    
+    Expected JSON payload:
+        action (str): 'add' or 'remove'
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with updated elements
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data or "action" not in data or "cy_elements" not in data:
+            return jsonify({"error": "Invalid input"}), 400
+        
+        action = data["action"]
+        cy_elements = data["cy_elements"]
+        
+        if action == "remove":
+            # Remove bounding boxes and unparent nodes
+            filtered_elements = []
+            for element in cy_elements:
+                if not element.get("classes") == "bounding-box":
+                    # Remove parent relationship
+                    if "parent" in element.get("data", {}):
+                        del element["data"]["parent"]
+                    filtered_elements.append(element)
+            return jsonify(filtered_elements), 200
+        elif action == "add":
+            # Use existing add_aop_bounding_box logic but with proper parameter handling
+            bounding_boxes = []
+            seen = set()
+            
+            # Only process nodes with valid AOP data
+            for element in cy_elements:
+                if element.get("group") == "edges" or element.get("classes") == "bounding-box":
+                    continue
+                    
+                element_data = element.get('data', {})
+                node_aop = element_data.get('aop', [])
+                aop_titles = element_data.get('aop_title', [])
+                
+                # Skip elements without AOP data
+                if not node_aop or not aop_titles:
+                    continue
+                    
+                if not isinstance(node_aop, list):
+                    node_aop = [node_aop]
+                if not isinstance(aop_titles, list):
+                    aop_titles = [aop_titles]
+                    
+                for aop_item, aop_title in zip(node_aop, aop_titles):
+                    if aop_item and aop_item not in seen:
+                        bounding_boxes.append({
+                            "group": "nodes",
+                            "data": {
+                                "id": f"bounding-box-{aop_item}",
+                                "label": f"{aop_title} (aop:{aop_item.replace('https://identifiers.org/aop/', '')})"},
+                            "classes": "bounding-box"
+                        })
+                        seen.add(aop_item)
+
+            # Only assign parent to elements with valid AOP data
+            for element in cy_elements:
+                if element.get("group") == "edges" or element.get("classes") == "bounding-box":
+                    continue
+                    
+                element_data = element.get('data', {})
+                node_aop = element_data.get('aop', [])
+                
+                if not node_aop:
+                    continue
+                    
+                if not isinstance(node_aop, list):
+                    node_aop = [node_aop]
+                for aop_item in node_aop:
+                    if aop_item:
+                        element['data']['parent'] = f"bounding-box-{aop_item}"
+                        break  # Only assign to first valid AOP
+                        
+            return jsonify(cy_elements + bounding_boxes), 200
+        else:
+            return jsonify({"error": "Invalid action"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+import json
+import os
+from datetime import datetime
+
+# Network state storage (in production, use database)
+NETWORK_STATES_DIR = os.path.join(os.path.dirname(__file__), "../static/data/network_states")
+
+@aop_app.route("/save_network_state", methods=["POST"])
+def save_network_state():
+    """
+    Save current network state to persistent storage.
+    
+    Expected JSON payload:
+        elements (list): Cytoscape elements
+        style (list): Cytoscape styles
+        layout (dict): Node positions
+        metadata (dict): Additional metadata
+        
+    Returns:
+        tuple: JSON response with save confirmation
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"error": "Invalid JSON input"}), 400
+        
+        # Ensure network states directory exists
+        os.makedirs(NETWORK_STATES_DIR, exist_ok=True)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"network_state_{timestamp}.json"
+        filepath = os.path.join(NETWORK_STATES_DIR, filename)
+        
+        # Add server-side metadata
+        data["server_metadata"] = {
+            "saved_at": datetime.now().isoformat(),
+            "filename": filename,
+            "server_version": "1.0"
+        }
+        
+        # Save to file
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        # Also save as latest (for quick loading)
+        latest_filepath = os.path.join(NETWORK_STATES_DIR, "latest_network_state.json")
+        with open(latest_filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        return jsonify({
+            "success": True,
+            "message": "Network state saved successfully",
+            "filename": filename,
+            "timestamp": data["server_metadata"]["saved_at"]
+        }), 200
+        
+    except Exception as e:
+        print(f"Error saving network state: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/load_network_state", methods=["GET"])
+def load_network_state():
+    """
+    Load the latest network state from persistent storage.
+    
+    Returns:
+        tuple: JSON response with network state data
+    """
+    try:
+        latest_filepath = os.path.join(NETWORK_STATES_DIR, "latest_network_state.json")
+        
+        if not os.path.exists(latest_filepath):
+            return jsonify({"error": "No saved network state found"}), 404
+        
+        with open(latest_filepath, 'r', encoding='utf-8') as f:
+            network_data = json.load(f)
+        
+        return jsonify(network_data), 200
+        
+    except Exception as e:
+        print(f"Error loading network state: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/list_network_states", methods=["GET"])
+def list_network_states():
+    """
+    List all saved network states.
+    
+    Returns:
+        tuple: JSON response with list of saved states
+    """
+    try:
+        if not os.path.exists(NETWORK_STATES_DIR):
+            return jsonify({"states": []}), 200
+        
+        states = []
+        for filename in os.listdir(NETWORK_STATES_DIR):
+            if filename.endswith('.json') and filename != 'latest_network_state.json':
+                filepath = os.path.join(NETWORK_STATES_DIR, filename)
+                stat = os.stat(filepath)
+                states.append({
+                    "filename": filename,
+                    "created_at": datetime.fromtimestamp(stat.st_ctime).isoformat(),
+                    "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(),
+                    "size": stat.st_size
+                })
+        
+        # Sort by creation time, newest first
+        states.sort(key=lambda x: x["created_at"], reverse=True)
+        
+        return jsonify({"states": states}), 200
+        
+    except Exception as e:
+        print(f"Error listing network states: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/delete_network_state/<filename>", methods=["DELETE"])
+def delete_network_state(filename):
+    """
+    Delete a specific network state file.
+    
+    Args:
+        filename (str): Name of the file to delete
+        
+    Returns:
+        tuple: JSON response with deletion confirmation
+    """
+    try:
+        # Validate filename to prevent directory traversal
+        if not filename.endswith('.json') or '/' in filename or '\\' in filename:
+            return jsonify({"error": "Invalid filename"}), 400
+        
+        filepath = os.path.join(NETWORK_STATES_DIR, filename)
+        
+        if not os.path.exists(filepath):
+            return jsonify({"error": "File not found"}), 404
+        
+        os.remove(filepath)
+        
+        return jsonify({
+            "success": True,
+            "message": f"Network state {filename} deleted successfully"
+        }), 200
+        
+    except Exception as e:
+        print(f"Error deleting network state: {str(e)}")
         return jsonify({"error": str(e)}), 500

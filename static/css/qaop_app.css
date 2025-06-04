@@ -1,75 +1,551 @@
-/* Style for Cytoscape Container */
-#cy {
-    background-color: #FFFFFF;
-    border-radius: 20px;
-    border: 2px solid #ccc;
-    box-shadow: 3px 3px 10px rgba(0, 0, 0, 0.2);
-    padding: 10px;
-    height: 72vh;
-}
-.container {
+/* Professional Dashboard Layout */
+.dashboard-container {
     display: flex;
-    width: 90vw;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    background-color: #f8f9fa;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     margin: 0;
     padding: 0;
+    position: fixed;
+    top: 100px; /* Account for navbar height from styles.css */
+    left: 0;
+    overflow: hidden;
+    height: calc(100vh - 100px); /* Subtract navbar height */
 }
-.left, .center {
-    padding: 10px;
+
+/* Top Navigation */
+.top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    border-bottom: 1px solid #e9ecef;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    min-height: 60px;
+}
+
+.nav-section h1 {
+    margin: 0;
+    color: #495057;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.control-group label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin: 0;
+}
+
+/* Main Content Layout */
+.main-content {
+    display: flex;
+    flex: 1;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 0;
+    height: calc(100vh - 160px); /* Subtract navbar (100px) + top-nav (60px) */
+}
+
+/* Sidebar Styling */
+.left-sidebar, .right-sidebar {
+    width: 280px;
+    min-width: 260px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+    flex-shrink: 0;
+    height: 100%; /* Full height of main content */
+}
+
+/* Make right sidebar 300% wider */
+.right-sidebar {
+    width: 840px; /* 280px * 3 = 840px */
+    min-width: 780px; /* 260px * 3 = 780px */
+    max-width: 960px; /* 320px * 3 = 960px */
+}
+
+.network-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    height: 100%; /* Full height of main content */
+}
+
+/* Panel Component */
+.panel {
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #e9ecef;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Network panel should take all available space */
+.network-area .panel {
+    flex: 1;
+    height: 100%;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
     flex-shrink: 0;
 }
-.left {
-    width: 47vw;
-    max-height: 20vh;
-    margin-left: 2.5vw;
+
+.panel-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
 }
-.center {
-    width: 47vw;
-    margin-right: 2.5vw;
+
+.panel-content {
+    padding: 0.75rem;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
-.table-container {
-    max-height: 65vh;
-    overflow-y:scroll;
-    border-radius: 20px;
+
+/* Network Controls */
+.network-controls {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
 }
-th, td {
+
+.network-container {
+    padding: 0;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Cytoscape Container */
+#cy {
+    height: 100%;
+    min-height: 500px;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+    flex: 1; /* Take all available space */
+}
+
+.loading-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #6c757d;
+    z-index: 10;
+}
+
+.loading-overlay i {
+    font-size: 1.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.loading-overlay p {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+}
+
+/* Form Controls */
+.form-select, .form-control {
+    width: 100%;
+    padding: 0.4rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    box-sizing: border-box;
+}
+
+.form-select:focus, .form-control:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.15rem rgba(0, 123, 255, 0.25);
+}
+
+.form-group {
+    margin-bottom: 0.5rem; /* Reduced from 0.75rem */
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    color: #495057;
+    font-size: 0.8rem;
+}
+
+.form-text {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    box-sizing: border-box;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+    border-color: #545b62;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #1e7e34;
+    border-color: #1e7e34;
+}
+
+.btn-sm {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+.mb-2 {
+    margin-bottom: 0.5rem;
+}
+
+/* Tables */
+.table-wrapper {
+    max-height: 300px; /* Increased from 200px to accommodate both tables */
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+    flex: 1;
+}
+
+.table {
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+
+.table th,
+.table td {
+    padding: 0.4rem;
+    border-bottom: 1px solid #e9ecef;
+    text-align: left;
     word-wrap: break-word;
 }
 
-.loading {
-    color:#000000;
-
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
-.form-control {
-    max-width: 90px;
-    width: 90px;
-    font-size: 13px;
+.table tbody tr:hover {
+    background-color: #f8f9fa;
 }
 
-#font-size-slider {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    width: 200px;
-    z-index: 1000;
+/* Compound table selections */
+#compound_table tbody tr.selected {
+    background-color: #e3f2fd !important;
+    border-left: 4px solid #2196f3;
 }
 
-#gene_table {
-    display: table; /* Ensure the table is displayed properly */
-    width: 100%;    /* Make it responsive */
-    margin-top: 10px;
+#compound_table tbody tr:hover {
+    background-color: #f5f5f5;
+    cursor: pointer;
 }
 
-.scrollable-table {
-    overflow-y: auto; /* Enable vertical scrolling */
-    border: 1px solid #ccc; /* Add a border for better visibility */
-    border-radius: 5px;
-    padding: 5px;
-    background-color: #fff; /* Ensure a white background for the tables */
+#compound_table tbody tr {
+    transition: background-color 0.2s ease;
 }
 
-#compound_table, #gene_table {
-    width: 100%; /* Ensure tables take full width of their container */
-    margin: 0; /* Remove default margins */
-    border-collapse: collapse; /* Ensure proper table styling */
+/* Data Sections */
+.data-section {
+    margin-bottom: 0.5rem; /* Reduced from 0.75rem */
+}
+
+/* Node and Connection Controls */
+.node-controls,
+.connection-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem; /* Reduced from 0.75rem */
+}
+
+/* Utility Classes */
+.text-center {
+    text-align: center;
+}
+
+.loading-row td {
+    padding: 1.5rem;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Slider */
+.slider {
+    -webkit-appearance: none;
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: #ddd;
+    outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: none;
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+    .left-sidebar {
+        width: 260px;
+        min-width: 240px;
+    }
+    
+    .right-sidebar {
+        width: 780px; /* 260px * 3 */
+        min-width: 720px; /* 240px * 3 */
+    }
+    
+    .network-controls {
+        gap: 0.2rem;
+    }
+    
+    .btn-sm {
+        padding: 0.15rem 0.3rem;
+        font-size: 0.65rem;
+    }
+}
+
+@media (max-width: 1200px) {
+    .left-sidebar {
+        width: 240px;
+        min-width: 220px;
+    }
+    
+    .right-sidebar {
+        width: 720px; /* 240px * 3 */
+        min-width: 660px; /* 220px * 3 */
+    }
+    
+    .main-content {
+        gap: 0.5rem;
+        padding: 0.5rem;
+        height: calc(100vh - 60px);
+    }
+    
+    .panel-content {
+        padding: 0.5rem;
+    }
+    
+    .top-nav {
+        padding: 0.5rem;
+    }
+    
+    /* Make sidebar panels even more compact on smaller screens */
+    .left-sidebar .panel,
+    .right-sidebar .panel {
+        max-height: calc((100vh - 100px) / 3);
+        min-height: 150px;
+    }
+    
+    .table-wrapper {
+        max-height: 150px;
+    }
+}
+
+@media (max-width: 992px) {
+    .main-content {
+        flex-direction: column;
+        gap: 0.75rem;
+        height: calc(100vh - 180px); /* Account for potentially taller nav on mobile */
+    }
+    
+    .left-sidebar, .right-sidebar {
+        width: 100%;
+        max-width: none;
+        flex-direction: row;
+        overflow-x: auto;
+        overflow-y: visible;
+        max-height: 250px; /* Limit sidebar height on mobile */
+        height: auto;
+    }
+    
+    .panel {
+        min-width: 280px;
+        flex-shrink: 0;
+        max-height: 240px;
+    }
+    
+    .network-area {
+        order: -1;
+        flex: 1;
+        min-height: 400px;
+        height: auto; /* Let it take remaining space */
+    }
+    
+    /* Network should take most space on mobile */
+    .network-area .panel {
+        height: calc(100vh - 450px); /* Account for navbar + collapsed sidebars */
+        min-height: 400px;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-container {
+        top: 120px; /* Account for taller navbar on mobile */
+        height: calc(100vh - 120px);
+    }
+    
+    .main-content {
+        height: calc(100vh - 200px); /* Account for taller navbar + top-nav */
+    }
+    
+    .top-nav {
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        min-height: auto;
+    }
+    
+    .nav-section h1 {
+        font-size: 1.1rem;
+    }
+    
+    .nav-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .network-controls {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+    
+    .btn {
+        width: 100%;
+        justify-content: center;
+        padding: 0.5rem;
+    }
+    
+    .slider {
+        width: 100px;
+    }
+}
+
+/* Ensure proper scrolling and no page-level scroll */
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Make sure the base template doesn't interfere */
+.container {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
 }

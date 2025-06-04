@@ -1,4 +1,9 @@
 function positionNodes(cy, fontSizeMultiplier = 1) {
+    if (!cy || !cy.elements) {
+        console.warn("Invalid Cytoscape instance passed to positionNodes");
+        return;
+    }
+
     cy.layout({
         //animate: true,
         name: 'breadthfirst',
@@ -108,7 +113,7 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "text-margin-y": -15,
                 "font-size": `${40 * fontSizeMultiplier}px`,
                 "curve-style": "unbundled-bezier",
-                
+
             }
         },
         {
@@ -161,12 +166,26 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
     ]).update();
 }
 
-// Add event listener for font size slider
-document.getElementById('font-size-slider').addEventListener('input', function() {
-    const fontSizeMultiplier = parseFloat(this.value);
-    console.log(fontSizeMultiplier);
-    positionNodes(cy, fontSizeMultiplier);
-
+// Add event listener for font size slider with safety checks
+document.addEventListener('DOMContentLoaded', function() {
+    const fontSlider = document.getElementById('font-size-slider');
+    if (fontSlider) {
+        fontSlider.addEventListener('input', function() {
+            const fontSizeMultiplier = parseFloat(this.value);
+            console.log('Font size:', fontSizeMultiplier);
+            if (window.cy) {
+                positionNodes(window.cy, fontSizeMultiplier);
+            }
+        });
+    }
 });
 
-addEventListener("resize", (event) => { positionNodes(cy) });
+// Add window resize handler with safety checks
+window.addEventListener("resize", function() { 
+    if (window.cy) {
+        positionNodes(window.cy);
+    }
+});
+
+// Make positionNodes available globally
+window.positionNodes = positionNodes;
