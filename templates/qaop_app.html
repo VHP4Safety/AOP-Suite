@@ -7,10 +7,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 
 <div class="dashboard-container" 
-     data-mies="{{ mie_query if mie_query is defined else mies if mies is defined else '' }}" 
+     data-mies="{{ mie_query if mie_query is defined else '' }}" 
      data-qid="{{ qid if qid is defined else '' }}" 
      data-qid-wd="{{ qid_wd if qid_wd is defined else '' }}"
-     data-title="{{ title if title is defined else '' }}"
+     data-title="{{ title if title is defined else 'AOP Network Builder' }}"
      id="compound-container">
     <!-- Top Navigation Bar -->
     <header class="top-nav">

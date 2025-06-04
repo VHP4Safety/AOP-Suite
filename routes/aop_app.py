@@ -1,14 +1,16 @@
 from flask import Blueprint, request, jsonify, send_file
-import requests
 from wikidataintegrator import wdi_core
-import json
-import re
 from urllib.parse import quote, unquote
-import pandas as pd
-import csv
-import os
 from pyBiodatafuse import id_mapper
 from pyBiodatafuse.annotators import opentargets, bgee
+import requests
+import json
+import pandas as pd
+import os
+import csv
+import re
+import traceback
+from datetime import datetime
 
 aop_app = Blueprint("aop_app", __name__)
 
@@ -303,7 +305,7 @@ def get_predictions():
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON input"}), 400
-    smiles = [i for i in data.get("smiles", []) if i!= '']
+    smiles = [i for i in data.get("smiles", []) if i != '']
     models = data.get("models", [])
     metadata = data.get("metadata", {})
     try:
@@ -555,24 +557,13 @@ def get_case_mie_model():
 
 @aop_app.route("/load_and_show_genes", methods=["GET"])
 def load_and_show_genes():
-    """
-    Load and return gene data (UniProt and Ensembl) for specified MIEs.
-    
-    Query Parameters:
-        mies (str): Comma or space-separated list of MIE identifiers 
-                   Supports formats: "aop.events:1656", "https://identifiers.org/aop.events/1656", "1656"
-        
-    Returns:
-        tuple: JSON response with Cytoscape-formatted gene elements and edges
-    """
+    """Load and return gene data (UniProt and Ensembl) for specified MIEs."""
     mies = request.args.get("mies", "")
-    print(f"Received mies parameter: {mies}")
     if not mies:
         return jsonify({"error": "mies parameter is required"}), 400
     
     # Parse comma or space-separated MIE identifiers and extract numeric IDs
     mie_ids = []
-    # Split by comma or space
     raw_mies = mies.replace(",", " ").split()
     
     for mie in raw_mies:
@@ -580,33 +571,22 @@ def load_and_show_genes():
         if not mie:
             continue
             
-        # Handle different formats:
-        # 1. https://identifiers.org/aop.events/1656
-        # 2. aop.events:1656  
-        # 3. 1656
         if "https://identifiers.org/aop.events/" in mie:
             numeric_id = mie.split("https://identifiers.org/aop.events/")[-1]
         elif "aop.events:" in mie:
             numeric_id = mie.split("aop.events:")[-1]
         else:
-            # Assume it's already a numeric ID
             numeric_id = mie
             
-        # Validate that we have a numeric ID
         if numeric_id and numeric_id.isdigit():
             mie_ids.append(numeric_id)
-        else:
-            print(f"Warning: Could not extract numeric ID from: {mie}")
-    
-    print(f"Extracted MIE IDs: {mie_ids}")
     
     if not mie_ids:
         return jsonify({"error": "No valid MIE identifiers found"}), 400
     
     gene_elements = []
-    csv_path = os.path.join(
-        os.path.dirname(__file__), "../static/data/caseMieModel.csv"
-    )
+    csv_path = os.path.join(os.path.dirname(__file__), "../static/data/caseMieModel.csv")
+    
     try:
         with open(csv_path, "r", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
@@ -614,86 +594,84 @@ def load_and_show_genes():
                 csv_mie_id = row.get("MIE/KE identifier in AOP wiki", "").strip()
                 uniprot_id = row.get("uniprot ID inferred from qspred name", "").strip()
                 ensembl_id = row.get("Ensembl", "").strip()
+                protein_name = row.get("protein name uniprot", "").strip()
                 
-                # Check if this row's MIE ID matches any of our requested IDs
                 if csv_mie_id in mie_ids and uniprot_id and ensembl_id:
-                    full_mie_id = f"https://identifiers.org/aop.events/{csv_mie_id}"
+                    mie_node_id = f"https://identifiers.org/aop.events/{csv_mie_id}"
                     uniprot_node_id = f"uniprot_{uniprot_id}"
                     ensembl_node_id = f"ensembl_{ensembl_id}"
                     
-                    gene_elements.append(
-                        {
-                            "data": {
-                                "id": uniprot_node_id,
-                                "label": uniprot_id,
-                                "type": "uniprot",
-                            },
-                            "classes": "uniprot-node",
+                    # Add UniProt node
+                    gene_elements.append({
+                        "data": {
+                            "id": uniprot_node_id,
+                            "label": protein_name or uniprot_id,
+                            "type": "uniprot",
+                            "uniprot_id": uniprot_id
+                        },
+                        "classes": "uniprot-node"
+                    })
+                    
+                    # Add Ensembl node
+                    gene_elements.append({
+                        "data": {
+                            "id": ensembl_node_id,
+                            "label": ensembl_id,
+                            "type": "ensembl",
+                            "ensembl_id": ensembl_id
+                        },
+                        "classes": "ensembl-node"
+                    })
+                    
+                    # Add edge from MIE to UniProt
+                    gene_elements.append({
+                        "data": {
+                            "id": f"{mie_node_id}_{uniprot_node_id}",
+                            "source": mie_node_id,
+                            "target": uniprot_node_id,
+                            "label": "part of"
                         }
-                    )
-                    gene_elements.append(
-                        {
-                            "data": {
-                                "id": ensembl_node_id,
-                                "label": ensembl_id,
-                                "type": "ensembl",
-                            },
-                            "classes": "ensembl-node",
+                    })
+                    
+                    # Add edge from UniProt to Ensembl
+                    gene_elements.append({
+                        "data": {
+                            "id": f"{uniprot_node_id}_{ensembl_node_id}",
+                            "source": uniprot_node_id,
+                            "target": ensembl_node_id,
+                            "label": "translates to"
                         }
-                    )
-                    gene_elements.append(
-                        {
-                            "data": {
-                                "id": f"edge_{full_mie_id}_{uniprot_node_id}",
-                                "source": uniprot_node_id,
-                                "target": full_mie_id,
-                                "label": "part of",
-                            }
-                        }
-                    )
-                    gene_elements.append(
-                        {
-                            "data": {
-                                "id": f"edge_{uniprot_node_id}_{ensembl_node_id}",
-                                "source": uniprot_node_id,
-                                "target": ensembl_node_id,
-                                "label": "translates to",
-                            }
-                        }
-                    )
+                    })
+                    
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     
-    print(f"Generated {len(gene_elements)} gene elements")
-    return jsonify(gene_elements)
+    return jsonify(gene_elements), 200
 
 
 @aop_app.route("/add_qsprpred_compounds", methods=["POST"])
 def add_qsprpred_compounds():
     """
     Add QSPR prediction compounds to Cytoscape network.
-    
-    Expected JSON payload:
-        compound_mapping (dict): Mapping of SMILES to compound data
-        model_to_protein_info (dict): Model to protein information mapping
-        model_to_mie (dict): Model to MIE mapping
-        response (list): Prediction response data
-        cy_elements (list): Current Cytoscape elements
-        
-    Returns:
-        tuple: JSON response with updated Cytoscape elements
+    Connect compounds to UniProt proteins based on model mapping from CSV.
     """
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "Invalid JSON input"}), 400
+    
     compound_mapping = data.get("compound_mapping", {})
     model_to_protein_info = data.get("model_to_protein_info", {})
-    model_to_mie = data.get("model_to_mie", {})
     response_data = data.get("response", [])
     cy_elements = data.get("cy_elements", [])
     
     # Track added compounds to avoid duplicates
     added_compounds = set()
+    
+    # Create lookup for existing nodes
+    existing_node_ids = set()
+    for element in cy_elements:
+        if element.get("group") != "edges" and element.get("data", {}).get("id"):
+            existing_node_ids.add(element["data"]["id"])
     
     if isinstance(response_data, list):
         grouped = {}
@@ -712,48 +690,195 @@ def add_qsprpred_compounds():
             )
             
             # Add compound node only once
-            if compound_id not in added_compounds:
-                cy_elements.append(
-                    {
-                        "data": {
-                            "id": compound_id,
-                            "label": compound_id,
-                            "type": "chemical",
-                            "smiles": smiles,
-                        },
-                        "classes": "chemical-node",
-                    }
-                )
+            if compound_id not in added_compounds and compound_id not in existing_node_ids:
+                cy_elements.append({
+                    "data": {
+                        "id": compound_id,
+                        "label": compound_id,
+                        "type": "chemical",
+                        "smiles": smiles,
+                    },
+                    "classes": "chemical-node",
+                })
                 added_compounds.add(compound_id)
             
             for prediction in predictions:
                 for model, value in prediction.items():
                     if model != "smiles":
-                        try:
-                            if float(value) >= 6.5:
-                                protein_info = model_to_protein_info.get(
-                                    model,
-                                    {"proteinName": "Unknown Protein", "uniprotId": ""},
-                                )
-                                uniprot_target = f"uniprot_{protein_info.get('uniprotId', '')}"
-                                
-                                # Ensure the edge has a unique ID
-                                edge_id = f"{compound_id}-{uniprot_target}-{model}"
-                                cy_elements.append(
-                                    {
-                                        "data": {
-                                            "id": edge_id,
-                                            "source": compound_id,
-                                            "target": uniprot_target,
-                                            "value": value,
-                                            "type": "interaction",
-                                            "label": f"pChEMBL: {value} ({model})",
-                                        }
+                        # Get UniProt ID for this model from the CSV mapping
+                        protein_info = model_to_protein_info.get(model, {})
+                        uniprot_id = protein_info.get("uniprotId", "")
+                        
+                        if uniprot_id:  # Only create edges if we have a valid UniProt ID
+                            uniprot_node_id = f"uniprot_{uniprot_id}"
+                            edge_id = f"{compound_id}_{uniprot_node_id}_{model}"
+                            
+                            # Check if target UniProt node exists in the network
+                            target_exists = any(
+                                el.get("data", {}).get("id") == uniprot_node_id 
+                                for el in cy_elements 
+                                if el.get("group") != "edges"
+                            )
+                            
+                            if target_exists:
+                                cy_elements.append({
+                                    "data": {
+                                        "id": edge_id,
+                                        "source": compound_id,
+                                        "target": uniprot_node_id,
+                                        "value": value,
+                                        "type": "interaction",
+                                        "label": f"pChEMBL: {value}",
+                                        "model": model
                                     }
-                                )
-                        except Exception:
-                            continue
+                                })
+                            else:
+                                print(f"Warning: UniProt node {uniprot_node_id} not found in network for model {model}")
+                        else:
+                            print(f"Warning: No UniProt ID found for model {model}")
+                            
     return jsonify(cy_elements), 200
+
+
+@aop_app.route("/get_qsprpred_data", methods=["POST"])
+def get_qsprpred_data():
+    """
+    Get complete QSPRPred data including predictions and network elements.
+    
+    Expected JSON payload:
+        qid (str): QID for compounds
+        mie_query (str): MIE query string
+        threshold (float): pChEMBL threshold
+        
+    Returns:
+        tuple: JSON response with table data and network elements
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"error": "Invalid JSON input"}), 400
+        
+        qid = data.get("qid")
+        mie_query = data.get("mie_query")
+        threshold = float(data.get("threshold", 6.5))
+        
+        if not qid or not mie_query:
+            return jsonify({"error": "QID and MIE query required"}), 400
+        
+        # Get compounds
+        compounds_response, status = get_compounds_q(qid)
+        if status != 200:
+            return compounds_response, status
+        
+        compounds = compounds_response.get_json()
+        
+        # Get model to MIE mapping and protein info
+        filtered_df = load_case_mie_model(mie_query)
+        model_to_mie = filtered_df.set_index("qsprpred_model")["MIE/KE identifier in AOP wiki"].to_dict()
+        models = list(model_to_mie.keys())
+        
+        if not models:
+            return jsonify({"error": "No models available"}), 400
+        
+        # Get SMILES
+        smiles_list = [c.get("SMILES", "") for c in compounds if c.get("SMILES")]
+        
+        # Get predictions
+        predictions = fetch_predictions(smiles_list, models, {}, threshold)
+        
+        if isinstance(predictions, dict) and "error" in predictions:
+            return jsonify({"error": predictions["error"]}), 500
+        
+        # Process results server-side
+        table_data = []
+        network_elements = []
+        
+        # Load protein info from CSV
+        protein_info = {}
+        csv_path = os.path.join(os.path.dirname(__file__), "../static/data/caseMieModel.csv")
+        with open(csv_path, "r", encoding="utf-8") as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                model = row.get("qsprpred_model", "")
+                protein_name = row.get("protein name uniprot", "")
+                uniprot_id = row.get("uniprot ID inferred from qspred name", "")
+                if model and uniprot_id:
+                    protein_info[model] = {"proteinName": protein_name, "uniprotId": uniprot_id}
+        
+        # Group predictions by SMILES
+        grouped_predictions = {}
+        for pred in predictions:
+            smiles = pred.get("smiles")
+            if smiles:
+                if smiles not in grouped_predictions:
+                    grouped_predictions[smiles] = []
+                grouped_predictions[smiles].append(pred)
+        
+        # Process each compound
+        for compound in compounds:
+            smiles = compound.get("SMILES", "")
+            if smiles in grouped_predictions:
+                target_cells = []
+                pchembl_cells = []
+                
+                for prediction in grouped_predictions[smiles]:
+                    for model, value in prediction.items():
+                        if model != "smiles":
+                            protein = protein_info.get(model, {"proteinName": "Unknown", "uniprotId": ""})
+                            protein_link = f'<a href="https://www.uniprot.org/uniprotkb/{protein["uniprotId"]}" target="_blank">{protein["proteinName"]}</a>' if protein["uniprotId"] else protein["proteinName"]
+                            target_cells.append(f"{protein_link} ({model})")
+                            pchembl_cells.append(str(value))
+                            
+                            # Create network elements - connect to UniProt nodes
+                            compound_id = compound.get("Term", smiles)
+                            uniprot_id = protein["uniprotId"]
+                            
+                            if uniprot_id:  # Only create connections if we have a valid UniProt ID
+                                uniprot_node_id = f"uniprot_{uniprot_id}"
+                                
+                                # Add compound node
+                                network_elements.append({
+                                    "group": "nodes",
+                                    "data": {
+                                        "id": compound_id,
+                                        "label": compound_id,
+                                        "type": "chemical",
+                                        "smiles": smiles
+                                    },
+                                    "classes": "chemical-node"
+                                })
+                                
+                                # Add edge from compound to UniProt protein
+                                network_elements.append({
+                                    "group": "edges",
+                                    "data": {
+                                        "id": f"{compound_id}_{uniprot_node_id}_{model}",
+                                        "source": compound_id,
+                                        "target": uniprot_node_id,
+                                        "value": value,
+                                        "type": "interaction",
+                                        "label": f"pChEMBL: {value}",
+                                        "model": model
+                                    }
+                                })
+                
+                if target_cells:
+                    table_data.append({
+                        "smiles": smiles,
+                        "compound_name": compound.get("Term", ""),
+                        "cid": compound.get("cid", ""),
+                        "targets": "<br>".join(target_cells),
+                        "pchembl_values": "<br>".join(pchembl_cells)
+                    })
+        
+        return jsonify({
+            "table_data": table_data,
+            "network_elements": network_elements,
+            "threshold": threshold
+        }), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @aop_app.route("/add_aop_bounding_box", methods=["POST"])
@@ -1231,7 +1356,7 @@ def toggle_genes():
                                 ensembl_id = row.get("Ensembl", "").strip()
                                 
                                 if csv_mie_id in mie_ids and uniprot_id and ensembl_id:
-                                    full_mie_id = f"https://identifiers.org/aop.events/{csv_mie_id}"
+                                    mie_node_id = f"https://identifiers.org/aop.events/{csv_mie_id}"
                                     uniprot_node_id = f"uniprot_{uniprot_id}"
                                     ensembl_node_id = f"ensembl_{ensembl_id}"
                                     
@@ -1254,9 +1379,9 @@ def toggle_genes():
                                         },
                                         {
                                             "data": {
-                                                "id": f"edge_{full_mie_id}_{uniprot_node_id}",
-                                                "source": uniprot_node_id,
-                                                "target": full_mie_id,
+                                                "id": f"edge_{mie_node_id}_{uniprot_node_id}",
+                                                "source": mie_node_id,
+                                                "target": uniprot_node_id,
                                                 "label": "part of",
                                             }
                                         },
@@ -1522,4 +1647,43 @@ def delete_network_state(filename):
         
     except Exception as e:
         print(f"Error deleting network state: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+@aop_app.route("/get_all_genes", methods=["POST"])
+def get_all_genes():
+    """
+    Get all genes from Cytoscape elements.
+    
+    Expected JSON payload:
+        cy_elements (list): Current Cytoscape elements
+        
+    Returns:
+        tuple: JSON response with list of gene identifiers
+    """
+    try:
+        data = request.get_json(silent=True)
+        if not data or "cy_elements" not in data:
+            return jsonify({"error": "Cytoscape elements required"}), 400
+        
+        cy_elements = data["cy_elements"]
+        genes = []
+        
+        for element in cy_elements:
+            # Handle both direct element structure and nested data structure
+            element_data = element.get("data", element)
+            element_classes = element.get("classes", "")
+            element_type = element_data.get("type", "")
+            element_id = element_data.get("id", "")
+            
+            # Check for Ensembl nodes using multiple criteria
+            if (element_classes == "ensembl-node" or 
+                element_type == "ensembl" or
+                element_id.startswith("ensembl_")):
+                
+                gene_label = element_data.get("label", "")
+                if gene_label and gene_label not in genes:
+                    genes.append(gene_label)
+        
+        return jsonify({"genes": genes}), 200
+    except Exception as e:
         return jsonify({"error": str(e)}), 500

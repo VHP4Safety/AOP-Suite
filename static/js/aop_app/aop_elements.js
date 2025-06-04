@@ -310,7 +310,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // Initialize the application
-    const dashboardContainer = document.querySelector(".dashboard-container");
+    const dashboardContainer = document.querySelector("#compound-container");
     console.log("Dashboard container found:", dashboardContainer);
     
     if (dashboardContainer) {
@@ -318,7 +318,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const mies = dashboardContainer.dataset.mies;
         console.log("Raw mies data:", mies);
         
-        if (mies) {
+        if (mies && mies.trim() !== '') {
             console.log("Found MIEs:", mies);
             fetchAOPData(mies).then(data => {
                 console.debug("Fetched AOP data:", data);
@@ -334,6 +334,7 @@ document.addEventListener("DOMContentLoaded", function () {
             });
         } else {
             console.error("No 'mies' data found in dashboard-container");
+            console.log("Container found:", dashboardContainer);
             const loadingOverlay = document.querySelector(".loading-overlay");
             if (loadingOverlay) {
                 loadingOverlay.innerHTML = '<p>Missing MIE data. Please check the URL parameters.</p>';

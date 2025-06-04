@@ -1,6 +1,6 @@
 $(document).ready(() => {
-    // Use the dashboard container with the correct data attributes
-    const container = document.querySelector(".dashboard-container");
+    // Use the compound-container ID to match the actual container
+    const container = document.querySelector("#compound-container");
     console.log("Container found:", container);
     
     if (container) {
@@ -9,71 +9,83 @@ $(document).ready(() => {
         console.log("Raw qid data:", qid);
         
         if (!qid) {
-            console.error("No 'qid' found in dashboard-container.");
+            console.error("No 'qid' found in compound-container.");
             return;
         }
 
-        // Load compound table and store data (but don't render compounds in network)
-        $.ajax({
-            url: `/populate_compound_table/${qid}`,
-            type: "GET",
-            success: response => {
-                const loadingElement = document.getElementById("loading_compound");
-                if (loadingElement) {
-                    loadingElement.style.display = "none";
+        // Load compound table using the working old approach
+        $.getJSON(`/get_compounds/${qid}`, data => {
+            console.log(data);
+            const loadingElement = document.getElementById("loading_compound");
+            if (loadingElement) {
+                loadingElement.style.display = "none";
+            }
+
+            const tableBody = $("#compound_table tbody").empty();
+            data.forEach(option => {
+                const encodedSMILES = encodeURIComponent(option.SMILES);
+                window.compoundMapping[option.SMILES] = { term: option.Term, url: `/compound/${option.ID}`, target: "_blank" };
+                if (option.cid && option.cid !== "nan") {
+                    window.compoundMapping[option.cid] = {
+                        cid: option.cid,
+                        url: `https://pubchem.ncbi.nlm.nih.gov/compound/${option.cid}`,
+                        target: "_blank"
+                    };
+                } else {
+                    window.compoundMapping[option.cid] = {
+                        cid: option.cid,
+                        url: "",
+                    };
                 }
 
-                // Store compound data globally
-                window.compoundMapping = response.compound_mapping;
-                window.compoundTableData = response.table_data;
-                window.allCompoundElements = response.table_data.map(compound => ({
-                    data: {
-                        id: compound.term,
-                        label: compound.term,
-                        type: "chemical",
-                        smiles: compound.smiles,
-                    },
-                    classes: "chemical-node",
-                }));
-                
-                const tableBody = $("#compound_table tbody").empty();
-                response.table_data.forEach(compound => {
-                    tableBody.append(`
-                        <tr data-compound-name="${compound.term}" data-smiles="${compound.smiles}">
-                            <td>
-                                <img src="${compound.img_url}" alt="${compound.smiles}" />
-                                <p>${compound.compound_cell}</p> 
-                                <p>PubChem ID: ${compound.pubchem_cell}</p>
-                            </td>
-                        </tr>
-                    `);
-                });
+                // Update compound_data and populate the table
+                window.compound_data[option.SMILES] = {
+                    compoundCell: `<a href="${window.compoundMapping[option.SMILES].url}" class="compound-link" target="_blank">${option.Term}</a>`,
+                    pubChemCell: `<a href="${window.compoundMapping[option.cid].url}" class="cid-link" target="_blank">${window.compoundMapping[option.cid].cid}</a>`
+                };
 
-                console.log(`Loaded ${response.table_data.length} compounds (not rendered in network)`);
-            },
-            error: () => {
-                console.error("Failed to fetch compounds. Retrying...");
-                setTimeout(() => {
-                    location.reload();
-                }, 400);
-            }
+                tableBody.append(`
+                    <tr>
+                        <td>
+                            <img src="https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi=${encodedSMILES}" 
+                                 alt="${option.SMILES}" />
+                            <p>${window.compound_data[option.SMILES].compoundCell}</p> 
+                            <p>PubChem ID: ${window.compound_data[option.SMILES].pubChemCell}</p>
+                        </td>
+                    </tr>
+                `);
+            });
+            
+            // Initialize global variables for QSPRPred
+            window.compoundMapping = window.compoundMapping;
+            window.compound_data = window.compound_data;
+        }).fail(() => {
+            console.error("Failed to fetch compounds. Retrying...");
+            setTimeout(() => {
+                location.reload();
+            }, 400);
         });
 
-        // Handle row selection - toggle individual compounds
+        // Enable row selection to filter the Cytoscape network by compound
         $("#compound_table").on("click", "tbody tr", function (e) {
             if ($(e.target).is("a") || $(e.target).is("button")) return;
+            if (!window.fetched_preds) return;
 
-            // Toggle selection on this row
-            $(this).toggleClass("selected");
-            
-            const compoundName = $(this).data("compound-name");
-            if (compoundName) {
-                if ($(this).hasClass("selected")) {
-                    addSelectedCompound(compoundName);
-                } else {
-                    removeSelectedCompound(compoundName);
+            const compoundLink = $(this).find("td:first-child a");
+            if (compoundLink.length) {
+                compoundLink.toggleClass("selected");
+
+                const compoundName = compoundLink.text().trim();
+                if (compoundName) {
+                    const cyNode = window.cy.nodes(`[label="${compoundName}"]`);
+                    if (cyNode.length) {
+                        cyNode.toggleClass("selected");
+                    }
                 }
             }
+
+            updateCytoscapeSubset();
+            positionNodes(window.cy);
         });
 
         // Handle compound link clicks
@@ -83,155 +95,108 @@ $(document).ready(() => {
             positionNodes(window.cy);
         });
     } else {
-        console.error("Dashboard container not found");
+        console.error("Compound container not found");
         return;
     }
 });
 
-function addSelectedCompound(compoundName) {
-    if (!window.cy) {
-        console.error("Cytoscape instance not available");
-        return;
-    }
-
-    // Find the compound element
-    const compoundElement = window.allCompoundElements.find(el => 
-        el.data.label === compoundName
-    );
-
-    if (!compoundElement) {
-        console.error("Compound not found:", compoundName);
-        return;
-    }
-
-    // Add the compound if it doesn't exist
-    try {
-        window.cy.add(compoundElement);
-        console.log(`Added compound: ${compoundName}`);
-    } catch (error) {
-        console.warn("Compound already exists:", compoundName);
-    }
-
-    // Show the compound
-    window.cy.elements(`[label="${compoundName}"]`).show();
-    window.cy.fit(window.cy.elements(), 50);
-    positionNodes(window.cy);
-    
-    // Update button state if any compounds are visible
-    const visibleCompounds = window.cy.elements(".chemical-node:visible");
-    if (visibleCompounds.length > 0) {
-        window.compoundsVisible = true;
-        $("#toggle_compounds").text("Hide Compounds");
-    }
-}
-
-function removeSelectedCompound(compoundName) {
-    if (!window.cy) {
-        console.error("Cytoscape instance not available");
-        return;
-    }
-
-    // Remove the specific compound
-    window.cy.elements(`[label="${compoundName}"]`).remove();
-    console.log(`Removed compound: ${compoundName}`);
-
-    // Update button state based on remaining visible compounds
-    const visibleCompounds = window.cy.elements(".chemical-node:visible");
-    if (visibleCompounds.length === 0) {
-        window.compoundsVisible = false;
-        $("#toggle_compounds").text("Show Compounds");
-    }
-
-    window.cy.fit(window.cy.elements(), 50);
-    positionNodes(window.cy);
-}
-
-function showAllCompounds() {
-    if (!window.cy || !window.allCompoundElements) {
-        console.error("Cytoscape instance or compound data not available");
-        return;
-    }
-
-    // Remove existing chemical nodes
-    window.cy.elements(".chemical-node").remove();
-
-    // Add all compound elements
-    window.allCompoundElements.forEach(element => {
-        try {
-            window.cy.add(element);
-        } catch (error) {
-            console.warn("Skipping duplicate compound:", element.data.id);
-        }
-    });
-
-    window.cy.elements(".chemical-node").show();
-    
-    // Select all rows in the table
-    $("#compound_table tbody tr").addClass("selected");
-    
-    window.cy.fit(window.cy.elements(), 50);
-    positionNodes(window.cy);
-    
-    window.compoundsVisible = true;
-    $("#toggle_compounds").text("Hide Compounds");
-    console.log(`Showed all ${window.allCompoundElements.length} compounds`);
-}
-
-function hideAllCompounds() {
-    if (!window.cy) {
-        console.error("Cytoscape instance not available");
-        return;
-    }
-
-    // Remove all chemical nodes and their edges
-    window.cy.elements(".chemical-node").remove();
-    window.cy.edges("[type='interaction']").remove();
-    
-    // Clear table selections
-    $("#compound_table tbody tr").removeClass("selected");
-    
-    window.compoundsVisible = false;
-    $("#toggle_compounds").text("Show Compounds");
-    
-    window.cy.fit(window.cy.elements(), 50);
-    positionNodes(window.cy);
-    console.log("Hidden all compounds");
-}
-
-// Simplified toggle function
-async function toggleCompounds() {
-    if (!window.cy) {
-        console.error("Cytoscape instance not available");
-        return;
-    }
-    
-    if (window.compoundsVisible) {
-        hideAllCompounds();
-    } else {
-        showAllCompounds();
-    }
-}
-
+// Function to collect all CIDs
 function getAllCIDs() {
     return new Promise((resolve, reject) => {
-        if (!window.compoundTableData) {
-            reject("Compound table data not loaded");
-            return;
-        }
-
-        const cids = window.compoundTableData
-            .map(compound => compound.cid)
-            .filter(cid => cid && cid !== "nan");
-        
+        const cids = [];
+        $("#compound_table tbody tr").each((_, tr) => {
+            const cidLink = $(tr).find(".cid-link");
+            if (cidLink.length) {
+                const cid = cidLink.text().trim();
+                if (cid && cid !== "nan") {
+                    cids.push(cid);
+                }
+            }
+        });
         console.log('Retrieved CIDs:', cids);
         resolve(cids);
     });
 }
 
+function updateCytoscapeSubset() {
+    const selectedCompounds = [];
+
+    // Collect the names of compounds that are selected in the table
+    $("#compound_table tbody tr").each(function () {
+        const compoundLink = $(this).find("td:first-child a");
+        if (compoundLink.hasClass("selected")) {
+            const compoundName = compoundLink.text().trim();
+            if (compoundName) {
+                selectedCompounds.push(compoundName);
+            }
+        }
+    });
+
+    console.log("Selected compounds:", selectedCompounds);
+
+    if (!selectedCompounds.length) {
+        window.cy.elements().show();
+        window.cy.fit(window.cy.elements(), 50);
+        return;
+    }
+
+    const visited = new Set();
+    let activated = window.cy.collection();
+
+    // Breadth-first search function to traverse outgoing edges
+    function bfs(startNode) {
+        const queue = [startNode];
+        while (queue.length > 0) {
+            const node = queue.shift();
+            if (visited.has(node.id())) continue;
+            visited.add(node.id());
+            activated = activated.union(node);
+
+            node.outgoers('edge').forEach(edge => {
+                const target = edge.target();
+                if (!visited.has(target.id())) {
+                    queue.push(target);
+                }
+            });
+        }
+    }
+
+    // Start BFS from selected chemical nodes
+    selectedCompounds.forEach(compoundName => {
+        const node = window.cy.nodes(`[label="${compoundName}"]`);
+        if (!node.empty() && node.hasClass("chemical-node")) {
+            bfs(node);
+        }
+    });
+
+    // Keep only edges connecting activated nodes
+    const activatedEdges = window.cy.edges().filter(edge =>
+        activated.contains(edge.source()) && activated.contains(edge.target())
+    );
+
+    window.cy.elements().hide();
+    activated.show();
+    activatedEdges.show();
+    window.cy.fit(activated, 50);
+    positionNodes(window.cy);
+}
+
+// Legacy functions for backward compatibility
+function showAllCompounds() {
+    console.log("showAllCompounds called - use compound table selection");
+}
+
+function hideAllCompounds() {
+    console.log("hideAllCompounds called - use compound table selection");
+}
+
+function toggleCompounds() {
+    console.log("toggleCompounds called - use compound table selection");
+}
+
 // Make functions available globally
-window.toggleCompounds = toggleCompounds;
-window.showSelectedCompound = addSelectedCompound; // Keep backward compatibility
+window.getAllCIDs = getAllCIDs;
+window.updateCytoscapeSubset = updateCytoscapeSubset;
 window.showAllCompounds = showAllCompounds;
 window.hideAllCompounds = hideAllCompounds;
-window.addSelectedCompound = addSelectedCompound;
-window.removeSelectedCompound = removeSelectedCompound;
+window.toggleCompounds = toggleCompounds;

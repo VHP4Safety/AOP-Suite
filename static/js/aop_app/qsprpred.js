@@ -12,8 +12,11 @@ $.ajax({
                     const model = row["qsprpred_model"];
                     const proteinName = row["protein name uniprot"];
                     const uniprotId = row["uniprot ID inferred from qspred name"];
-                    window.modelToProteinInfo[model] = { proteinName, uniprotId };
+                    if (model && proteinName && uniprotId) {
+                        window.modelToProteinInfo[model] = { proteinName, uniprotId };
+                    }
                 });
+                console.log("Loaded protein info:", window.modelToProteinInfo);
             }
         });
     }
@@ -33,12 +36,13 @@ async function fetchAndDisplayPredictions() {
     }
 
     if (!window.genesVisible) {
+        window.genesVisible = true;
         await window.toggleGenes();
+        positionNodes(window.cy);
     }
     
     try {
-        // Use the dashboard container with the correct data attributes
-        const container = document.querySelector(".dashboard-container");
+        const container = document.querySelector("#compound-container");
         const mieQuery = container ? container.dataset.mies : null;
         
         if (!mieQuery) {
@@ -53,7 +57,7 @@ async function fetchAndDisplayPredictions() {
             data: { mie_query: mieQuery }
         });
         
-        // Get SMILES from compound table
+        // Get SMILES from compound table using the old approach
         const smilesList = [];
         $("#compound_table tbody tr").each((_, tr) => {
             const img = $(tr).find("td img");
@@ -83,41 +87,9 @@ async function fetchAndDisplayPredictions() {
             })
         });
         
-        // Add predictions to network via backend
-        const cyElements = window.cy.elements().jsons();
-        const updatedElements = await $.ajax({
-            url: "/add_qsprpred_compounds",
-            type: "POST",
-            contentType: "application/json",
-            data: JSON.stringify({
-                compound_mapping: window.compoundMapping,
-                model_to_protein_info: window.modelToProteinInfo,
-                model_to_mie: modelToMIEResponse,
-                response: predictions,
-                cy_elements: cyElements
-            })
-        });
-        
-        // Update Cytoscape with new elements
-        if (updatedElements && Array.isArray(updatedElements)) {
-            updatedElements.forEach(element => {
-                try {
-                    window.cy.add(element);
-                } catch (error) {
-                    console.warn("Skipping duplicate element");
-                }
-            });
-        }
-        
-        // Update table
-        populateQsprPredTable(predictions, modelToMIEResponse);
-        
-        window.compoundsVisible = true;
-        $("#toggle_compounds").text("Hide Compounds");
-        if (window.positionNodes && window.cy) {
-            window.positionNodes(window.cy);
-        }
-        window.fetched_preds = true;
+        // Use the old populateQsprPredMies function
+        populateQsprPredMies(window.cy, window.compoundMapping, window.modelToProteinInfo, modelToMIEResponse, predictions);
+        if (window.fetched_preds === false) window.fetched_preds = true;
         
     } catch (error) {
         console.error("Error fetching predictions:", error);
@@ -125,7 +97,7 @@ async function fetchAndDisplayPredictions() {
     }
 }
 
-function populateQsprPredTable(predictions, modelToMIE) {
+function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMIE, response) {
     const table = $("#compound_table");
     const tableHead = table.find("thead").empty();
     const tableBody = table.find("tbody").empty();
@@ -138,51 +110,65 @@ function populateQsprPredTable(predictions, modelToMIE) {
         </tr>
     `);
 
-    if (Array.isArray(predictions)) {
-        const grouped = predictions.reduce((acc, pred) => {
+    if (Array.isArray(response)) {
+        const grouped = response.reduce((acc, pred) => {
             const s = pred.smiles;
             (acc[s] = acc[s] || []).push(pred);
             return acc;
         }, {});
 
-        Object.entries(grouped).forEach(([smiles, predictionList]) => {
-            const compound = window.compoundMapping[smiles];
-            const compoundName = compound ? compound.term : smiles;
-            const compoundCell = compound ? 
-                `<a href="${compound.url}" class="compound-link">${compound.term}</a>` : 
-                smiles;
-            
+        const cyElements = [];
+        Object.entries(grouped).forEach(([smiles, predictions]) => {
+            const compound = compoundMapping[smiles];
+            const compoundCell = compound ? `<a href="${compound.url}">${compound.term}</a>` : smiles;
             const targetCells = [];
             const pChEMBLCells = [];
 
-            predictionList.forEach(prediction => {
+            predictions.forEach(prediction => {
                 Object.entries(prediction).forEach(([model, value]) => {
-                    if (model !== "smiles" && parseFloat(value) >= 6.5) {
-                        const proteinInfo = window.modelToProteinInfo[model] || 
-                            { proteinName: "Unknown Protein", uniprotId: "" };
-                        const proteinLink = proteinInfo.uniprotId ? 
-                            `<a href="https://www.uniprot.org/uniprotkb/${proteinInfo.uniprotId}" target="_blank">${proteinInfo.proteinName}</a>` : 
-                            proteinInfo.proteinName;
+                    if (parseFloat(value) >= 6.5) {
+                        const proteinInfo = modelToProteinInfo[model] || { proteinName: "Unknown Protein", uniprotId: "" };
+                        const proteinLink = proteinInfo.uniprotId ? `<a href="https://www.uniprot.org/uniprotkb/${proteinInfo.uniprotId}" target="_blank">${proteinInfo.proteinName}</a>` : proteinInfo.proteinName;
                         targetCells.push(`${proteinLink} (${model})`);
                         pChEMBLCells.push(value);
+
+                        const targetNodeId = `https://identifiers.org/aop.events/${modelToMIE[model]}`;
+                        const compoundId = compound ? compound.term : smiles;
+                        cyElements.push(
+                            { data: { id: compoundId, label: compoundId, type: "chemical", smiles: smiles }, classes: "chemical-node" },
+                            { data: { id: `${compoundId}-${targetNodeId}-${model}`, source: compoundId, target: `uniprot_${proteinInfo.uniprotId}`, value: value, type: "interaction", label: `pChEMBL: ${value} (${model})` } }
+                        );
                     }
                 });
             });
 
-            if (targetCells.length > 0) {
-                tableBody.append(`
-                    <tr data-compound-name="${compoundName}" data-smiles="${smiles}">
-                        <td>
-                            <img src="https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=.4&annotate=cip&r=0&smi=${encodeURIComponent(smiles)}" 
-                                 alt="${smiles}" />
-                            <br />
-                            ${compoundCell}
-                        </td>
-                        <td>${targetCells.join('<br>')}</td>
-                        <td>${pChEMBLCells.join('<br>')}</td>
-                    </tr>
-                `);
-            }
+            // Update compound_data and populate the table
+            window.compound_data[smiles] = {
+                compoundCell,
+                targetCells: targetCells.join('<br>'),
+                pChEMBLCells: pChEMBLCells.join('<br>')
+            };
+
+            tableBody.append(`
+                <tr>
+                    <td>
+                        <img src="https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=.4&annotate=cip&r=0&smi=${encodeURIComponent(smiles)}" 
+                             alt="${smiles}" />
+                        <br />
+                        ${compoundCell}
+                    </td>
+                    <td>${window.compound_data[smiles].targetCells}</td>
+                    <td>${window.compound_data[smiles].pChEMBLCells}</td>
+                </tr>
+            `);
         });
+
+        if (cyElements.length) {
+            cy.add(cyElements);
+            positionNodes(cy);
+        }
+    } else {
+        console.error("Unexpected API response format:", response);
+        alert("Error: Unexpected response format from server.");
     }
 }

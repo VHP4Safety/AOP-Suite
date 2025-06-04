@@ -7,12 +7,5 @@
 {% set title = "Thyroid disruption case study" %}
 
 {% block content %}
-    <div id="compound-container" 
-        data-qid="{{ qid }}" 
-        data-mies="{{ mie_query }}" 
-        data-mie-query="{{ mie_query }}"
-        qid_wd="{{qid_wd}}"
-        title="{{title}}">
-        {{ super() }}
-    </div>
+    {{ super() }}
 {% endblock %}

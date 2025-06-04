@@ -47,7 +47,7 @@ async function fetchBridgeDbXref(identifiers, inputSpecies = "Human", inputDatas
 async function addBdfOT(cids) {
     const data = await fetchData('/add_bdf_opentargets', { cids: cids.join(',') });
     if (data) {
-        populateBdfTableBgee(data);
+        populateBdfTableOT(data);
     }
 }
 
@@ -96,23 +96,35 @@ async function addBdfBgeeWithBridgeDb(genes) {
 }
 
 // Event listener for OpenTargets query button
-document.getElementById('query_opentargets').addEventListener('click', async () => {
-    try {
-        const cids = await getAllCIDs();
-        await addBdfOTWithBridgeDb(cids);
-    } catch (error) {
-        console.error("Error getting CIDs:", error);
-    }
-});
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('query_opentargets').addEventListener('click', async () => {
+        try {
+            const cids = await getAllCIDs();
+            if (cids.length === 0) {
+                alert("No compound IDs found. Please ensure compounds are loaded.");
+                return;
+            }
+            await addBdfOTWithBridgeDb(cids);
+        } catch (error) {
+            console.error("Error getting CIDs:", error);
+            alert("Error getting compound data: " + error.message);
+        }
+    });
 
-// Event listener for Bgee query button
-document.getElementById('query_bgee').addEventListener('click', async () => {
-    try {
-        const genes = await getAllGenes();
-        await addBdfBgeeWithBridgeDb(genes);
-    } catch (error) {
-        console.error("Error getting genes:", error);
-    }
+    // Event listener for Bgee query button
+    document.getElementById('query_bgee').addEventListener('click', async () => {
+        try {
+            const genes = await getAllGenes();
+            if (genes.length === 0) {
+                alert("No genes found. Please ensure genes are loaded in the network.");
+                return;
+            }
+            await addBdfBgeeWithBridgeDb(genes);
+        } catch (error) {
+            console.error("Error getting genes:", error);
+            alert("Error getting gene data: " + error.message);
+        }
+    });
 });
 
 // Function to populate the OpenTargets table

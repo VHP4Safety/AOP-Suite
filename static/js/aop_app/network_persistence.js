@@ -21,10 +21,20 @@ class NetworkState {
         }
 
         try {
+            // Extract positions safely to avoid cyclic references
+            const positions = {};
+            window.cy.nodes().forEach(node => {
+                const pos = node.position();
+                positions[node.id()] = {
+                    x: pos.x,
+                    y: pos.y
+                };
+            });
+
             const networkData = {
                 elements: window.cy.elements().jsons(),
-                style: window.cy.style().json(),
-                layout: window.cy.elements().positions(),
+                style: this.extractStyleData(),
+                layout: positions,
                 metadata: {
                     timestamp: new Date().toISOString(),
                     version: "1.0",
@@ -55,6 +65,20 @@ class NetworkState {
             if (!isAutoSave) {
                 this.showNotification("Failed to save network", "error");
             }
+        }
+    }
+
+    // Extract style data safely without cyclic references
+    extractStyleData() {
+        try {
+            // Return basic style information instead of full style object
+            return {
+                fontSizeMultiplier: parseFloat(document.getElementById('font-size-slider')?.value || 0.5),
+                timestamp: new Date().toISOString()
+            };
+        } catch (error) {
+            console.warn("Could not extract style data:", error);
+            return {};
         }
     }
 
@@ -98,10 +122,21 @@ class NetworkState {
             if (networkData.layout) {
                 Object.entries(networkData.layout).forEach(([nodeId, position]) => {
                     const node = window.cy.getElementById(nodeId);
-                    if (node.length > 0) {
-                        node.position(position);
+                    if (node.length > 0 && position.x !== undefined && position.y !== undefined) {
+                        node.position({
+                            x: parseFloat(position.x),
+                            y: parseFloat(position.y)
+                        });
                     }
                 });
+            }
+
+            // Restore style settings
+            if (networkData.style && networkData.style.fontSizeMultiplier) {
+                const fontSlider = document.getElementById('font-size-slider');
+                if (fontSlider) {
+                    fontSlider.value = networkData.style.fontSizeMultiplier;
+                }
             }
 
             // Restore state variables
@@ -138,30 +173,45 @@ class NetworkState {
             return;
         }
 
-        const networkData = {
-            elements: window.cy.elements().jsons(),
-            style: window.cy.style().json(),
-            layout: window.cy.elements().positions(),
-            metadata: {
-                timestamp: new Date().toISOString(),
-                version: "1.0",
-                exported: true
-            }
-        };
+        try {
+            // Extract positions safely
+            const positions = {};
+            window.cy.nodes().forEach(node => {
+                const pos = node.position();
+                positions[node.id()] = {
+                    x: pos.x,
+                    y: pos.y
+                };
+            });
 
-        const blob = new Blob([JSON.stringify(networkData, null, 2)], { 
-            type: "application/json" 
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `aop_network_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+            const networkData = {
+                elements: window.cy.elements().jsons(),
+                style: this.extractStyleData(),
+                layout: positions,
+                metadata: {
+                    timestamp: new Date().toISOString(),
+                    version: "1.0",
+                    exported: true
+                }
+            };
 
-        this.showNotification("Network downloaded", "success");
+            const blob = new Blob([JSON.stringify(networkData, null, 2)], { 
+                type: "application/json" 
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `aop_network_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            this.showNotification("Network downloaded", "success");
+        } catch (error) {
+            console.error("Error downloading network:", error);
+            this.showNotification("Failed to download network", "error");
+        }
     }
 
     // Show notification to user

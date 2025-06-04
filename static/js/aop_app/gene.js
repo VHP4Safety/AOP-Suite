@@ -5,8 +5,9 @@ async function getAllGenes() {
         throw new Error("Cytoscape instance not available");
     }
 
+    // If genes aren't visible, show them first to get gene data
     if (!window.genesVisible) {
-        console.log("Showing genes first");
+        console.log("Showing genes first to get gene data");
         await toggleGenes();
     }
 
@@ -20,10 +21,11 @@ async function getAllGenes() {
             data: JSON.stringify({ cy_elements: cyElements }),
             success: response => {
                 console.log('Retrieved genes:', response.genes);
-                resolve(response.genes);
+                resolve(response.genes || []);
             },
-            error: () => {
-                reject("Error fetching genes");
+            error: (xhr, status, error) => {
+                console.error("Error fetching genes:", error);
+                reject(`Error fetching genes: ${error}`);
             }
         });
     });
