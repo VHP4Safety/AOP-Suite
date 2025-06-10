@@ -1,228 +1,306 @@
-// Manual node and connection creation controls
+// Manual node and edge controls
 
 class ManualControls {
     constructor() {
         this.setupEventHandlers();
-        this.nodeCounter = 0;
-        this.edgeCounter = 0;
+        this.setupCollapsibleSections();
+        this.setupSearchableDropdowns();
+    }
+
+    setupCollapsibleSections() {
+        // Initialize collapsible sections
+        document.querySelectorAll('.collapsible-header').forEach(header => {
+            header.addEventListener('click', (e) => {
+                this.toggleSection(header);
+            });
+        });
+
+        // Start with all sections collapsed
+        document.querySelectorAll('.collapsible-content').forEach(content => {
+            content.classList.add('collapsed');
+            content.style.maxHeight = '0px';
+        });
+        
+        document.querySelectorAll('.collapsible-header').forEach(header => {
+            header.classList.add('collapsed');
+        });
+    }
+
+    toggleSection(header) {
+        const targetId = header.getAttribute('data-target');
+        const content = document.getElementById(targetId);
+        const icon = header.querySelector('.collapse-icon');
+
+        if (content.classList.contains('collapsed')) {
+            // Expand section
+            content.classList.remove('collapsed');
+            header.classList.remove('collapsed');
+            content.style.maxHeight = content.scrollHeight + 'px';
+            
+            // Reset max-height after animation completes
+            setTimeout(() => {
+                if (!content.classList.contains('collapsed')) {
+                    content.style.maxHeight = 'none';
+                }
+            }, 300);
+        } else {
+            // Collapse section
+            content.style.maxHeight = content.scrollHeight + 'px';
+            // Force reflow
+            content.offsetHeight;
+            content.classList.add('collapsed');
+            header.classList.add('collapsed');
+            content.style.maxHeight = '0px';
+        }
     }
 
     setupEventHandlers() {
         // Add node button
-        $("#add-node").on("click", () => {
-            this.addNode();
-        });
-
-        // Add connection button
-        $("#add-connection").on("click", () => {
-            this.addConnection();
-        });
-
-        // Update dropdowns when network changes
-        if (window.cy) {
-            window.cy.on('add remove', () => {
-                this.updateNodeDropdowns();
+        const addNodeBtn = document.getElementById('add-node');
+        if (addNodeBtn) {
+            addNodeBtn.addEventListener('click', () => {
+                this.addNode();
             });
         }
 
-        // Node type change handler
-        $("#node-type").on("change", () => {
-            this.updateNodeForm();
+        // Add connection button
+        const addConnectionBtn = document.getElementById('add-connection');
+        if (addConnectionBtn) {
+            addConnectionBtn.addEventListener('click', () => {
+                this.addConnection();
+            });
+        }
+
+        // Update node dropdowns when network changes
+        if (window.cy) {
+            window.cy.on('add remove', 'node', () => {
+                this.updateNodeDropdowns();
+            });
+        }
+    }
+
+    setupSearchableDropdowns() {
+        // Source node search
+        $("#source-node-search").on("input", (e) => {
+            this.filterDropdown("source-node", e.target.value);
         });
+
+        // Target node search
+        $("#target-node-search").on("input", (e) => {
+            this.filterDropdown("target-node", e.target.value);
+        });
+
+        // Clear search when dropdown gets focus
+        $("#source-node, #target-node").on("focus", function() {
+            const searchInput = $(this).siblings(".dropdown-search");
+            if (searchInput.length) {
+                searchInput.val("");
+                $(this).find("option").removeClass("hidden").show();
+            }
+        });
+    }
+
+    filterDropdown(selectId, searchTerm) {
+        const select = $(`#${selectId}`);
+        const options = select.find("option");
+        
+        searchTerm = searchTerm.toLowerCase();
+        
+        options.each(function() {
+            const option = $(this);
+            const text = option.text().toLowerCase();
+            const value = option.val().toLowerCase();
+            
+            if (searchTerm === "" || text.includes(searchTerm) || value.includes(searchTerm)) {
+                option.removeClass("hidden").show();
+            } else {
+                option.addClass("hidden").hide();
+            }
+        });
+        
+        // Reset selection if current selection is hidden
+        const currentOption = select.find("option:selected");
+        if (currentOption.hasClass("hidden")) {
+            select.val("");
+        }
+    }
+
+    populateNodeDropdowns() {
+        if (!window.cy) {
+            console.log("Cytoscape not available - clearing dropdowns");
+            const sourceSelect = $("#source-node");
+            const targetSelect = $("#target-node");
+            
+            sourceSelect.find("option:not(:first)").remove();
+            targetSelect.find("option:not(:first)").remove();
+            return;
+        }
+
+        const sourceSelect = $("#source-node");
+        const targetSelect = $("#target-node");
+        
+        // Clear existing options except the first one
+        sourceSelect.find("option:not(:first)").remove();
+        targetSelect.find("option:not(:first)").remove();
+        
+        // Get all nodes from the network
+        const nodes = window.cy.nodes().map(node => ({
+            id: node.id(),
+            label: node.data("label") || node.id(),
+            type: node.data("type") || "unknown"
+        }));
+        
+        if (nodes.length === 0) {
+            console.log("No nodes in network - dropdowns will remain empty");
+            return;
+        }
+        
+        // Sort nodes by label for better UX
+        nodes.sort((a, b) => a.label.localeCompare(b.label));
+        
+        // Add nodes to dropdowns
+        nodes.forEach(node => {
+            const optionText = `${node.label} (${node.type})`;
+            const option = `<option value="${node.id}">${optionText}</option>`;
+            sourceSelect.append(option);
+            targetSelect.append(option);
+        });
+        
+        console.log(`Updated node dropdowns with ${nodes.length} nodes`);
     }
 
     // Add a new node to the network
     addNode() {
         const nodeType = $("#node-type").val();
         const nodeLabel = $("#node-label").val().trim();
-        const nodeId = $("#node-id").val().trim() || this.generateNodeId(nodeType);
+        const nodeId = $("#node-id").val().trim();
 
         if (!nodeLabel) {
-            this.showError("Please enter a node label");
+            alert("Please enter a node label");
             return;
         }
 
         if (!window.cy) {
-            this.showError("Network not initialized");
+            alert("Network not initialized");
             return;
         }
 
+        // Generate ID if not provided
+        const finalId = nodeId || `${nodeType}_${Date.now()}`;
+
         // Check if node already exists
-        if (window.cy.getElementById(nodeId).length > 0) {
-            this.showError("Node with this ID already exists");
+        if (window.cy.getElementById(finalId).length > 0) {
+            alert(`Node with ID "${finalId}" already exists`);
             return;
         }
 
         try {
-            const nodeData = this.createNodeData(nodeType, nodeId, nodeLabel);
+            // Create node data
+            const nodeData = {
+                data: {
+                    id: finalId,
+                    label: nodeLabel,
+                    type: nodeType
+                },
+                classes: `${nodeType}-node`
+            };
+
+            // Add to network
             window.cy.add(nodeData);
+
+            // Hide loading overlay if this is the first element
+            const loadingOverlay = document.querySelector(".loading-overlay");
+            if (loadingOverlay && window.cy.elements().length > 0) {
+                loadingOverlay.style.display = "none";
+            }
+
+            // Reposition nodes
+            if (window.positionNodes) {
+                window.positionNodes(window.cy);
+            }
 
             // Clear form
             $("#node-label").val("");
             $("#node-id").val("");
 
-            // Update dropdowns
-            this.updateNodeDropdowns();
-
-            // Reposition nodes
-            positionNodes(window.cy);
-
-            this.showSuccess(`${nodeType} node added successfully`);
+            console.log(`Added node: ${finalId}`);
 
         } catch (error) {
             console.error("Error adding node:", error);
-            this.showError("Failed to add node");
-        }
-    }
-
-    // Create node data based on type
-    createNodeData(nodeType, nodeId, nodeLabel) {
-        const baseData = {
-            data: {
-                id: nodeId,
-                label: nodeLabel,
-                type: nodeType,
-                manually_added: true
-            }
-        };
-
-        switch (nodeType) {
-            case "ke":
-                return {
-                    ...baseData,
-                    classes: "ke-node",
-                    data: {
-                        ...baseData.data,
-                        is_mie: false,
-                        is_ao: false
-                    }
-                };
-            case "chemical":
-                return {
-                    ...baseData,
-                    classes: "chemical-node",
-                    data: {
-                        ...baseData.data,
-                        smiles: ""
-                    }
-                };
-            case "uniprot":
-                return {
-                    ...baseData,
-                    classes: "uniprot-node"
-                };
-            case "ensembl":
-                return {
-                    ...baseData,
-                    classes: "ensembl-node"
-                };
-            default:
-                return baseData;
+            alert("Error adding node: " + error.message);
         }
     }
 
     // Add a new connection between nodes
     addConnection() {
-        const sourceId = $("#source-node").val();
-        const targetId = $("#target-node").val();
-        const edgeType = $("#edge-type").val();
-        const edgeLabel = $("#edge-label").val().trim();
+        const sourceId = document.getElementById('source-node').value;
+        const targetId = document.getElementById('target-node').value;
+        const edgeType = document.getElementById('edge-type').value;
+        const edgeLabel = document.getElementById('edge-label').value.trim();
 
         if (!sourceId || !targetId) {
-            this.showError("Please select both source and target nodes");
+            alert('Please select both source and target nodes');
             return;
         }
 
         if (sourceId === targetId) {
-            this.showError("Source and target cannot be the same node");
+            alert('Source and target cannot be the same node');
             return;
         }
 
         if (!window.cy) {
-            this.showError("Network not initialized");
+            alert('Network not initialized');
             return;
         }
 
-        try {
-            const edgeId = this.generateEdgeId(sourceId, targetId);
-            
-            // Check if edge already exists
-            if (window.cy.getElementById(edgeId).length > 0) {
-                this.showError("Connection already exists between these nodes");
+        // Generate edge ID
+        const edgeId = `${sourceId}_${targetId}_${Date.now()}`;
+
+        // Check if edge already exists
+        const existingEdge = window.cy.edges().filter(edge => {
+            return edge.source().id() === sourceId && edge.target().id() === targetId;
+        });
+
+        if (existingEdge.length > 0) {
+            if (!confirm('An edge already exists between these nodes. Add another?')) {
                 return;
             }
+        }
 
-            const edgeData = this.createEdgeData(edgeId, sourceId, targetId, edgeType, edgeLabel);
+        try {
+            // Create edge data
+            const edgeData = {
+                data: {
+                    id: edgeId,
+                    source: sourceId,
+                    target: targetId,
+                    type: edgeType,
+                    label: edgeLabel || edgeType
+                }
+            };
+
+            // Add to network
             window.cy.add(edgeData);
 
-            // Clear form
-            $("#edge-label").val("");
-            $("#source-node").val("");
-            $("#target-node").val("");
-
             // Reposition nodes
-            positionNodes(window.cy);
+            if (window.positionNodes) {
+                window.positionNodes(window.cy);
+            }
 
-            this.showSuccess(`${edgeType} connection added successfully`);
+            // Clear form
+            document.getElementById('source-node').value = '';
+            document.getElementById('target-node').value = '';
+            document.getElementById('edge-label').value = '';
+            
+            // Clear search boxes
+            $("#source-node-search").val("");
+            $("#target-node-search").val("");
+
+            console.log(`Added edge: ${edgeId}`);
 
         } catch (error) {
-            console.error("Error adding connection:", error);
-            this.showError("Failed to add connection");
-        }
-    }
-
-    // Create edge data based on type
-    createEdgeData(edgeId, sourceId, targetId, edgeType, edgeLabel) {
-        const baseData = {
-            data: {
-                id: edgeId,
-                source: sourceId,
-                target: targetId,
-                type: edgeType,
-                manually_added: true
-            }
-        };
-
-        if (edgeLabel) {
-            baseData.data.label = edgeLabel;
-        }
-
-        switch (edgeType) {
-            case "ker":
-                return {
-                    ...baseData,
-                    data: {
-                        ...baseData.data,
-                        ker_label: edgeLabel || `KER_${this.edgeCounter++}`,
-                        curie: `aop.relationships:manual_${this.edgeCounter}`
-                    }
-                };
-            case "interaction":
-                return {
-                    ...baseData,
-                    data: {
-                        ...baseData.data,
-                        label: edgeLabel || "interaction"
-                    }
-                };
-            case "part_of":
-                return {
-                    ...baseData,
-                    data: {
-                        ...baseData.data,
-                        label: "part of"
-                    }
-                };
-            case "translates_to":
-                return {
-                    ...baseData,
-                    data: {
-                        ...baseData.data,
-                        label: "translates to"
-                    }
-                };
-            default:
-                return baseData;
+            console.error('Error adding edge:', error);
+            alert('Error adding edge: ' + error.message);
         }
     }
 
@@ -233,117 +311,77 @@ class ManualControls {
         const sourceSelect = $("#source-node");
         const targetSelect = $("#target-node");
         
-        // Store current values
-        const currentSource = sourceSelect.val();
-        const currentTarget = targetSelect.val();
-
-        // Clear and rebuild options
-        sourceSelect.empty().append('<option value="">Select source...</option>');
-        targetSelect.empty().append('<option value="">Select target...</option>');
-
-        window.cy.nodes().forEach(node => {
-            const nodeId = node.id();
-            const nodeLabel = node.data('label') || nodeId;
-            const nodeType = node.data('type') || 'unknown';
-            const optionText = `${nodeLabel} (${nodeType})`;
-            
-            sourceSelect.append(`<option value="${nodeId}">${optionText}</option>`);
-            targetSelect.append(`<option value="${nodeId}">${optionText}</option>`);
-        });
-
-        // Restore previous values if they still exist
-        if (currentSource && sourceSelect.find(`option[value="${currentSource}"]`).length) {
-            sourceSelect.val(currentSource);
-        }
-        if (currentTarget && targetSelect.find(`option[value="${currentTarget}"]`).length) {
-            targetSelect.val(currentTarget);
-        }
-    }
-
-    // Update node form based on selected type
-    updateNodeForm() {
-        const nodeType = $("#node-type").val();
-        const nodeIdField = $("#node-id");
+        // Clear existing options except the first one
+        sourceSelect.find("option:not(:first)").remove();
+        targetSelect.find("option:not(:first)").remove();
         
-        // Update placeholder text based on node type
-        switch (nodeType) {
-            case "ke":
-                nodeIdField.attr("placeholder", "e.g., https://identifiers.org/aop.events/123");
-                break;
-            case "chemical":
-                nodeIdField.attr("placeholder", "e.g., compound_name or SMILES");
-                break;
-            case "uniprot":
-                nodeIdField.attr("placeholder", "e.g., uniprot_P12345");
-                break;
-            case "ensembl":
-                nodeIdField.attr("placeholder", "e.g., ensembl_ENSG00000123456");
-                break;
-            default:
-                nodeIdField.attr("placeholder", "Auto-generated if empty");
-        }
+        // Get all nodes from the network
+        const nodes = window.cy.nodes().map(node => ({
+            id: node.id(),
+            label: node.data("label") || node.id(),
+            type: node.data("type") || "unknown"
+        }));
+        
+        // Sort nodes by label for better UX
+        nodes.sort((a, b) => a.label.localeCompare(b.label));
+        
+        // Add nodes to dropdowns
+        nodes.forEach(node => {
+            const optionText = `${node.label} (${node.type})`;
+            const option = `<option value="${node.id}">${optionText}</option>`;
+            sourceSelect.append(option);
+            targetSelect.append(option);
+        });
+        
+        console.log(`Updated node dropdowns with ${nodes.length} nodes`);
     }
 
     // Generate unique node ID
-    generateNodeId(nodeType) {
+    generateNodeId(nodeType, nodeLabel) {
         const timestamp = Date.now();
-        const random = Math.floor(Math.random() * 1000);
-        
-        switch (nodeType) {
-            case "uniprot":
-                return `uniprot_manual_${timestamp}_${random}`;
-            case "ensembl":
-                return `ensembl_manual_${timestamp}_${random}`;
-            case "chemical":
-                return `chemical_manual_${timestamp}_${random}`;
-            default:
-                return `${nodeType}_manual_${timestamp}_${random}`;
-        }
+        const cleanLabel = nodeLabel.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+        return `${nodeType}_${cleanLabel}_${timestamp}`;
     }
 
-    // Generate unique edge ID
-    generateEdgeId(sourceId, targetId) {
-        return `edge_${sourceId}_${targetId}_${Date.now()}`;
-    }
-
-    // Show success message
-    showSuccess(message) {
-        if (window.networkState) {
-            window.networkState.showNotification(message, "success");
-        } else {
-            console.log("Success:", message);
-        }
-    }
-
-    // Show error message
-    showError(message) {
-        if (window.networkState) {
-            window.networkState.showNotification(message, "error");
-        } else {
-            console.error("Error:", message);
-            alert(message); // Fallback
-        }
+    // Get default edge label based on type
+    getDefaultEdgeLabel(edgeType) {
+        const labels = {
+            'ker': 'Key Event Relationship',
+            'interaction': 'Interacts with',
+            'part_of': 'Part of',
+            'translates_to': 'Translates to'
+        };
+        return labels[edgeType] || 'Connection';
     }
 }
 
 // Initialize manual controls
 let manualControls;
 
-document.addEventListener("DOMContentLoaded", function() {
-    manualControls = new ManualControls();
-});
-
-// Update dropdowns when Cytoscape is ready
 function initializeManualControls() {
-    if (manualControls && window.cy) {
-        manualControls.updateNodeDropdowns();
-        // Setup change tracking for the manual controls
-        window.cy.on('add remove', () => {
-            manualControls.updateNodeDropdowns();
-        });
+    if (!manualControls) {
+        manualControls = new ManualControls();
+        
+        // Initial population of dropdowns
+        setTimeout(() => {
+            if (manualControls) {
+                manualControls.updateNodeDropdowns();
+            }
+        }, 1000);
+    }
+    
+    // Also initialize AOP network data manager
+    if (window.initializeAOPNetworkData) {
+        window.initializeAOPNetworkData();
     }
 }
 
 // Make available globally
-window.manualControls = manualControls;
 window.initializeManualControls = initializeManualControls;
+window.manualControls = manualControls;
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    // Don't initialize immediately - let aop_elements.js handle it
+    console.log('Manual controls module loaded');
+});

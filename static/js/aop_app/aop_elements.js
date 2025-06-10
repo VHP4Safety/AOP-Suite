@@ -9,6 +9,12 @@ document.addEventListener("DOMContentLoaded", function () {
     window.modelToProteinInfo = {};
     window.compoundMapping = {};
 
+    // Check if we're in standalone mode or template mode
+    const isStandaloneMode = !document.querySelector("#compound-container[data-mies]") || 
+                            !document.querySelector("#compound-container").dataset.mies;
+
+    console.log("App mode:", isStandaloneMode ? "Standalone" : "Template");
+
     // Fetch data for the AOP network.
     function fetchAOPData(mies) {
         console.debug(`Fetching AOP network data for: ${mies}`);
@@ -36,6 +42,8 @@ document.addEventListener("DOMContentLoaded", function () {
         // Ensure we have elements to render
         if (!Array.isArray(elements) || elements.length === 0) {
             console.warn("No elements to render in network");
+            // Initialize empty network for standalone mode
+            initializeEmptyNetwork();
             return;
         }
 
@@ -59,69 +67,140 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             
             setupEventHandlers();
-            
-            // Initialize additional functionality
-            setTimeout(() => {
-                initializeGeneView();
-                if (window.initializeManualControls) {
-                    window.initializeManualControls();
-                }
-                if (window.setupNetworkChangeTracking) {
-                    window.setupNetworkChangeTracking();
-                }
-            }, 200);
+            initializeModules();
             
         } catch (error) {
             console.error("Error creating Cytoscape instance:", error);
+            initializeEmptyNetwork();
         }
     }
 
+    function initializeEmptyNetwork() {
+        console.log("Initializing empty network for standalone mode");
+        try {
+            window.cy = cytoscape({
+                container: document.getElementById("cy"),
+                elements: [],
+            });
+
+            if (window.positionNodes) {
+                window.positionNodes(window.cy);
+            }
+            
+            setupEventHandlers();
+            initializeModules();
+            
+            // Show helpful message for standalone mode
+            const loadingOverlay = document.querySelector(".loading-overlay");
+            if (loadingOverlay) {
+                loadingOverlay.innerHTML = `
+                    <div class="text-center">
+                        <i class="fas fa-project-diagram fa-3x mb-3" style="color: #6c757d;"></i>
+                        <h4>QAOP Network Builder</h4>
+                        <p>Start building your network by:</p>
+                        <ul style="text-align: left; display: inline-block;">
+                            <li>Adding AOP network data manually</li>
+                            <li>Using manual controls to add nodes and edges</li>
+                            <li>Uploading custom tables</li>
+                        </ul>
+                    </div>
+                `;
+                loadingOverlay.style.display = "flex";
+                loadingOverlay.style.flexDirection = "column";
+                loadingOverlay.style.justifyContent = "center";
+            }
+            
+        } catch (error) {
+            console.error("Error creating empty Cytoscape instance:", error);
+        }
+    }
+
+    function initializeModules() {
+        setTimeout(() => {
+            // Initialize gene view (safe to call without data)
+            initializeGeneView();
+            
+            // Initialize manual controls
+            if (window.initializeManualControls) {
+                window.initializeManualControls();
+            }
+            
+            // Initialize AOP network data manager
+            if (window.initializeAOPNetworkData) {
+                window.initializeAOPNetworkData();
+            }
+            
+            // Setup network change tracking
+            if (window.setupNetworkChangeTracking) {
+                window.setupNetworkChangeTracking();
+            }
+        }, 200);
+    }
+
     function initializeGeneView() {
-        if (!window.cy || window.cy.elements().length === 0) {
+        if (!window.cy) {
             console.warn("Cytoscape not ready for gene initialization");
             return;
         }
         
-        // Always populate the gene table, even if genes aren't shown in the network yet
+        // Always populate the gene table, even if empty
         setTimeout(() => {
             if (window.populateGeneTable) {
                 window.populateGeneTable();
             }
         }, 100);
         
-        fetch('/initialize_gene_view', {
+        // Only try to load genes if we have MIE data
+        const dashboardContainer = document.querySelector("#compound-container");
+        const mies = dashboardContainer?.dataset?.mies;
+        
+        if (!mies || isStandaloneMode) {
+            console.log("No MIE data available - skipping gene loading");
+            return;
+        }
+        
+        // Load gene elements but keep them hidden initially
+        fetch('/toggle_genes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
+            body: JSON.stringify({ 
+                action: 'show',
+                cy_elements: window.cy.elements().jsons() 
+            })
         })
         .then(response => {
             if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                console.warn(`Gene initialization failed: ${response.status}`);
+                return { gene_elements: [] };
             }
             return response.json();
         })
         .then(data => {
-            if (data.error) {
-                console.warn("Gene initialization error:", data.error);
-                return;
-            }
-            
             if (data.gene_elements && data.gene_elements.length > 0) {
                 data.gene_elements.forEach(element => {
-                    try {
-                        window.cy.add(element);
-                    } catch (error) {
-                        console.warn("Skipping duplicate element:", element.data?.id);
+                    const elementId = element.data?.id;
+                    if (elementId && !window.cy.getElementById(elementId).length) {
+                        try {
+                            window.cy.add(element);
+                        } catch (error) {
+                            console.warn("Skipping duplicate element:", elementId);
+                        }
                     }
                 });
-                // Don't show genes by default - let user control visibility
+                
+                // Keep genes hidden by default
                 window.cy.elements(".uniprot-node, .ensembl-node").hide();
+                window.cy.edges().filter(edge => {
+                    const source = edge.source();
+                    const target = edge.target();
+                    return source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
+                           target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
+                }).hide();
+                
                 $("#see_genes").text("See Genes");
                 window.genesVisible = false;
                 
                 console.log("Gene elements loaded but hidden by default");
-            } else {
-                console.log("No gene elements to initialize");
             }
         })
         .catch(error => {
@@ -216,26 +295,33 @@ document.addEventListener("DOMContentLoaded", function () {
             }
             
             if (action === 'show' && data.gene_elements) {
+                // Add only new elements
                 data.gene_elements.forEach(element => {
-                    try {
-                        window.cy.add(element);
-                    } catch (error) {
-                        console.warn("Skipping duplicate element:", element.data?.id);
+                    const elementId = element.data?.id;
+                    if (elementId && !window.cy.getElementById(elementId).length) {
+                        try {
+                            window.cy.add(element);
+                        } catch (error) {
+                            console.warn("Error adding element:", elementId, error.message);
+                        }
                     }
                 });
+                
                 // Show all gene nodes and their edges
                 window.cy.elements(".uniprot-node, .ensembl-node").show();
-                window.cy.edges().filter(function(edge) {
+                window.cy.edges().forEach(function(edge) {
                     const source = edge.source();
                     const target = edge.target();
-                    return (source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
-                           target.hasClass("uniprot-node") || target.hasClass("ensembl-node")) &&
-                           source.visible() && target.visible();
-                }).show();
+                    
+                    // Show edge if both source and target are visible
+                    if (source.visible() && target.visible()) {
+                        edge.show();
+                    }
+                });
                 
                 $("#see_genes").text("Hide Genes");
                 window.genesVisible = true;
-                
+            
                 // Populate gene table after showing genes
                 setTimeout(() => {
                     if (window.populateGeneTable) {
@@ -245,23 +331,26 @@ document.addEventListener("DOMContentLoaded", function () {
             } else if (action === 'hide') {
                 // Hide gene nodes
                 window.cy.elements(".uniprot-node, .ensembl-node").hide();
-                // Hide only edges that connect exclusively to gene nodes
-                window.cy.edges().filter(function(edge) {
+                // Hide edges connected to gene nodes
+                window.cy.edges().forEach(function(edge) {
                     const source = edge.source();
                     const target = edge.target();
-                    // Hide edge if either source or target is a hidden gene node
-                    return (source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
-                           target.hasClass("uniprot-node") || target.hasClass("ensembl-node"));
-                }).hide();
+                    
+                    // Hide edge if either end is a gene node
+                    if (source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
+                        target.hasClass("uniprot-node") || target.hasClass("ensembl-node")) {
+                        edge.hide();
+                    }
+                });
                 
                 $("#see_genes").text("See Genes");
                 window.genesVisible = false;
             }
+            
             positionNodes(window.cy);
         })
         .catch(error => {
             console.error("Error toggling genes:", error);
-            console.error("Response might not be JSON. Check server logs.");
         });
     }
 
@@ -313,35 +402,36 @@ document.addEventListener("DOMContentLoaded", function () {
     const dashboardContainer = document.querySelector("#compound-container");
     console.log("Dashboard container found:", dashboardContainer);
     
-    if (dashboardContainer) {
-        console.log("All data attributes:", dashboardContainer.dataset);
-        const mies = dashboardContainer.dataset.mies;
-        console.log("Raw mies data:", mies);
-        
-        if (mies && mies.trim() !== '') {
-            console.log("Found MIEs:", mies);
-            fetchAOPData(mies).then(data => {
-                console.debug("Fetched AOP data:", data);
-                if (data && data.length > 0) {
-                    renderAOPNetwork(data);
-                } else {
-                    console.warn("No AOP data received");
-                    const loadingOverlay = document.querySelector(".loading-overlay");
-                    if (loadingOverlay) {
-                        loadingOverlay.innerHTML = '<p>No AOP network data available</p>';
-                    }
-                }
-            });
-        } else {
-            console.error("No 'mies' data found in dashboard-container");
-            console.log("Container found:", dashboardContainer);
-            const loadingOverlay = document.querySelector(".loading-overlay");
-            if (loadingOverlay) {
-                loadingOverlay.innerHTML = '<p>Missing MIE data. Please check the URL parameters.</p>';
-            }
-        }
-    } else {
+    if (!dashboardContainer) {
         console.error("Dashboard container not found");
+        return;
+    }
+
+    if (isStandaloneMode) {
+        console.log("Running in standalone mode - initializing empty network");
+        initializeEmptyNetwork();
+        return;
+    }
+
+    // Template mode - try to load data from template
+    console.log("All data attributes:", dashboardContainer.dataset);
+    const mies = dashboardContainer.dataset.mies;
+    console.log("Raw mies data:", mies);
+    
+    if (mies && mies.trim() !== '') {
+        console.log("Found MIEs:", mies);
+        fetchAOPData(mies).then(data => {
+            console.debug("Fetched AOP data:", data);
+            if (data && data.length > 0) {
+                renderAOPNetwork(data);
+            } else {
+                console.warn("No AOP data received");
+                initializeEmptyNetwork();
+            }
+        });
+    } else {
+        console.log("No MIEs data found - running in standalone mode");
+        initializeEmptyNetwork();
     }
 });
 

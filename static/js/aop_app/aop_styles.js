@@ -36,12 +36,6 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
         {
             selector: ".chemical-node",
             style: {
-                //"background-image": ele => 
-                //    "https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi=" + encodeURIComponent(ele.data('smiles'))
-                //,
-                //"background-fit": "cover cover",
-                //"background-image-opacity": 0.5,
-                //todo: CORS issue
                 "width": `${270 * fontSizeMultiplier}px`,
                 "height": `${200 * fontSizeMultiplier}px`,
                 "shape": "triangle",

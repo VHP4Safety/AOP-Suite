@@ -65,6 +65,11 @@ async function fetchAndDisplayPredictions() {
             if (smiles) smilesList.push(smiles);
         });
         
+        if (smilesList.length === 0) {
+            alert("No compounds found. Please ensure compound data is loaded.");
+            return;
+        }
+        
         const models = Object.keys(modelToMIEResponse);
         if (!models.length) {
             alert("Error: No models available for prediction.");
@@ -126,18 +131,45 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
 
             predictions.forEach(prediction => {
                 Object.entries(prediction).forEach(([model, value]) => {
-                    if (parseFloat(value) >= 6.5) {
+                    if (model !== "smiles" && parseFloat(value) >= 6.5) {
                         const proteinInfo = modelToProteinInfo[model] || { proteinName: "Unknown Protein", uniprotId: "" };
                         const proteinLink = proteinInfo.uniprotId ? `<a href="https://www.uniprot.org/uniprotkb/${proteinInfo.uniprotId}" target="_blank">${proteinInfo.proteinName}</a>` : proteinInfo.proteinName;
                         targetCells.push(`${proteinLink} (${model})`);
                         pChEMBLCells.push(value);
 
-                        const targetNodeId = `https://identifiers.org/aop.events/${modelToMIE[model]}`;
                         const compoundId = compound ? compound.term : smiles;
-                        cyElements.push(
-                            { data: { id: compoundId, label: compoundId, type: "chemical", smiles: smiles }, classes: "chemical-node" },
-                            { data: { id: `${compoundId}-${targetNodeId}-${model}`, source: compoundId, target: `uniprot_${proteinInfo.uniprotId}`, value: value, type: "interaction", label: `pChEMBL: ${value} (${model})` } }
-                        );
+                        const uniprotNodeId = `uniprot_${proteinInfo.uniprotId}`;
+                        
+                        // Add compound node if it doesn't exist
+                        if (!cy.getElementById(compoundId).length) {
+                            cyElements.push({
+                                data: { 
+                                    id: compoundId, 
+                                    label: compoundId, 
+                                    type: "chemical", 
+                                    smiles: smiles 
+                                }, 
+                                classes: "chemical-node" 
+                            });
+                        }
+                        
+                        // Only add edge if the target UniProt node exists
+                        if (cy.getElementById(uniprotNodeId).length > 0) {
+                            const edgeId = `${compoundId}-${uniprotNodeId}-${model}`;
+                            if (!cy.getElementById(edgeId).length) {
+                                cyElements.push({
+                                    data: { 
+                                        id: edgeId,
+                                        source: compoundId, 
+                                        target: uniprotNodeId, 
+                                        value: value, 
+                                        type: "interaction", 
+                                        label: `pChEMBL: ${value}`,
+                                        model: model
+                                    }
+                                });
+                            }
+                        }
                     }
                 });
             });

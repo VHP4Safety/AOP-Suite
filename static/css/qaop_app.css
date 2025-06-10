@@ -159,19 +159,7 @@
     flex-direction: column;
 }
 
-/* Cytoscape Container */
-#cy {
-    height: 100%;
-    min-height: 500px;
-    background: white;
-    border: 1px solid #e9ecef;
-    border-radius: 4px;
-    position: relative;
-    width: 100%;
-    box-sizing: border-box;
-    flex: 1; /* Take all available space */
-}
-
+/* Loading overlay - moved from inline styles */
 .loading-overlay {
     position: absolute;
     top: 50%;
@@ -180,16 +168,36 @@
     text-align: center;
     color: #6c757d;
     z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: rgba(255,255,255,0.8);
 }
 
-.loading-overlay i {
-    font-size: 1.5rem;
-    margin-bottom: 0.5rem;
+/* Cytoscape container - moved from inline styles */
+#cy {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    position: relative;
+    box-sizing: border-box;
+    flex: 1;
 }
 
-.loading-overlay p {
-    margin-top: 0.75rem;
-    font-size: 0.9rem;
+/* Loading indicators - moved from inline styles */
+.loading-indicator {
+    display: none;
+    text-align: center;
+    padding: 1rem;
+    color: #6c757d;
+}
+
+#loading_qaop_table {
+    display: none;
 }
 
 /* Form Controls */
@@ -334,13 +342,26 @@
     border-left: 4px solid #2196f3;
 }
 
-#compound_table tbody tr:hover {
-    background-color: #f5f5f5;
+#compound_table tbody tr {
     cursor: pointer;
+    transition: background-color 0.2s ease;
 }
 
-#compound_table tbody tr {
-    transition: background-color 0.2s ease;
+#compound_table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+#compound_table tbody tr .compound-link {
+    transition: all 0.2s ease;
+}
+
+/* Enhanced compound selection styling */
+.compound-link.selected {
+    background-color: #007bff !important;
+    color: white !important;
+    font-weight: bold;
+    padding: 2px 4px;
+    border-radius: 3px;
 }
 
 /* Data Sections */
@@ -396,142 +417,296 @@
     border: none;
 }
 
-/* Responsive Design */
-@media (max-width: 1400px) {
-    .left-sidebar {
-        width: 260px;
-        min-width: 240px;
-    }
-    
-    .right-sidebar {
-        width: 780px; /* 260px * 3 */
-        min-width: 720px; /* 240px * 3 */
-    }
-    
-    .network-controls {
-        gap: 0.2rem;
-    }
-    
-    .btn-sm {
-        padding: 0.15rem 0.3rem;
-        font-size: 0.65rem;
-    }
+/* Collapsible Sections */
+.collapsible-section {
+    margin-bottom: 0.75rem;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
 }
 
-@media (max-width: 1200px) {
-    .left-sidebar {
-        width: 240px;
-        min-width: 220px;
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: #f8f9fa;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.collapsible-header:hover {
+    background-color: #e9ecef;
+}
+
+.collapsible-header h4 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.collapse-icon {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+    color: #6c757d;
+}
+
+.collapsible-header.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.collapsible-content {
+    padding: 0.75rem;
+    border-top: 1px solid #e9ecef;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    overflow: hidden;
+}
+
+.collapsible-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top: none;
+}
+
+/* Enhanced form controls for collapsible sections */
+.collapsible-content .form-group {
+    margin-bottom: 0.5rem;
+}
+
+.collapsible-content .btn {
+    width: 100%;
+    margin-top: 0.25rem;
+}
+
+/* Sidebar Toggle and Collapse Functionality */
+.sidebar-toggle {
+    background: none;
+    border: none;
+    color: #495057;
+    font-size: 1rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+    color: #007bff;
+}
+
+/* Sidebar Headers */
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sidebar-close {
+    background: none;
+    border: none;
+    color: #6c757d;
+    font-size: 1rem;
+    padding: 0.25rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.sidebar-close:hover {
+    color: #495057;
+}
+
+/* Collapsible Sidebar Styles */
+.left-sidebar, .right-sidebar {
+    position: relative;
+    transition: transform 0.3s ease, width 0.3s ease;
+    overflow: visible;
+    z-index: 50;
+}
+
+.left-sidebar.collapsed {
+    transform: translateX(-100%);
+    width: 0;
+    min-width: 0;
+    margin-right: 0;
+}
+
+.right-sidebar.collapsed {
+    transform: translateX(100%);
+    width: 0;
+    min-width: 0;
+    margin-left: 0;
+}
+
+/* When sidebars are collapsed, network takes full width */
+.main-content:has(.left-sidebar.collapsed) .network-area {
+    margin-left: 0;
+}
+
+.main-content:has(.right-sidebar.collapsed) .network-area {
+    margin-right: 0;
+}
+
+.main-content:has(.left-sidebar.collapsed):has(.right-sidebar.collapsed) .network-area {
+    width: 100%;
+    margin: 0;
+}
+
+/* Enhanced network area flexibility */
+.network-area {
+    transition: margin 0.3s ease, width 0.3s ease;
+}
+
+/* Sidebar collapse animation improvements */
+@media (min-width: 993px) {
+    .left-sidebar.collapsed {
+        position: absolute;
+        left: -280px;
+        width: 280px;
+        transform: none;
     }
     
-    .right-sidebar {
-        width: 720px; /* 240px * 3 */
-        min-width: 660px; /* 220px * 3 */
+    .right-sidebar.collapsed {
+        position: absolute;
+        right: -840px;
+        width: 840px;
+        transform: none;
     }
     
+    /* Adjust main content when sidebars are collapsed */
     .main-content {
-        gap: 0.5rem;
-        padding: 0.5rem;
-        height: calc(100vh - 60px);
+        position: relative;
     }
     
-    .panel-content {
-        padding: 0.5rem;
+    .main-content:has(.left-sidebar.collapsed) {
+        padding-left: 0;
     }
     
-    .top-nav {
-        padding: 0.5rem;
+    .main-content:has(.right-sidebar.collapsed) {
+        padding-right: 0;
     }
     
-    /* Make sidebar panels even more compact on smaller screens */
-    .left-sidebar .panel,
-    .right-sidebar .panel {
-        max-height: calc((100vh - 100px) / 3);
-        min-height: 150px;
+    .main-content:has(.left-sidebar.collapsed) .network-area {
+        margin-left: -0.75rem;
+        width: calc(100% + 0.75rem);
     }
     
-    .table-wrapper {
-        max-height: 150px;
+    .main-content:has(.right-sidebar.collapsed) .network-area {
+        margin-right: -0.75rem;
+        width: calc(100% + 0.75rem);
+    }
+    
+    .main-content:has(.left-sidebar.collapsed):has(.right-sidebar.collapsed) .network-area {
+        margin: -0.75rem;
+        width: calc(100% + 1.5rem);
     }
 }
 
+/* Toggle button positioning adjustments */
+.nav-section {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+/* Enhanced panel styles for better sidebar experience */
+.left-sidebar .panel,
+.right-sidebar .panel {
+    border-radius: 6px;
+    margin-bottom: 0.75rem;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* Ensure panels don't overflow in collapsed state */
+.left-sidebar.collapsed .panel,
+.right-sidebar.collapsed .panel {
+    display: none;
+}
+
+/* Responsive improvements for sidebar collapse */
 @media (max-width: 992px) {
-    .main-content {
-        flex-direction: column;
-        gap: 0.75rem;
-        height: calc(100vh - 180px); /* Account for potentially taller nav on mobile */
+    .sidebar-toggle {
+        display: none;
     }
     
-    .left-sidebar, .right-sidebar {
+    .left-sidebar.collapsed,
+    .right-sidebar.collapsed {
+        transform: none;
+        position: relative;
         width: 100%;
-        max-width: none;
-        flex-direction: row;
-        overflow-x: auto;
-        overflow-y: visible;
-        max-height: 250px; /* Limit sidebar height on mobile */
-        height: auto;
     }
     
-    .panel {
-        min-width: 280px;
-        flex-shrink: 0;
-        max-height: 240px;
-    }
-    
-    .network-area {
-        order: -1;
-        flex: 1;
-        min-height: 400px;
-        height: auto; /* Let it take remaining space */
-    }
-    
-    /* Network should take most space on mobile */
-    .network-area .panel {
-        height: calc(100vh - 450px); /* Account for navbar + collapsed sidebars */
-        min-height: 400px;
+    .main-content:has(.left-sidebar.collapsed) .network-area,
+    .main-content:has(.right-sidebar.collapsed) .network-area,
+    .main-content:has(.left-sidebar.collapsed):has(.right-sidebar.collapsed) .network-area {
+        margin: 0;
+        width: 100%;
     }
 }
 
-@media (max-width: 768px) {
-    .dashboard-container {
-        top: 120px; /* Account for taller navbar on mobile */
-        height: calc(100vh - 120px);
-    }
-    
-    .main-content {
-        height: calc(100vh - 200px); /* Account for taller navbar + top-nav */
-    }
-    
-    .top-nav {
-        flex-direction: column;
-        gap: 0.5rem;
-        padding: 0.75rem;
-        min-height: auto;
-    }
-    
-    .nav-section h1 {
-        font-size: 1.1rem;
-    }
-    
-    .nav-controls {
-        width: 100%;
-        justify-content: space-between;
-    }
-    
-    .network-controls {
-        flex-direction: column;
-        gap: 0.25rem;
-    }
-    
-    .btn {
-        width: 100%;
-        justify-content: center;
-        padding: 0.5rem;
-    }
-    
-    .slider {
-        width: 100px;
-    }
+/* Smooth transitions for better UX */
+* {
+    transition: margin 0.3s ease, width 0.3s ease, transform 0.3s ease;
+}
+
+/* Network container adjustments */
+.network-container {
+    height: 100%;
+    position: relative;
+}
+
+/* Ensure network resizes properly when sidebars toggle */
+.network-area .panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.network-area .panel-content {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Better visual feedback for toggle buttons */
+.sidebar-toggle {
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+    background-color: rgba(0,123,255,0.1);
+}
+
+.sidebar-toggle:active {
+    transform: scale(0.95);
 }
 
 /* Ensure proper scrolling and no page-level scroll */
@@ -548,4 +723,68 @@ html, body {
     max-width: none !important;
     padding: 0 !important;
     margin: 0 !important;
+}
+
+/* Add visual feedback for Ctrl+click instruction */
+.compound-selection-hint {
+    font-size: 0.8em;
+    color: #6c757d;
+    font-style: italic;
+    margin-top: 5px;
+}
+
+/* Searchable Dropdown Styles */
+.searchable-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.dropdown-search {
+    width: 100%;
+    margin-bottom: 0.25rem;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
+    font-size: 0.8rem;
+    z-index: 10;
+    position: relative;
+}
+
+.searchable-select {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top: 1px solid #ced4da;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+}
+
+.searchable-select option {
+    padding: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.searchable-select option:hover {
+    background-color: #e9ecef;
+}
+
+.dropdown-search:focus {
+    border-bottom: 1px solid #80bdff;
+    z-index: 11;
+}
+
+.searchable-select:focus {
+    border-top: 1px solid #80bdff;
+    outline: none;
+    box-shadow: 0 0 0 0.15rem rgba(0, 123, 255, 0.25);
+}
+
+/* Hide options that don't match search */
+.searchable-select option.hidden {
+    display: none;
+}
+
+/* Enhanced form group spacing for searchable dropdowns */
+.searchable-dropdown .form-control {
+    transition: border-color 0.15s ease-in-out;
 }

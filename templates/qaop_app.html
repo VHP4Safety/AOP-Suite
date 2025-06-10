@@ -15,6 +15,9 @@
     <!-- Top Navigation Bar -->
     <header class="top-nav">
         <div class="nav-section">
+            <button id="toggle-left-sidebar" class="sidebar-toggle btn-secondary">
+                <i class="fas fa-bars"></i>
+            </button>
             <h1><i class="fas fa-project-diagram"></i> {{ title if title is defined else 'AOP Network Builder' }}</h1>
         </div>
         <div class="nav-controls">
@@ -28,13 +31,23 @@
             <button id="load_network" class="btn btn-secondary">
                 <i class="fas fa-upload"></i> Load Network
             </button>
+            <button id="toggle-right-sidebar" class="sidebar-toggle btn-secondary">
+                <i class="fas fa-table"></i>
+            </button>
         </div>
     </header>
 
     <!-- Main Content Area -->
     <div class="main-content">
         <!-- Left Sidebar -->
-        <aside class="left-sidebar">
+        <aside class="left-sidebar" id="left-sidebar">
+            <div class="sidebar-header">
+                <h3><i class="fas fa-cog"></i> Controls</h3>
+                <button class="sidebar-close" data-target="left-sidebar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
             <!-- Data Sources Section -->
             <div class="panel">
                 <div class="panel-header">
@@ -43,8 +56,8 @@
                 <div class="panel-content">
                     <select id="data-type-dropdown" class="form-select" onchange="handleDataTypeChange()">
                         <option value="qsprpred_opt">QSPRPred</option>
-                        <option value="qaop_opt">Custom qAOP data</option>
                         <option value="bdf_opt">BioDataFuse</option>
+                        <option value="custom_table_opt">Custom Tables</option>
                     </select>
                     
                     <div id="qsprpred" class="data-section">
@@ -56,104 +69,182 @@
                             <input type="number" step="0.1" class="form-control" id="threshold_pchembl" value="6.5">
                             <small class="form-text">Activity of 10<sup id="activity_display">-6.5</sup> M</small>
                         </div>
+                        <button id="fetch_predictions" class="btn btn-primary">
+                            <i class="fas fa-flask"></i> Fetch Predictions
+                        </button>
                     </div>
                     
-                    <div id="qaop_div" class="data-section" style="display: none;">
+                    <div id="bdf_div" class="data-section">
+                        <button id="query_opentargets" class="btn btn-secondary">
+                            <i class="fas fa-bullseye"></i> Query OpenTargets
+                        </button>
+                        <button id="query_bgee" class="btn btn-secondary">
+                            <i class="fas fa-dna"></i> Query Bgee
+                        </button>
+                    </div>
+                    
+                    <div id="custom_table_div" class="data-section">
+                        <div class="form-group">
+                            <label for="upload-table-file">Upload CSV/TSV:</label>
+                            <input type="file" id="upload-table-file" accept=".csv,.tsv,.txt" class="form-control">
+                            <div id="table-upload-status" class="mt-2"></div>
+                        </div>
+                        <div class="form-group">
+                            <label for="uploaded-tables-select">Select Table:</label>
+                            <select id="uploaded-tables-select" class="form-control"></select>
+                        </div>
+                        <button id="map-table-btn" class="btn btn-primary" disabled>
+                            <i class="fas fa-map"></i> Map to Network
+                        </button>
+                        <div id="table-preview" class="mt-3"></div>
+                    </div>
+                    
+                    <div id="qaop_div" class="data-section">
+                        <div id="loading_qaop_table" class="loading-indicator">
+                            <i class="fas fa-spinner fa-spin"></i> Loading QAOP data...
+                        </div>
                         <div class="table-wrapper">
-                            <table class="table" id="qaop_table"> 
+                            <table id="qaop_table" class="table table-striped">
                                 <thead>
                                     <tr>
                                         <th>Source</th>
-                                        <th>KER</th>
+                                        <th>Relationship</th>
                                         <th>Target</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr class="loading-row">
-                                        <td colspan="3" class="text-center">Loading AOP network...</td>
-                                    </tr>
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    
-                    <div id="bdf_div" class="data-section" style="display: none;">
-                        <button id="query_opentargets" class="btn btn-primary w-100 mb-2">
-                            <i class="fas fa-pills"></i> Query OpenTargets
-                        </button>
-                        <button id="query_bgee" class="btn btn-primary w-100">
-                            <i class="fas fa-dna"></i> Query Bgee
-                        </button>
+                </div>
+            </div>
+
+            <!-- Manual Data Controls -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-plus-circle"></i> Add Data Manually</h3>
+                </div>
+                <div class="panel-content">
+                    <!-- Add Nodes Section -->
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" data-target="add-nodes-content">
+                            <h4><i class="fas fa-circle"></i> Add Nodes</h4>
+                            <i class="fas fa-chevron-down collapse-icon"></i>
+                        </div>
+                        <div class="collapsible-content" id="add-nodes-content">
+                            <div class="node-controls">
+                                <div class="form-group">
+                                    <label for="node-type">Node Type:</label>
+                                    <select id="node-type" class="form-control">
+                                        <option value="ke">Key Event</option>
+                                        <option value="chemical">Chemical</option>
+                                        <option value="uniprot">UniProt</option>
+                                        <option value="ensembl">Ensembl</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="node-label">Node Label:</label>
+                                    <input type="text" id="node-label" class="form-control" placeholder="Enter node label">
+                                </div>
+                                <div class="form-group">
+                                    <label for="node-id">Node ID (optional):</label>
+                                    <input type="text" id="node-id" class="form-control" placeholder="Auto-generated if empty">
+                                </div>
+                                <button id="add-node" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Add Node
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Edges Section -->
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" data-target="add-edges-content">
+                            <h4><i class="fas fa-link"></i> Add Edges</h4>
+                            <i class="fas fa-chevron-down collapse-icon"></i>
+                        </div>
+                        <div class="collapsible-content" id="add-edges-content">
+                            <div class="connection-controls">
+                                <div class="form-group">
+                                    <label for="source-node">Source Node:</label>
+                                    <div class="searchable-dropdown">
+                                        <input type="text" id="source-node-search" class="form-control dropdown-search" placeholder="Search source nodes...">
+                                        <select id="source-node" class="form-control searchable-select" size="5">
+                                            <option value="">Select source...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="target-node">Target Node:</label>
+                                    <div class="searchable-dropdown">
+                                        <input type="text" id="target-node-search" class="form-control dropdown-search" placeholder="Search target nodes...">
+                                        <select id="target-node" class="form-control searchable-select" size="5">
+                                            <option value="">Select target...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edge-type">Connection Type:</label>
+                                    <select id="edge-type" class="form-control">
+                                        <option value="ker">Key Event Relationship</option>
+                                        <option value="interaction">Interaction</option>
+                                        <option value="part_of">Part Of</option>
+                                        <option value="translates_to">Translates To</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edge-label">Connection Label (optional):</label>
+                                    <input type="text" id="edge-label" class="form-control" placeholder="Enter connection label">
+                                </div>
+                                <button id="add-connection" class="btn btn-success">
+                                    <i class="fas fa-link"></i> Add Edge
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Manual Node Controls -->
+            <!-- AOP Network Data Controls -->
             <div class="panel">
                 <div class="panel-header">
-                    <h3><i class="fas fa-plus-circle"></i> Add Nodes</h3>
+                    <h3><i class="fas fa-network-wired"></i> Add AOP Network Data</h3>
                 </div>
                 <div class="panel-content">
-                    <div class="node-controls">
-                        <div class="form-group">
-                            <label for="node-type">Node Type:</label>
-                            <select id="node-type" class="form-select">
-                                <option value="ke">Key Event</option>
-                                <option value="chemical">Chemical</option>
-                                <option value="uniprot">UniProt</option>
-                                <option value="ensembl">Ensembl</option>
-                            </select>
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" data-target="aop-network-content">
+                            <h4><i class="fas fa-plus-circle"></i> Add More Network Data</h4>
+                            <i class="fas fa-chevron-down collapse-icon"></i>
                         </div>
-                        <div class="form-group">
-                            <label for="node-label">Label:</label>
-                            <input type="text" id="node-label" class="form-control" placeholder="Enter node label">
+                        <div class="collapsible-content" id="aop-network-content">
+                            <div class="aop-network-controls">
+                                <div class="form-group">
+                                    <label for="query-type">Query Type:</label>
+                                    <select id="query-type" class="form-control">
+                                        <option value="mie">Add by MIE</option>
+                                        <option value="aop">Add by AOP</option>
+                                        <option value="ke_upstream">Add by Upstream KE</option>
+                                        <option value="ke_downstream">Add by Downstream KE</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="query-values">Values (space-separated URIs):</label>
+                                    <textarea id="query-values" class="form-control" rows="3" 
+                                             placeholder="Enter space-separated URIs or identifiers (e.g., 1 2 3 or https://identifiers.org/aop.events/1)"></textarea>
+                                    <small class="form-text">
+                                        Examples:<br>
+                                        • Full URIs: https://identifiers.org/aop.events/1 https://identifiers.org/aop.events/2<br>
+                                        • Short form: 1 2 3<br>
+                                        • Prefixed: aop.events:1 aop.events:2
+                                    </small>
+                                </div>
+                                <button id="add-aop-data" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Add to Network
+                                </button>
+                                <div id="aop-data-status" class="mt-2"></div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label for="node-id">ID (optional):</label>
-                            <input type="text" id="node-id" class="form-control" placeholder="Auto-generated if empty">
-                        </div>
-                        <button id="add-node" class="btn btn-success w-100">
-                            <i class="fas fa-plus"></i> Add Node
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Connection Controls -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-link"></i> Add Connections</h3>
-                </div>
-                <div class="panel-content">
-                    <div class="connection-controls">
-                        <div class="form-group">
-                            <label for="source-node">Source Node:</label>
-                            <select id="source-node" class="form-select">
-                                <option value="">Select source...</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="target-node">Target Node:</label>
-                            <select id="target-node" class="form-select">
-                                <option value="">Select target...</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="edge-type">Connection Type:</label>
-                            <select id="edge-type" class="form-select">
-                                <option value="ker">Key Event Relationship</option>
-                                <option value="interaction">Interaction</option>
-                                <option value="part_of">Part Of</option>
-                                <option value="translates_to">Translates To</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="edge-label">Label (optional):</label>
-                            <input type="text" id="edge-label" class="form-control" placeholder="Connection label">
-                        </div>
-                        <button id="add-connection" class="btn btn-success w-100">
-                            <i class="fas fa-arrow-right"></i> Add Connection
-                        </button>
                     </div>
                 </div>
             </div>
@@ -165,53 +256,66 @@
                 <div class="panel-header">
                     <h3><i class="fas fa-project-diagram"></i> Network Visualization</h3>
                     <div class="network-controls">
-                        <button id="reset_layout" class="btn btn-sm btn-secondary">
-                            <i class="fas fa-refresh"></i> Reset Layout
-                        </button>
                         <button id="see_genes" class="btn btn-sm btn-secondary">
                             <i class="fas fa-dna"></i> See Genes
-                        </button>
-                        <button id="toggle_compounds" class="btn btn-sm btn-secondary">
-                            <i class="fas fa-flask"></i> Show Compounds
                         </button>
                         <button id="toggle_bounding_boxes" class="btn btn-sm btn-secondary">
                             <i class="fas fa-object-group"></i> Group by AOP
                         </button>
-                        <button id="download_network" class="btn btn-sm btn-primary">
+                        <button id="reset_layout" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-sync"></i> Reset Layout
+                        </button>
+                        <button id="download_network" class="btn btn-sm btn-secondary">
                             <i class="fas fa-download"></i> Download
                         </button>
                     </div>
                 </div>
                 <div class="panel-content network-container">
-                    <div id="cy">
-                        <div class="loading-overlay">
-                            <i class="fas fa-spinner fa-spin"></i>
-                            <p>Loading AOP network...</p>
+                    <div class="loading-overlay">
+                        <div class="text-center">
+                            <i class="fas fa-spinner fa-spin fa-3x"></i>
+                            <p>Loading network...</p>
                         </div>
                     </div>
+                    <div id="cy"></div>
                 </div>
             </div>
         </main>
 
         <!-- Right Sidebar -->
-        <aside class="right-sidebar">
+        <aside class="right-sidebar" id="right-sidebar">
+            <div class="sidebar-header">
+                <h3><i class="fas fa-table"></i> Data Tables</h3>
+                <button class="sidebar-close" data-target="right-sidebar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
             <!-- Compounds Table -->
             <div class="panel">
                 <div class="panel-header">
                     <h3><i class="fas fa-flask"></i> Compounds</h3>
+                    <div class="compound-controls">
+                        <button id="toggle_compounds" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-flask"></i> Toggle Compounds
+                        </button>
+                    </div>
                 </div>
                 <div class="panel-content">
+                    <div class="compound-selection-hint">
+                        <p>Click compound rows to show their pathways in the network</p>
+                    </div>
                     <div class="table-wrapper">
-                        <table class="table" id="compound_table">
+                        <div id="loading_compound" class="loading-indicator">
+                            <i class="fas fa-spinner fa-spin"></i> Loading compounds...
+                        </div>
+                        <table id="compound_table" class="table table-striped">
                             <thead>
                                 <tr>
                                     <th>Compound</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr class="loading-row">
-                                    <td class="text-center">Loading compounds...</td>
-                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -225,22 +329,102 @@
                 </div>
                 <div class="panel-content">
                     <div class="table-wrapper">
-                        <table class="table" id="gene_table">
+                        <table id="gene_table" class="table table-striped">
                             <thead>
                                 <tr>
                                     <th>Gene</th>
+                                    <th>Expression</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr class="loading-row">
-                                    <td class="text-center">Loading genes...</td>
-                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
         </aside>
+    </div>
+</div>
+
+<!-- Table Mapping Modal -->
+<div class="modal fade" id="table-mapping-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Map Table to Network</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Node Creation</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create-nodes-checkbox">
+                            <label class="form-check-label" for="create-nodes-checkbox">Create nodes from table</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="node-type-select">Node Type:</label>
+                            <select id="node-type-select" class="form-control">
+                                <option value="ke">Key Event</option>
+                                <option value="chemical">Chemical</option>
+                                <option value="uniprot">UniProt</option>
+                                <option value="ensembl">Ensembl</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="node-id-column">ID Column:</label>
+                            <select id="node-id-column" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="node-label-column">Label Column:</label>
+                            <select id="node-label-column" class="form-control"></select>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Edge Creation</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create-edges-checkbox">
+                            <label class="form-check-label" for="create-edges-checkbox">Create edges from table</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="edge-type-select">Edge Type:</label>
+                            <select id="edge-type-select" class="form-control">
+                                <option value="ker">Key Event Relationship</option>
+                                <option value="interaction">Interaction</option>
+                                <option value="part_of">Part Of</option>
+                                <option value="translates_to">Translates To</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edge-source-column">Source Column:</label>
+                            <select id="edge-source-column" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edge-target-column">Target Column:</label>
+                            <select id="edge-target-column" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edge-label-column">Label Column:</label>
+                            <select id="edge-label-column" class="form-control"></select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>Property Columns</h6>
+                        <div id="property-columns">
+                            <!-- Dynamically populated checkboxes -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="apply-mapping-btn">Apply Mapping</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -268,6 +452,43 @@
     if (thresholdInput) {
         thresholdInput.addEventListener('input', updateActivity);
     }
+
+    // Sidebar collapse functionality
+    document.addEventListener('DOMContentLoaded', function() {
+        // Toggle buttons in nav
+        document.getElementById('toggle-left-sidebar')?.addEventListener('click', function() {
+            toggleSidebar('left-sidebar');
+        });
+        
+        document.getElementById('toggle-right-sidebar')?.addEventListener('click', function() {
+            toggleSidebar('right-sidebar');
+        });
+        
+        // Close buttons in sidebars
+        document.querySelectorAll('.sidebar-close').forEach(button => {
+            button.addEventListener('click', function() {
+                const targetId = this.getAttribute('data-target');
+                toggleSidebar(targetId);
+            });
+        });
+    });
+
+    function toggleSidebar(sidebarId) {
+        const sidebar = document.getElementById(sidebarId);
+        if (!sidebar) return;
+        
+        sidebar.classList.toggle('collapsed');
+        
+        // Trigger resize event for Cytoscape to adjust
+        setTimeout(() => {
+            if (window.cy) {
+                window.cy.resize();
+                if (window.positionNodes) {
+                    window.positionNodes(window.cy);
+                }
+            }
+        }, 300);
+    }
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
@@ -284,5 +505,8 @@
 <script src="/static/js/aop_app/bdf.js"></script>
 <script src="/static/js/aop_app/network_persistence.js"></script>
 <script src="/static/js/aop_app/manual_controls.js"></script>
+<script src="/static/js/aop_app/custom_tables.js"></script>
+<script src="/static/js/aop_app/table_qaop.js"></script>
+<script src="/static/js/aop_app/aop_network_data.js"></script>
 
 {% endblock %}

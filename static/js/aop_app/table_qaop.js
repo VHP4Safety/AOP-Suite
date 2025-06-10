@@ -1,13 +1,8 @@
 // QAOP Table functionality
 
 document.addEventListener("DOMContentLoaded", function() {
-    // Event listener for data-type-dropdown option value "qaop_table"
-    $("#data-type-dropdown").on("change", function () {
-        const selectedValue = $(this).val();
-        if (selectedValue === "qaop_div") {
-            populateQaopTable();
-        }
-    });
+    // Function will be called by select_data.js when option is selected
+    console.log("QAOP table module loaded");
 });
 
 function populateQaopTable() {
@@ -18,6 +13,12 @@ function populateQaopTable() {
     
     const cyElements = window.cy.elements().jsons();
     
+    // Show loading indicator
+    const loadingElement = document.getElementById("loading_qaop_table");
+    if (loadingElement) {
+        loadingElement.style.display = "block";
+    }
+    
     $.ajax({
         url: "/populate_qaop_table",
         type: "POST",
@@ -25,7 +26,11 @@ function populateQaopTable() {
         data: JSON.stringify({ cy_elements: cyElements }),
         success: response => {
             const table = $("#qaop_table");
-            document.getElementById("loading_qaop_table").style.display = "none";
+            const loadingElement = document.getElementById("loading_qaop_table");
+            if (loadingElement) {
+                loadingElement.style.display = "none";
+            }
+            
             const tableBody = table.find("tbody").empty();
             
             if (response.qaop_data && response.qaop_data.length > 0) {
@@ -48,7 +53,10 @@ function populateQaopTable() {
             console.error("Error populating QAOP table:", error);
             const tableBody = $("#qaop_table tbody").empty();
             tableBody.append('<tr><td colspan="3">Error loading QAOP data</td></tr>');
-            document.getElementById("loading_qaop_table").style.display = "none";
+            const loadingElement = document.getElementById("loading_qaop_table");
+            if (loadingElement) {
+                loadingElement.style.display = "none";
+            }
         }
     });
 }

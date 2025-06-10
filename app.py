@@ -204,6 +204,16 @@ from routes.aop_app import aop_app
 app.register_blueprint(aop_app)
 
 ################################################################################
+@app.route("/qaop_standalone")
+def qaop_standalone():
+    """
+    Standalone QAOP Network Builder - doesn't require template data
+    """
+    return render_template("qaop_app.html", 
+                         title="QAOP Network Builder - Standalone",
+                         mie_query="",
+                         qid="",
+                         qid_wd="")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

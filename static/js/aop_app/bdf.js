@@ -140,17 +140,22 @@ function populateBdfTableOT(data) {
 
     const matchedRows = new Set();
 
-    data.forEach(row => {
+    // Process each row asynchronously
+    data.forEach(async (row) => {
         const compoundRow = findCompoundRow(tableBody, row.identifier);
         if (compoundRow.length) {
             matchedRows.add(row.identifier);
-            const therapeuticAreas = formatTherapeuticAreas(row.OpenTargets_diseases || []);
+            
+            // Format therapeutic areas with proper CURIE conversion
+            const therapeuticAreas = await formatTherapeuticAreas(row.OpenTargets_diseases || []);
             compoundRow.append(`<td>${therapeuticAreas}</td>`);
         }
     });
 
-    // Add empty cells for unmatched rows
-    addEmptyCellsForUnmatchedRows(tableBody, matchedRows);
+    // Add empty cells for unmatched rows after a short delay
+    setTimeout(() => {
+        addEmptyCellsForUnmatchedRows(tableBody, matchedRows);
+    }, 1000);
 }
 
 // Function to populate the Bgee table
@@ -209,20 +214,74 @@ function findCompoundRow(tableBody, identifier) {
     });
 }
 
-// Helper function to format therapeutic areas
-function formatTherapeuticAreas(diseases) {
-    return diseases
-        .flatMap(diseaseObj => {
+// Helper function to format therapeutic areas using backend conversion
+async function formatTherapeuticAreas(diseases) {
+    try {
+        // Extract all therapeutic area strings
+        const therapeuticAreaStrings = diseases
+            .map(diseaseObj => diseaseObj.therapeutic_areas || "")
+            .filter(areas => areas.trim() !== "");
+        
+        if (therapeuticAreaStrings.length === 0) {
+            return "";
+        }
+        
+        // Send to backend for proper CURIE to IRI conversion
+        const response = await fetch('/convert_therapeutic_areas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ therapeutic_areas: therapeuticAreaStrings })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Backend conversion failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        // Create unique areas map by namespace_id
+        const uniqueAreas = new Map();
+        
+        data.converted_areas.forEach(area => {
+            const key = area.namespace_id;
+            if (!uniqueAreas.has(key)) {
+                uniqueAreas.set(key, area);
+            }
+        });
+        
+        // Return formatted links
+        return Array.from(uniqueAreas.values())
+            .map(area => area.link)
+            .join(", ");
+            
+    } catch (error) {
+        console.error('Error formatting therapeutic areas:', error);
+        
+        // Fallback to simple client-side formatting
+        const uniqueAreas = new Map();
+        
+        diseases.forEach(diseaseObj => {
             const areas = diseaseObj.therapeutic_areas || "";
-            return areas.split(",").map(area => {
+            areas.split(",").forEach(area => {
                 const [id, name] = area.split(":").map(part => part.trim());
-                return id
-                    ? `<a href="https://purl.obolibrary.org/onto/${id}" title="${name || ''}" target="_blank" style="position: relative; z-index: 10;">${name || id}</a>`
-                    : null;
+                if (id && name) {
+                    uniqueAreas.set(id, {
+                        id: id,
+                        name: name,
+                        link: `<a href="#" title="${name}" target="_blank" style="position: relative; z-index: 10;">${name}</a>`
+                    });
+                }
             });
-        })
-        .filter(area => area)
-        .join(", ");
+        });
+        
+        return Array.from(uniqueAreas.values())
+            .map(area => area.link)
+            .join(", ");
+    }
 }
 
 // Helper function to format gene expression levels
