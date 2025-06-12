@@ -36,7 +36,6 @@ class AOPNetworkService:
             raise ValueError("No active network")
         
         # Parse MIE query and fetch from AOP Wiki
-        # This would use your existing SPARQL query logic
         elements = self._fetch_aopwiki_sparql(mie_query)
         
         for element in elements:
@@ -201,12 +200,12 @@ class AOPNetworkService:
     
     def _fetch_aopwiki_sparql(self, mie_query: str) -> List[Dict[str, Any]]:
         """Fetch data from AOP Wiki SPARQL endpoint"""
-        # Use your existing SPARQL logic here
+        # Placeholder
         pass
     
     def _fetch_bgee_data(self, genes: List[str]) -> Dict[str, Any]:
         """Fetch Bgee gene expression data"""
-        # Use your existing Bgee fetching logic here
+        # Placeholder
         pass
     
     def _determine_node_type(self, data: Dict[str, Any]) -> NodeType:

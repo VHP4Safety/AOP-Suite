@@ -165,9 +165,10 @@ function setupEventHandlers() {
                 if (cyNode.length === 0) {
                     const smiles = clickedRow.data("smiles");
                     createCompoundNode(compoundName, smiles);
-                    cyNode = window.cy.nodes(`[label="${compoundName}"]`);
+                    // Node creation will trigger automatic table update via network listener
                 }
                 
+                cyNode = window.cy.nodes(`[label="${compoundName}"]`);
                 if (cyNode.length) {
                     cyNode.addClass("selected");
                 }
@@ -184,6 +185,7 @@ function setupEventHandlers() {
                 if (cyNode.length) {
                     cyNode.removeClass("selected");
                     hideCompoundNode(compoundName);
+                    // Node removal will trigger automatic table update via network listener
                 }
             }
         }
@@ -192,6 +194,7 @@ function setupEventHandlers() {
         updateNetworkWithSelectedCompounds();
     });
 
+    // Enhanced compound link click handler to work with network compounds
     $(document).on("click", "#compound_table .compound-link", function (e) {
         if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
@@ -215,9 +218,9 @@ function setupEventHandlers() {
                 if (cyNode.length === 0) {
                     const smiles = row.data("smiles");
                     createCompoundNode(compoundName, smiles);
-                    cyNode = window.cy.nodes(`[label="${compoundName}"]`);
                 }
                 
+                cyNode = window.cy.nodes(`[label="${compoundName}"]`);
                 if (cyNode.length) {
                     if ($(this).hasClass("selected")) {
                         cyNode.addClass("selected");
@@ -231,10 +234,13 @@ function setupEventHandlers() {
             // Immediate network update after each selection change
             updateNetworkWithSelectedCompounds();
         } else {
-            const url = $(this).attr("href");
-            const frame = $("#compound-frame");
-            if (frame.length) {
-                frame.attr("src", url);
+            // Handle regular link clicks for non-network compounds
+            if (!$(this).hasClass("network-compound-link")) {
+                const url = $(this).attr("href");
+                const frame = $("#compound-frame");
+                if (frame.length) {
+                    frame.attr("src", url);
+                }
             }
         }
     });
@@ -326,6 +332,8 @@ function createCompoundNode(compoundName, smiles) {
         window.cy.add(nodeData);
         console.log(`Created compound node: ${compoundName}`);
         
+        // Network listener will automatically update the compound table
+        
         // Reposition nodes
         if (window.positionNodes) {
             window.positionNodes(window.cy);
@@ -333,6 +341,75 @@ function createCompoundNode(compoundName, smiles) {
     } catch (error) {
         console.error("Error creating compound node:", error);
     }
+}
+
+// Enhanced function to create multiple compound nodes
+function createMultipleCompoundNodes(compoundData) {
+    if (!window.cy) {
+        console.error("Cytoscape instance not available");
+        return { added: 0, skipped: 0 };
+    }
+    
+    let added = 0;
+    let skipped = 0;
+    
+    // Handle different input formats
+    let compounds = [];
+    
+    if (typeof compoundData === 'string') {
+        // Parse space/comma separated compound names
+        const names = compoundData.split(/[,\s]+/).map(name => name.trim()).filter(name => name);
+        compounds = names.map(name => ({ name, smiles: "" }));
+    } else if (Array.isArray(compoundData)) {
+        compounds = compoundData;
+    } else if (compoundData.name) {
+        compounds = [compoundData];
+    }
+    
+    compounds.forEach(compound => {
+        const compoundName = compound.name || compound.label || compound;
+        const smiles = compound.smiles || "";
+        
+        if (!compoundName) return;
+        
+        // Check if node already exists
+        if (window.cy.getElementById(compoundName).length > 0) {
+            console.log(`Compound node already exists: ${compoundName}`);
+            skipped++;
+            return;
+        }
+        
+        try {
+            const nodeData = {
+                data: { 
+                    id: compoundName, 
+                    label: compoundName, 
+                    type: "chemical", 
+                    smiles: smiles
+                }, 
+                classes: "chemical-node" 
+            };
+            
+            window.cy.add(nodeData);
+            console.log(`Created compound node: ${compoundName}`);
+            added++;
+            
+        } catch (error) {
+            console.error(`Error creating compound node ${compoundName}:`, error);
+            skipped++;
+        }
+    });
+    
+    if (added > 0) {
+        // Network listener will automatically update the compound table
+        
+        // Reposition nodes
+        if (window.positionNodes) {
+            window.positionNodes(window.cy);
+        }
+    }
+    
+    return { added, skipped };
 }
 
 // Function to hide compound nodes from the network
@@ -348,6 +425,8 @@ function hideCompoundNode(compoundName) {
             cyNode.remove();
             console.log(`Removed compound node: ${compoundName}`);
             
+            // Network listener will automatically update the compound table
+            
             // Reposition remaining nodes
             if (window.positionNodes) {
                 window.positionNodes(window.cy);
@@ -356,6 +435,49 @@ function hideCompoundNode(compoundName) {
     } catch (error) {
         console.error("Error removing compound node:", error);
     }
+}
+
+// Enhanced function to hide multiple compound nodes
+function hideMultipleCompoundNodes(compoundNames) {
+    if (!window.cy) {
+        console.error("Cytoscape instance not available");
+        return { removed: 0, notFound: 0 };
+    }
+    
+    let removed = 0;
+    let notFound = 0;
+    
+    // Handle string input (space/comma separated)
+    if (typeof compoundNames === 'string') {
+        compoundNames = compoundNames.split(/[,\s]+/).map(name => name.trim()).filter(name => name);
+    }
+    
+    compoundNames.forEach(compoundName => {
+        try {
+            const cyNode = window.cy.nodes(`[label="${compoundName}"]`);
+            if (cyNode.length) {
+                cyNode.remove();
+                console.log(`Removed compound node: ${compoundName}`);
+                removed++;
+            } else {
+                notFound++;
+            }
+        } catch (error) {
+            console.error(`Error removing compound node ${compoundName}:`, error);
+            notFound++;
+        }
+    });
+    
+    if (removed > 0) {
+        // Network listener will automatically update the compound table
+        
+        // Reposition remaining nodes
+        if (window.positionNodes) {
+            window.positionNodes(window.cy);
+        }
+    }
+    
+    return { removed, notFound };
 }
 
 // Function to collect all CIDs - handle standalone mode
@@ -749,3 +871,89 @@ window.showAllCompounds = showAllCompounds;
 window.hideAllCompounds = hideAllCompounds;
 window.createCompoundNode = createCompoundNode;
 window.hideCompoundNode = hideCompoundNode;
+
+// Make enhanced functions available globally
+window.createMultipleCompoundNodes = createMultipleCompoundNodes;
+window.hideMultipleCompoundNodes = hideMultipleCompoundNodes;
+
+// Make the network update function available globally
+window.updateCompoundTableFromNetwork = updateCompoundTableFromNetwork;
+
+// Enhanced function specifically for updating compound table from network
+function updateCompoundTableFromNetwork() {
+    if (!window.cy) {
+        console.warn("Cytoscape not available for compound table update");
+        return;
+    }
+    
+    // Get all chemical nodes from the network
+    const chemicalNodes = window.cy.nodes('.chemical-node');
+    const tableBody = $("#compound_table tbody");
+    
+    // Add network chemical nodes to table if they're not already there
+    chemicalNodes.forEach(node => {
+        const nodeData = node.data();
+        const nodeLabel = nodeData.label;
+        const nodeSmiles = nodeData.smiles || "";
+        const nodeId = nodeData.id;
+        
+        // Check if this compound is already in the table (either from backend or network)
+        const existingRow = tableBody.find(`tr`).filter(function() {
+            const rowLink = $(this).find('.compound-link');
+            return rowLink.text().trim() === nodeLabel;
+        });
+        
+        if (existingRow.length === 0 && nodeLabel) {
+            // Add new row for network compound
+            const encodedSMILES = encodeURIComponent(nodeSmiles);
+            const imgUrl = nodeSmiles ? 
+                `https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi=${encodedSMILES}` :
+                '';
+            
+            tableBody.append(`
+                <tr data-smiles="${nodeSmiles}" data-compound-source="network" class="network-compound">
+                    <td>
+                        ${imgUrl ? `<img src="${imgUrl}" alt="${nodeSmiles}" style="max-width: 150px; height: auto; margin-bottom: 5px;" />` : ''}
+                        <p><span class="compound-link network-compound-link" style="font-weight: bold;">${nodeLabel}</span></p>
+                        <p><small style="color: #6c757d; font-style: italic;">Added from network</small></p>
+                    </td>
+                </tr>
+            `);
+            
+            console.log(`Added network compound to table: ${nodeLabel}`);
+        } else if (existingRow.length > 0) {
+            // Mark existing row as having a network counterpart
+            existingRow.addClass('has-network-node');
+        }
+    });
+    
+    // Clean up compounds that were added from network but no longer exist
+    tableBody.find('tr.network-compound').each(function() {
+        const row = $(this);
+        const compoundLabel = row.find('.compound-link').text().trim();
+        
+        // Check if this compound still exists in the network
+        const networkNode = window.cy.nodes().filter(node => {
+            return node.hasClass('chemical-node') && node.data('label') === compoundLabel;
+        });
+        
+        if (networkNode.length === 0) {
+            row.remove();
+            console.log(`Removed network compound from table: ${compoundLabel}`);
+        }
+    });
+    
+    // Remove network marking from compounds that no longer have network nodes
+    tableBody.find('tr.has-network-node').each(function() {
+        const row = $(this);
+        const compoundLabel = row.find('.compound-link').text().trim();
+        
+        const networkNode = window.cy.nodes().filter(node => {
+            return node.hasClass('chemical-node') && node.data('label') === compoundLabel;
+        });
+        
+        if (networkNode.length === 0) {
+            row.removeClass('has-network-node');
+        }
+    });
+}

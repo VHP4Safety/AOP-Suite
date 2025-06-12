@@ -196,7 +196,7 @@
     color: #6c757d;
 }
 
-#loading_qaop_table {
+#loading_aop_table {
     display: none;
 }
 
@@ -233,6 +233,12 @@
     font-size: 0.7rem;
     color: #6c757d;
     margin-top: 0.25rem;
+    line-height: 1.3;
+}
+
+.form-text strong {
+    color: #495057;
+    font-weight: 600;
 }
 
 /* Buttons */
@@ -355,6 +361,22 @@
     transition: all 0.2s ease;
 }
 
+/* Network compound styling */
+.network-compound {
+    border-left: 3px solid #28a745 !important;
+    background-color: #f8fff9 !important;
+}
+
+.network-compound-link {
+    color: #155724 !important;
+    font-weight: bold;
+}
+
+.has-network-node {
+    border-left: 3px solid #007bff !important;
+    background-color: #f8f9ff !important;
+}
+
 /* Enhanced compound selection styling */
 .compound-link.selected {
     background-color: #007bff !important;
@@ -364,17 +386,26 @@
     border-radius: 3px;
 }
 
-/* Data Sections */
-.data-section {
-    margin-bottom: 0.5rem; /* Reduced from 0.75rem */
+.network-compound-link.selected {
+    background-color: #28a745 !important;
+    color: white !important;
 }
 
-/* Node and Connection Controls */
-.node-controls,
-.connection-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem; /* Reduced from 0.75rem */
+/* Gene table auto-update indicator */
+.gene-table-updated {
+    border-left: 3px solid #28a745;
+    background-color: #f8fff9;
+    transition: all 0.3s ease;
+}
+
+/* Auto-update animations */
+@keyframes tableRowUpdate {
+    0% { background-color: #fff3cd; }
+    100% { background-color: inherit; }
+}
+
+.table-row-updated {
+    animation: tableRowUpdate 1s ease-in-out;
 }
 
 /* Utility Classes */
@@ -787,4 +818,100 @@ html, body {
 /* Enhanced form group spacing for searchable dropdowns */
 .searchable-dropdown .form-control {
     transition: border-color 0.15s ease-in-out;
+}
+
+/* Manual controls status messages */
+#manual-controls-status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    transition: opacity 0.3s ease;
+    opacity: 0;
+}
+
+/* AOP network data status */
+#aop-data-status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    min-height: 20px;
+}
+
+#aop-data-status.loading {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+#aop-data-status.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+#aop-data-status.warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+#aop-data-status.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* GO Processes Styles */
+.go-processes-controls {
+    padding: 1rem;
+}
+
+.go-processes-controls .help-text {
+    background-color: #f8f9fa;
+    border-left: 4px solid #17a2b8;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0 4px 4px 0;
+    font-size: 0.9rem;
+}
+
+.go-processes-controls .help-text i {
+    color: #17a2b8;
+    margin-right: 0.5rem;
+}
+
+.go-processes-controls .button-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.go-processes-controls .button-group .btn {
+    flex: 1;
+    min-width: 120px;
+}
+
+.go-processes-controls .form-text {
+    background-color: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+/* GO Process node styles for network */
+.go-process-node {
+    background-color: #8E44AD !important;
+    border-color: #6C3483 !important;
+    color: white !important;
+    shape: hexagon !important;
+}
+
+/* GO hierarchy edge styles */
+edge[type="go_hierarchy"] {
+    line-color: #8E44AD !important;
+    target-arrow-color: #8E44AD !important;
 }

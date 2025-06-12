@@ -1,13 +1,20 @@
 ################################################################################
 ### Loading the required modules
-from flask import Flask, request, jsonify, render_template, send_file, Blueprint, render_template, abort
+from flask import Flask, request, jsonify, render_template, send_file, Blueprint, render_template, abort, g
 import requests
 from wikidataintegrator import wdi_core
 import json
 import re
+import logging
 from werkzeug.routing import BaseConverter
 from jinja2 import TemplateNotFound
+from SPARQLWrapper import SPARQLWrapper, JSON
+from rdflib import Graph
 ################################################################################
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class RegexConverter(BaseConverter):
     """Converter for regular expression routes.
@@ -25,6 +32,15 @@ class RegexConverter(BaseConverter):
         self.regex = items[0]
 
 app = Flask(__name__)
+
+# Initialize RDF graph for AOP data (you may need to adjust this based on your setup)
+def get_aop_graph():
+    """Get or create the AOP RDF graph"""
+    if not hasattr(g, 'aop_graph'):
+        g.aop_graph = Graph()
+        # Load your AOP data here if needed
+        # g.aop_graph.parse("path_to_aop_data.ttl", format="turtle")
+    return g.aop_graph
 
 ################################################################################
 ### The landing page
@@ -215,5 +231,70 @@ def qaop_standalone():
                          qid="",
                          qid_wd="")
 
+@app.route('/get_go_processes', methods=['GET'])
+def get_go_processes():
+    """Query AOP wiki for GO processes related to current Key Events"""
+    try:
+        # Get current network elements
+        cy_elements = request.args.get('cy_elements', '[]')
+        if isinstance(cy_elements, str):
+            cy_elements = json.loads(cy_elements)
+        
+        # Extract Key Event IDs from current network
+        ke_ids = []
+        for element in cy_elements:
+            if element.get('data', {}).get('type') == 'key_event':
+                ke_id = element['data']['id']
+                if ke_id.startswith('https://identifiers.org/aop.events/'):
+                    ke_ids.append(ke_id)
+        
+        if not ke_ids:
+            return jsonify({"processes": [], "message": "No Key Events found in current network"})
+        
+        # For now, create some sample process data since we don't have the actual AOP graph setup
+        # You can integrate with your actual AOP data source later
+        sample_processes = [
+            {
+                "id": "go_process_0008150",
+                "uri": "http://purl.obolibrary.org/obo/GO_0008150",
+                "label": "biological_process",
+                "type": "go_process"
+            },
+            {
+                "id": "go_process_0009987",
+                "uri": "http://purl.obolibrary.org/obo/GO_0009987", 
+                "label": "cellular process",
+                "type": "go_process"
+            }
+        ]
+        
+        # Query remote endpoint for process hierarchy
+        include_hierarchy = request.args.get('include_hierarchy', 'false').lower() == 'true'
+        
+        if include_hierarchy:
+            # Return hierarchy with sample edges
+            return jsonify({
+                "processes": {
+                    "nodes": sample_processes,
+                    "edges": [
+                        {
+                            "id": "edge_go_process_0009987_to_go_process_0008150",
+                            "source": "go_process_0009987",
+                            "target": "go_process_0008150", 
+                            "type": "go_hierarchy",
+                            "label": "subClassOf"
+                        }
+                    ]
+                }
+            })
+        else:
+            # Just return the direct processes
+            return jsonify({"processes": sample_processes})
+            
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ...existing code...
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True)

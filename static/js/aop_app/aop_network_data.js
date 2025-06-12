@@ -8,11 +8,11 @@ class AOPNetworkDataManager {
 
     setupEventHandlers() {
         console.log('=== Setting up AOP Network Data Event Handlers ===');
-        
+
         // Add AOP data button
         const addAopDataBtn = document.getElementById('add-aop-data');
         console.log('Add AOP data button found:', !!addAopDataBtn);
-        
+
         if (addAopDataBtn) {
             addAopDataBtn.addEventListener('click', () => {
                 console.log('Add AOP data button clicked');
@@ -23,7 +23,7 @@ class AOPNetworkDataManager {
         // Query type change handler
         const queryTypeSelect = document.getElementById('query-type');
         console.log('Query type select found:', !!queryTypeSelect);
-        
+
         if (queryTypeSelect) {
             queryTypeSelect.addEventListener('change', () => {
                 console.log('Query type changed to:', queryTypeSelect.value);
@@ -35,25 +35,25 @@ class AOPNetworkDataManager {
     updateExampleText() {
         const queryType = document.getElementById('query-type').value;
         const helpText = document.querySelector('#query-values + .form-text');
-        
+
         console.log('Updating example text for query type:', queryType);
         console.log('Help text element found:', !!helpText);
 
         if (!helpText) return;
 
         const examples = {
-            'mie': 'Examples:<br>• Full URIs: https://identifiers.org/aop.events/1 https://identifiers.org/aop.events/2<br>• Short form: 1 2 3<br>• Prefixed: aop.events:1 aop.events:2<br><br><strong>Popular MIEs to try:</strong><br>• 17 (Aromatase inhibition)<br>• 25 (Thyroperoxidase inhibition)<br>• 109 (Histone deacetylase inhibition)',
-            'aop': 'Examples:<br>• Full URIs: https://identifiers.org/aop/1 https://identifiers.org/aop/2<br>• Short form: 1 2 3<br>• Prefixed: aop:1 aop:2<br><br><strong>Popular AOPs to try:</strong><br>• 13 (Chronic binding of antagonist to N-methyl-D-aspartate receptors)<br>• 42 (Inhibition of thyroperoxidase activity)<br>• 54 (Inhibition of Na+/I- symporter)',
-            'ke_upstream': 'Examples:<br>• Full URIs: https://identifiers.org/aop.events/3 https://identifiers.org/aop.events/4<br>• Short form: 3 4 5<br>• Prefixed: aop.events:3 aop.events:4<br><br><strong>Popular KEs to try:</strong><br>• 188 (Decreased, Triiodothyronine in serum)<br>• 280 (Decreased, Neuronal network function)',
-            'ke_downstream': 'Examples:<br>• Full URIs: https://identifiers.org/aop.events/5 https://identifiers.org/aop.events/6<br>• Short form: 5 6 7<br>• Prefixed: aop.events:5 aop.events:6<br><br><strong>Popular KEs to try:</strong><br>• 188 (Decreased, Triiodothyronine in serum)<br>• 280 (Decreased, Neuronal network function)'
+            'mie': 'Enter one per line:<br>• Search by name: "liver fibrosis", "reproductive dysfunction"<br>• Or enter IDs: 1, aop.events:1, https://identifiers.org/aop.events/1<br>• Mix both approaches as needed',
+            'aop': 'Enter one AOP per line:<br>• Search by name: "liver fibrosis", "reproductive dysfunction"<br>• Or enter IDs: 1, aop:1, https://identifiers.org/aop/1<br>• Mix both approaches as needed',
+            'ke_upstream': 'Enter one per line:<br>• Search by name: "liver fibrosis", "reproductive dysfunction"<br>• Or enter IDs: 3, aop.events:3, https://identifiers.org/aop.events/3<br>• Mix both approaches as needed',
+            'ke_downstream': 'Enter one per line:<br>• Search by name: "liver fibrosis", "reproductive dysfunction"<br>• Or enter IDs: 5, aop.events:5, https://identifiers.org/aop.events/5<br>• Mix both approaches as needed'
         };
 
-        helpText.innerHTML = examples[queryType] || 'Enter space-separated URIs or identifiers...';
+        helpText.innerHTML = examples[queryType] || 'Enter values...';
     }
 
     async addAopNetworkData() {
         console.log('=== Adding AOP Network Data ===');
-        
+
         if (!window.cy) {
             console.error('Cytoscape instance not available');
             this.showStatus('Network not initialized', 'error');
@@ -72,23 +72,38 @@ class AOPNetworkDataManager {
             return;
         }
 
-        // Show helpful message for first-time users
-        if (window.cy.elements().length === 0) {
-            this.showStatus('Building your first network...', 'loading');
+        // Parse multiple values from the textarea
+        const normalizedValues = this.parseQueryValues(values);
+        
+        if (normalizedValues.length === 0) {
+            this.showStatus('No valid values found', 'error');
+            return;
+        }
+
+        // Filter out null values
+        const validValues = normalizedValues.filter(v => v !== null);
+        
+        if (validValues.length === 0) {
+            this.showStatus('No valid identifiers found.', 'error');
+            return;
+        }
+        
+        if (validValues.length < normalizedValues.length) {
+            this.showStatus(`Processing ${validValues.length} valid value(s) out of ${normalizedValues.length} entered...`, 'warning');
         } else {
-            this.showStatus('Adding data to existing network...', 'loading');
+            this.showStatus(`Processing ${validValues.length} value(s)...`, 'info');
         }
 
         const requestData = {
             query_type: queryType,
-            values: values
+            values: validValues.join(' ') // Join with spaces for backend
         };
-        
+
         console.log('Request data:', requestData);
 
         try {
             console.log('Making fetch request to /add_aop_network_data');
-            
+
             const response = await fetch('/add_aop_network_data', {
                 method: 'POST',
                 headers: {
@@ -118,25 +133,25 @@ class AOPNetworkDataManager {
 
             if (result.success && result.elements && result.elements.length > 0) {
                 console.log(`Successfully received ${result.elements_count} elements`);
-                
+
                 this.addElementsToNetwork(result.elements);
-                
+
                 // Hide the loading overlay if this is the first network data
                 const loadingOverlay = document.querySelector(".loading-overlay");
                 if (loadingOverlay && window.cy.elements().length > 0) {
                     loadingOverlay.style.display = "none";
                 }
-                
+
                 this.showStatus(
-                    `Successfully added ${result.elements_count} elements to the network`, 
+                    `Successfully added ${result.elements_count} elements from ${validValues.length} ${queryType} value(s)`,
                     'success'
                 );
-                
+
                 // Clear the input
                 document.getElementById('query-values').value = '';
             } else {
                 console.warn('No elements returned or success=false');
-                this.showStatus('No new data found for the specified values', 'warning');
+                this.showStatus(`No new data found for the ${validValues.length} specified ${queryType} value(s)`, 'warning');
             }
 
         } catch (error) {
@@ -145,10 +160,100 @@ class AOPNetworkDataManager {
         }
     }
 
+    // Parse query values from textarea (one per line) or input (space/comma separated)
+    parseQueryValues(queryString) {
+        if (!queryString || !queryString.trim()) {
+            return [];
+        }
+        
+        const values = [];
+        
+        // Check if it contains newlines (textarea input)
+        if (queryString.includes('\n')) {
+            // Split by lines and process each
+            const lines = queryString.split('\n');
+            lines.forEach(line => {
+                const trimmedLine = line.trim();
+                if (trimmedLine) {
+                    values.push(this.normalizeIdentifier(trimmedLine));
+                }
+            });
+        } else {
+            // Original logic for space/comma separated values
+            const rawValues = queryString.includes(',') 
+                ? queryString.split(',') 
+                : queryString.split(/\s+/);
+            
+            rawValues.forEach(value => {
+                const trimmedValue = value.trim();
+                if (trimmedValue) {
+                    values.push(this.normalizeIdentifier(trimmedValue));
+                }
+            });
+        }
+        
+        return values;
+    }
+
+    // Enhanced normalize identifier function
+    normalizeIdentifier(identifier) {
+        if (!identifier || !identifier.trim()) {
+            return null;
+        }
+        
+        const trimmed = identifier.trim();
+        const queryType = document.getElementById('query-type').value;
+        
+        // If it's already a full URI, return as-is
+        if (trimmed.includes('identifiers.org/')) {
+            return trimmed;
+        }
+        
+        // Handle based on query type
+        if (window.aopNameUtils) {
+            if (queryType === 'aop') {
+                // Handle AOP identifiers
+                if (window.aopNameUtils.isIdentifierFormat(trimmed)) {
+                    return window.aopNameUtils.normalizeAopId(trimmed);
+                }
+                
+                // For text searches, try to find matching AOP
+                const results = window.aopNameUtils.findAopByText(trimmed);
+                if (results.length > 0) {
+                    return results[0].fullUri;
+                }
+                
+                // If no match found, try to treat as ID anyway
+                if (/^\d+$/.test(trimmed)) {
+                    return `https://identifiers.org/aop/${trimmed}`;
+                }
+            } else {
+                // Handle KE identifiers (for MIE, ke_upstream, ke_downstream)
+                if (window.aopNameUtils.isKeIdentifierFormat(trimmed)) {
+                    return window.aopNameUtils.normalizeKeId(trimmed);
+                }
+                
+                // For text searches, try to find matching KE
+                const results = window.aopNameUtils.findKeByText(trimmed);
+                if (results.length > 0) {
+                    return results[0].fullUri;
+                }
+                
+                // If no match found, try to treat as ID anyway
+                if (/^\d+$/.test(trimmed)) {
+                    return `https://identifiers.org/aop.events/${trimmed}`;
+                }
+            }
+        }
+        
+        // Last resort: return original
+        return trimmed;
+    }
+
     addElementsToNetwork(elements) {
         console.log('=== Adding Elements to Network ===');
         console.log('Elements to add:', elements.length);
-        
+
         if (!window.cy || !elements || elements.length === 0) {
             console.warn('Cannot add elements - cy or elements invalid');
             return;
@@ -159,11 +264,11 @@ class AOPNetworkDataManager {
         window.cy.elements().forEach(element => {
             existingIds.add(element.id());
         });
-        
+
         console.log('Existing element IDs:', existingIds.size);
 
         const newElements = [];
-        
+
         // Filter out existing elements
         elements.forEach((element, index) => {
             const elementId = element.data?.id;
@@ -187,13 +292,21 @@ class AOPNetworkDataManager {
                 console.log('Adding elements to Cytoscape...');
                 window.cy.add(newElements);
                 console.log('Elements added successfully');
-                
+
                 // Reposition nodes
                 if (window.positionNodes) {
                     console.log('Repositioning nodes...');
                     window.positionNodes(window.cy);
                 }
-                
+
+                // Manually trigger AOP table update after adding network data
+                if (window.populateAopTable) {
+                    console.log('Triggering AOP table update after network data addition');
+                    setTimeout(() => {
+                        window.populateAopTable();
+                    }, 300);
+                }
+
                 console.log(`Successfully added ${newElements.length} new elements to the network`);
             } catch (cyError) {
                 console.error('Error adding elements to Cytoscape:', cyError);
@@ -206,7 +319,7 @@ class AOPNetworkDataManager {
 
     showStatus(message, type = 'info') {
         console.log(`Status [${type}]:`, message);
-        
+
         const statusDiv = document.getElementById('aop-data-status');
         if (!statusDiv) {
             console.warn('Status div not found');
@@ -254,7 +367,7 @@ let aopNetworkDataManager;
 
 function initializeAOPNetworkData() {
     console.log('=== Initializing AOP Network Data Manager ===');
-    
+
     if (!aopNetworkDataManager) {
         aopNetworkDataManager = new AOPNetworkDataManager();
         console.log('AOP Network Data Manager initialized successfully');
@@ -271,4 +384,23 @@ window.aopNetworkDataManager = aopNetworkDataManager;
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded, initializing AOP Network Data Manager');
     initializeAOPNetworkData();
+
+    // Setup autocomplete for AOP query textarea
+    const queryValuesElement = document.getElementById('query-values');
+    if (queryValuesElement && window.aopNameUtils) {
+        window.aopNameUtils.setupAopAutocomplete(queryValuesElement);
+        
+        // Update placeholder when query type changes
+        const queryTypeSelect = document.getElementById('query-type');
+        if (queryTypeSelect) {
+            queryTypeSelect.addEventListener('change', () => {
+                // Trigger placeholder update after a short delay to ensure aopNameUtils is ready
+                setTimeout(() => {
+                    if (window.aopNameUtils.updatePlaceholderText) {
+                        window.aopNameUtils.updatePlaceholderText();
+                    }
+                }, 100);
+            });
+        }
+    }
 });

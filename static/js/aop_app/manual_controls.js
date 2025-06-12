@@ -172,11 +172,11 @@ class ManualControls {
     // Add a new node to the network
     addNode() {
         const nodeType = $("#node-type").val();
-        const nodeLabel = $("#node-label").val().trim();
-        const nodeId = $("#node-id").val().trim();
+        const nodeLabels = $("#node-label").val().trim();
+        const nodeIds = $("#node-id").val().trim();
 
-        if (!nodeLabel) {
-            alert("Please enter a node label");
+        if (!nodeLabels) {
+            alert("Please enter node label(s)");
             return;
         }
 
@@ -185,71 +185,143 @@ class ManualControls {
             return;
         }
 
-        // Generate ID if not provided
-        const finalId = nodeId || `${nodeType}_${Date.now()}`;
+        // Parse multiple labels (space or comma separated)
+        const labels = this.parseMultipleValues(nodeLabels);
+        const ids = nodeIds ? this.parseMultipleValues(nodeIds) : [];
+        
+        console.log(`Adding ${labels.length} nodes of type: ${nodeType}`);
+        
+        let addedCount = 0;
+        let skippedCount = 0;
+        
+        labels.forEach((label, index) => {
+            if (!label) return;
+            
+            // Generate ID if not provided or use corresponding ID from list
+            const finalId = ids[index] || `${nodeType}_${label.replace(/\s+/g, '_')}_${Date.now()}_${index}`;
 
-        // Check if node already exists
-        if (window.cy.getElementById(finalId).length > 0) {
-            alert(`Node with ID "${finalId}" already exists`);
-            return;
-        }
-
-        try {
-            // Create node data
-            const nodeData = {
-                data: {
-                    id: finalId,
-                    label: nodeLabel,
-                    type: nodeType
-                },
-                classes: `${nodeType}-node`
-            };
-
-            // Add to network
-            window.cy.add(nodeData);
-
-            // Hide loading overlay if this is the first element
-            const loadingOverlay = document.querySelector(".loading-overlay");
-            if (loadingOverlay && window.cy.elements().length > 0) {
-                loadingOverlay.style.display = "none";
+            // Check if node already exists
+            if (window.cy.getElementById(finalId).length > 0) {
+                console.warn(`Node with ID "${finalId}" already exists - skipping`);
+                skippedCount++;
+                return;
             }
 
-            // Reposition nodes
-            if (window.positionNodes) {
-                window.positionNodes(window.cy);
+            try {
+                // Create node data
+                const nodeData = {
+                    data: {
+                        id: finalId,
+                        label: label,
+                        type: nodeType
+                    },
+                    classes: `${nodeType}-node`
+                };
+
+                // Add to network - this will trigger automatic table updates via network listeners
+                window.cy.add(nodeData);
+                addedCount++;
+                
+                console.log(`Added node: ${finalId} (type: ${nodeType})`);
+
+            } catch (error) {
+                console.error(`Error adding node ${label}:`, error);
+                skippedCount++;
             }
+        });
 
-            // Clear form
-            $("#node-label").val("");
-            $("#node-id").val("");
-
-            console.log(`Added node: ${finalId}`);
-
-        } catch (error) {
-            console.error("Error adding node:", error);
-            alert("Error adding node: " + error.message);
+        // Show summary
+        let message = `Added ${addedCount} node(s)`;
+        if (skippedCount > 0) {
+            message += `, skipped ${skippedCount} duplicate(s)`;
         }
+        
+        // Hide loading overlay if this is the first element
+        const loadingOverlay = document.querySelector(".loading-overlay");
+        if (loadingOverlay && window.cy.elements().length > 0) {
+            loadingOverlay.style.display = "none";
+        }
+
+        // Reposition nodes
+        if (window.positionNodes) {
+            window.positionNodes(window.cy);
+        }
+
+        // Clear form
+        $("#node-label").val("");
+        $("#node-id").val("");
+        
+        // Show status
+        this.showStatus(message, addedCount > 0 ? 'success' : 'warning');
+    }
+
+    parseMultipleValues(input) {
+        if (!input) return [];
+        
+        // Split by comma or space, then clean up
+        return input.split(/[,\s]+/)
+            .map(value => value.trim())
+            .filter(value => value.length > 0);
+    }
+
+    showStatus(message, type = 'info') {
+        // Create or update status message
+        let statusEl = document.getElementById('manual-controls-status');
+        if (!statusEl) {
+            statusEl = document.createElement('div');
+            statusEl.id = 'manual-controls-status';
+            statusEl.style.cssText = `
+                margin-top: 10px;
+                padding: 8px 12px;
+                border-radius: 4px;
+                font-size: 0.8rem;
+                transition: opacity 0.3s ease;
+            `;
+            
+            // Insert after the add node button
+            const addNodeBtn = document.getElementById('add-node');
+            if (addNodeBtn && addNodeBtn.parentNode) {
+                addNodeBtn.parentNode.appendChild(statusEl);
+            }
+        }
+        
+        // Set style based on type
+        const styles = {
+            success: 'background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb;',
+            warning: 'background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7;',
+            error: 'background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;',
+            info: 'background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb;'
+        };
+        
+        statusEl.style.cssText += styles[type] || styles.info;
+        statusEl.textContent = message;
+        statusEl.style.opacity = '1';
+        
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            statusEl.style.opacity = '0';
+        }, 3000);
     }
 
     // Add a new connection between nodes
     addConnection() {
-        const sourceId = document.getElementById('source-node').value;
-        const targetId = document.getElementById('target-node').value;
-        const edgeType = document.getElementById('edge-type').value;
-        const edgeLabel = document.getElementById('edge-label').value.trim();
+        const sourceId = $("#source-node").val();
+        const targetId = $("#target-node").val();
+        const edgeType = $("#edge-type").val();
+        const edgeLabel = $("#edge-label").val().trim();
 
         if (!sourceId || !targetId) {
-            alert('Please select both source and target nodes');
+            alert("Please select both source and target nodes");
             return;
         }
 
         if (sourceId === targetId) {
-            alert('Source and target cannot be the same node');
+            alert("Source and target cannot be the same node");
             return;
         }
 
         if (!window.cy) {
-            alert('Network not initialized');
+            alert("Network not initialized");
             return;
         }
 
@@ -262,7 +334,7 @@ class ManualControls {
         });
 
         if (existingEdge.length > 0) {
-            if (!confirm('An edge already exists between these nodes. Add another?')) {
+            if (!confirm("An edge already exists between these nodes. Add another?")) {
                 return;
             }
         }
@@ -279,7 +351,7 @@ class ManualControls {
                 }
             };
 
-            // Add to network
+            // Add to network - this will trigger AOP table update via network listeners
             window.cy.add(edgeData);
 
             // Reposition nodes
@@ -288,19 +360,32 @@ class ManualControls {
             }
 
             // Clear form
-            document.getElementById('source-node').value = '';
-            document.getElementById('target-node').value = '';
-            document.getElementById('edge-label').value = '';
+            $("#source-node").val("");
+            $("#target-node").val("");
+            $("#edge-label").val("");
             
             // Clear search boxes
             $("#source-node-search").val("");
             $("#target-node-search").val("");
 
+            // Manually trigger AOP table update with more aggressive timing
+            if (window.populateAopTable) {
+                console.log("Manual edge addition - triggering AOP table update");
+                setTimeout(() => {
+                    window.populateAopTable();
+                }, 100);
+                
+                // Backup trigger in case the first one doesn't work
+                setTimeout(() => {
+                    window.populateAopTable();
+                }, 500);
+            }
+
             console.log(`Added edge: ${edgeId}`);
 
         } catch (error) {
-            console.error('Error adding edge:', error);
-            alert('Error adding edge: ' + error.message);
+            console.error("Error adding edge:", error);
+            alert("Error adding edge: " + error.message);
         }
     }
 

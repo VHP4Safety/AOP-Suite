@@ -1,13 +1,11 @@
 document.addEventListener('DOMContentLoaded', function() {
     const dropdown = document.getElementById('data-type-dropdown');
     if (dropdown) {
-        // Add QAOP option to dropdown
+        // Remove AOP table from dropdown since it's now always visible
         dropdown.innerHTML = `
             <option value="">Select data source...</option>
             <option value="qsprpred_opt">QSPR Predictions</option>
-            <option value="bdf_opt">Biodatafuse</option>
             <option value="custom_table_opt">Custom Tables</option>
-            <option value="qaop_div">QAOP Table</option>
         `;
         
         dropdown.addEventListener('change', handleDataTypeChange);
@@ -29,18 +27,15 @@ function handleDataTypeChange() {
     
     // Show the selected section
     if (selectedValue === 'qsprpred_opt') {
-        document.getElementById('qsprpred').style.display = 'block';
-        return;
-    } else if (selectedValue === 'bdf_opt') {
-        document.getElementById('bdf_div').style.display = 'block';
+        const qsprElement = document.getElementById('qsprpred');
+        if (qsprElement) {
+            qsprElement.style.display = 'block';
+        }
         return;
     } else if (selectedValue === 'custom_table_opt') {
-        document.getElementById('custom_table_div').style.display = 'block';
-        return;
-    } else if (selectedValue === 'qaop_div') {
-        document.getElementById('qaop_div').style.display = 'block';
-        if (window.populateQaopTable) {
-            window.populateQaopTable();
+        const customElement = document.getElementById('custom_table_div');
+        if (customElement) {
+            customElement.style.display = 'block';
         }
         return;
     }

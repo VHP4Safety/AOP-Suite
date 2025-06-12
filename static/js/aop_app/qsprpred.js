@@ -26,6 +26,20 @@ $(document).ready(() => {
     $("#fetch_predictions").on("click", () => {
         fetchAndDisplayPredictions();
     });
+    
+    // Initialize collapsible functionality for QSPRPred section
+    const qsprpredHeader = document.querySelector('[data-target="qsprpred-content"]');
+    if (qsprpredHeader) {
+        qsprpredHeader.addEventListener('click', function() {
+            const content = document.getElementById('qsprpred-content');
+            const icon = this.querySelector('.collapse-icon');
+            if (content && icon) {
+                content.style.display = content.style.display === 'none' ? 'block' : 'none';
+                icon.classList.toggle('fa-chevron-down');
+                icon.classList.toggle('fa-chevron-up');
+            }
+        });
+    }
 });
 
 async function fetchAndDisplayPredictions() {
