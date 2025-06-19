@@ -801,28 +801,83 @@ def load_and_show_genes_for_mies(mie_node_ids):
 
 @aop_app.route("/toggle_bounding_boxes", methods=["POST"])
 def toggle_bounding_boxes():
-    """Toggle bounding boxes in the network visualization."""
+    """Toggle bounding boxes on/off in the network."""
     try:
         data = request.get_json(silent=True)
-        if not data or "action" not in data:
-            return jsonify({"error": "Action parameter required"}), 400
+        if not data or "action" not in data or "cy_elements" not in data:
+            return jsonify({"error": "Invalid input"}), 400
         
         action = data["action"]
-        cy_elements = data.get("cy_elements", [])
+        cy_elements = data["cy_elements"]
         
-        if action == "add":
-            # Add bounding boxes logic here
-            # For now, return the elements unchanged
-            return jsonify(cy_elements)
-        elif action == "remove":
-            # Remove bounding boxes logic here
-            # For now, return the elements unchanged
-            return jsonify(cy_elements)
+        if action == "remove":
+            # Remove bounding boxes and unparent nodes
+            filtered_elements = []
+            for element in cy_elements:
+                if not element.get("classes") == "bounding-box":
+                    # Remove parent property
+                    if "parent" in element.get("data", {}):
+                        del element["data"]["parent"]
+                    filtered_elements.append(element)
+            return jsonify(filtered_elements), 200
+        elif action == "add":
+            # Use existing add_aop_bounding_box logic
+            bounding_boxes = []
+            seen = set()
+            
+            # Only process nodes with valid AOP data
+            for element in cy_elements:
+                if element.get("group") == "edges" or element.get("classes") == "bounding-box":
+                    continue
+                    
+                element_data = element.get('data', {})
+                node_aop = element_data.get('aop', [])
+                aop_titles = element_data.get('aop_title', [])
+                
+                # Skip elements without AOP data
+                if not node_aop or not aop_titles:
+                    continue
+                    
+                if not isinstance(node_aop, list):
+                    node_aop = [node_aop]
+                if not isinstance(aop_titles, list):
+                    aop_titles = [aop_titles]
+                    
+                for aop_item, aop_title in zip(node_aop, aop_titles):
+                    if aop_item and aop_item not in seen:
+                        bounding_boxes.append({
+                            "group": "nodes",
+                            "data": {
+                                "id": f"bounding-box-{aop_item}",
+                                "label": f"{aop_title} (aop:{aop_item.replace('https://identifiers.org/aop/', '')})"},
+                            "classes": "bounding-box"
+                        })
+                        seen.add(aop_item)
+
+            # Only assign parent to elements with valid AOP data
+            for element in cy_elements:
+                if element.get("group") == "edges" or element.get("classes") == "bounding-box":
+                    continue
+                    
+                element_data = element.get('data', {})
+                node_aop = element_data.get('aop', [])
+                
+                if not node_aop:
+                    continue
+                    
+                if not isinstance(node_aop, list):
+                    node_aop = [node_aop]
+                for aop_item in node_aop:
+                    if aop_item:
+                        element['data']['parent'] = f"bounding-box-{aop_item}"
+                        break  # Only assign to first valid AOP
+                        
+            return jsonify(cy_elements + bounding_boxes), 200
         else:
             return jsonify({"error": "Invalid action"}), 400
-            
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
 
 @aop_app.route("/get_all_genes", methods=["POST"])
 def get_all_genes():
@@ -894,354 +949,11 @@ def get_go_processes():
                 'message': 'No Key Events found in current network',
                 'processes': []
             })
-        
-        # Mock GO processes data - in a real implementation, you would query GO database
-        # For now, return some example processes based on the KE titles
-        go_processes = []
-        
-        # Simple mapping of some common KE terms to GO processes
-        go_mappings = {
-            'gene expression': [
-                {'id': 'GO:0010468', 'label': 'regulation of gene expression', 'uri': 'http://purl.obolibrary.org/obo/GO_0010468'},
-                {'id': 'GO:0006355', 'label': 'regulation of transcription, DNA-templated', 'uri': 'http://purl.obolibrary.org/obo/GO_0006355'}
-            ],
-            'thyroid': [
-                {'id': 'GO:0006590', 'label': 'thyroid hormone generation', 'uri': 'http://purl.obolibrary.org/obo/GO_0006590'},
-                {'id': 'GO:0070324', 'label': 'thyroid hormone binding', 'uri': 'http://purl.obolibrary.org/obo/GO_0070324'}
-            ],
-            'cognitive': [
-                {'id': 'GO:0050890', 'label': 'cognition', 'uri': 'http://purl.obolibrary.org/obo/GO_0050890'},
-                {'id': 'GO:0007611', 'label': 'learning or memory', 'uri': 'http://purl.obolibrary.org/obo/GO_0007611'}
-            ],
-            'hippocampal': [
-                {'id': 'GO:0021766', 'label': 'hippocampus development', 'uri': 'http://purl.obolibrary.org/obo/GO_0021766'},
-                {'id': 'GO:0048854', 'label': 'brain morphogenesis', 'uri': 'http://purl.obolibrary.org/obo/GO_0048854'}
-            ]
-        }
-        
-        # Find relevant GO processes based on KE labels
-        added_processes = set()
-        for ke in ke_nodes:
-            ke_label = ke['label'].lower()
-            ke_title = ke['title'].lower()
-            search_text = f"{ke_label} {ke_title}"
-            
-            for keyword, processes in go_mappings.items():
-                if keyword in search_text:
-                    for process in processes:
-                        if process['id'] not in added_processes:
-                            go_processes.append(process)
-                            added_processes.add(process['id'])
-        
-        # If no specific matches, add some general developmental processes
-        if not go_processes:
-            go_processes = [
-                {'id': 'GO:0032502', 'label': 'developmental process', 'uri': 'http://purl.obolibrary.org/obo/GO_0032502'},
-                {'id': 'GO:0048856', 'label': 'anatomical structure development', 'uri': 'http://purl.obolibrary.org/obo/GO_0048856'}
-            ]
-        
-        result = {'processes': go_processes}
-        
-        # Add hierarchy relationships if requested
-        if include_hierarchy and go_processes:
-            edges = []
-            # Simple parent-child relationships (this would come from GO database in real implementation)
-            hierarchy_map = {
-                'GO:0010468': 'GO:0065007',  # regulation of gene expression -> biological regulation
-                'GO:0006355': 'GO:0010468',  # regulation of transcription -> regulation of gene expression
-                'GO:0006590': 'GO:0008152',  # thyroid hormone generation -> metabolic process
-                'GO:0050890': 'GO:0008150',  # cognition -> biological process
-                'GO:0007611': 'GO:0050890',  # learning or memory -> cognition
-                'GO:0021766': 'GO:0048856',  # hippocampus development -> anatomical structure development
-                'GO:0048854': 'GO:0048856'   # brain morphogenesis -> anatomical structure development
-            }
-            
-            for child_id, parent_id in hierarchy_map.items():
-                if any(p['id'] == child_id for p in go_processes):
-                    # Add parent process if not already present
-                    if not any(p['id'] == parent_id for p in go_processes):
-                        parent_labels = {
-                            'GO:0065007': 'biological regulation',
-                            'GO:0008152': 'metabolic process',
-                            'GO:0008150': 'biological process',
-                            'GO:0048856': 'anatomical structure development'
-                        }
-                        if parent_id in parent_labels:
-                            go_processes.append({
-                                'id': parent_id,
-                                'label': parent_labels[parent_id],
-                                'uri': f'http://purl.obolibrary.org/obo/{parent_id.replace(":", "_")}'
-                            })
-                    
-                    # Add edge
-                    edges.append({
-                        'id': f'{parent_id}_{child_id}',
-                        'source': parent_id,
-                        'target': child_id,
-                        'type': 'go_hierarchy',
-                        'label': 'is_a'
-                    })
-            
-            result['processes'] = {
-                'nodes': go_processes,
-                'edges': edges
-            }
+        result = {}  #TODO Implement querying
         return jsonify(result)
         
     except json.JSONDecodeError as e:
         return jsonify({'error': f'Invalid JSON in cy_elements: {str(e)}'}), 400
-    except Exception as e:
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-
-@aop_app.route("/query_opentargets_compounds", methods=["POST"])
-def query_opentargets_compounds():
-    """
-    Query OpenTargets for compound data based on current network elements.
-    
-    Returns:
-        JSON response with compound data from OpenTargets
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data or 'cy_elements' not in data:
-            return jsonify({'error': 'Cytoscape elements required'}), 400
-        
-        cy_elements = data['cy_elements']
-        
-        # Extract existing compounds and targets from network
-        compounds = []
-        targets = []
-        
-        for element in cy_elements:
-            if element.get('group') == 'nodes' or 'group' not in element:
-                element_data = element.get('data', {})
-                element_type = element_data.get('type', '')
-                
-                if element_type == 'chemical':
-                    compounds.append(element_data)
-                elif element_type in ['uniprot', 'protein']:
-                    targets.append(element_data)
-        
-        # Mock OpenTargets response - in real implementation, query OpenTargets API
-        mock_compounds = [
-            {
-                'id': 'compound_ot_1',
-                'label': 'OpenTargets Compound 1',
-                'smiles': 'CCO',
-                'chembl_id': 'CHEMBL123',
-                'targets': ['P10827', 'P10828']
-            },
-            {
-                'id': 'compound_ot_2', 
-                'label': 'OpenTargets Compound 2',
-                'smiles': 'CCC',
-                'chembl_id': 'CHEMBL456',
-                'targets': ['P10827']
-            }
-        ]
-        
-        mock_relationships = [
-            {
-                'id': 'rel_ot_1',
-                'source': 'compound_ot_1',
-                'target': 'uniprot_P10827',
-                'confidence': 0.8
-            },
-            {
-                'id': 'rel_ot_2',
-                'source': 'compound_ot_2',
-                'target': 'uniprot_P10828',
-                'confidence': 0.7
-            }
-        ]
-        
-        return jsonify({
-            'compounds': mock_compounds,
-            'relationships': mock_relationships
-        })
-        
-    except Exception as e:
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-
-@aop_app.route("/query_opentargets_targets", methods=["POST"])
-def query_opentargets_targets():
-    """
-    Query OpenTargets for target data based on current network elements.
-    
-    Returns:
-        JSON response with target data from OpenTargets
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data or 'cy_elements' not in data:
-            return jsonify({'error': 'Cytoscape elements required'}), 400
-        
-        # Mock OpenTargets targets response
-        mock_targets = [
-            {
-                'id': 'target_ot_1',
-                'label': 'OpenTargets Target 1',
-                'uniprot_id': 'P12345',
-                'ensembl_id': 'ENSG00000123456',
-                'target_class': 'Enzyme'
-            },
-            {
-                'id': 'target_ot_2',
-                'label': 'OpenTargets Target 2', 
-                'uniprot_id': 'P67890',
-                'ensembl_id': 'ENSG00000789012',
-                'target_class': 'Receptor'
-            }
-        ]
-        
-        return jsonify({'targets': mock_targets})
-        
-    except Exception as e:
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-
-@aop_app.route("/query_opentargets_diseases", methods=["POST"])
-def query_opentargets_diseases():
-    """
-    Query OpenTargets for disease association data.
-    
-    Returns:
-        JSON response with disease association data from OpenTargets
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data or 'cy_elements' not in data:
-            return jsonify({'error': 'Cytoscape elements required'}), 400
-        
-        # Mock disease associations
-        mock_associations = [
-            {
-                'target_id': 'uniprot_P10827',
-                'disease_id': 'EFO_0000311',
-                'disease_name': 'cardiovascular disease',
-                'score': 0.85
-            },
-            {
-                'target_id': 'uniprot_P10828',
-                'disease_id': 'EFO_0000618',
-                'disease_name': 'nervous system disease',
-                'score': 0.72
-            }
-        ]
-        
-        return jsonify({'associations': mock_associations})
-        
-    except Exception as e:
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-
-@aop_app.route("/query_bgee_expression", methods=["POST"])
-def query_bgee_expression():
-    """
-    Query Bgee for gene expression data based on current network elements.
-    
-    Returns:
-        JSON response with gene expression data from Bgee
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data or 'cy_elements' not in data:
-            return jsonify({'error': 'Cytoscape elements required'}), 400
-        
-        cy_elements = data['cy_elements']
-        
-        # Extract gene nodes from network
-        gene_nodes = []
-        for element in cy_elements:
-            if element.get('group') == 'nodes' or 'group' not in element:
-                element_data = element.get('data', {})
-                element_type = element_data.get('type', '')
-                
-                if element_type in ['ensembl', 'uniprot']:
-                    gene_nodes.append(element_data)
-        
-        # Mock Bgee expression data
-        mock_expression_data = []
-        for gene in gene_nodes:
-            gene_id = gene.get('id', '')
-            mock_expression_data.append({
-                'gene_id': gene_id,
-                'expression_level': 'high',
-                'anatomical_entity': 'brain',
-                'developmental_stage': 'adult',
-                'expression_score': 0.9
-            })
-        
-        return jsonify({'expression_data': mock_expression_data})
-        
-    except Exception as e:
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-
-@aop_app.route("/query_bgee_developmental", methods=["POST"])
-def query_bgee_developmental():
-    """
-    Query Bgee for developmental stage expression data.
-    
-    Returns:
-        JSON response with developmental stage data from Bgee
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data or 'cy_elements' not in data:
-            return jsonify({'error': 'Cytoscape elements required'}), 400
-        
-        # Mock developmental data
-        mock_developmental_data = [
-            {
-                'gene_id': 'ensembl_ENSG00000126351',
-                'stage': 'HsapDv:0000087',
-                'stage_name': 'embryonic stage',
-                'expression_score': 0.8
-            },
-            {
-                'gene_id': 'ensembl_ENSG00000151090',
-                'stage': 'HsapDv:0000174',
-                'stage_name': 'adult stage',
-                'expression_score': 0.95
-            }
-        ]
-        
-        return jsonify({'developmental_data': mock_developmental_data})
-        
-    except Exception as e:
-        return jsonify({'error': f'Server error: {str(e)}'}), 500
-
-@aop_app.route("/query_bgee_anatomical", methods=["POST"])
-def query_bgee_anatomical():
-    """
-    Query Bgee for organ-specific expression data.
-    
-    Returns:
-        JSON response with anatomical expression data from Bgee
-    """
-    try:
-        data = request.get_json(silent=True)
-        if not data or 'cy_elements' not in data:
-            return jsonify({'error': 'Cytoscape elements required'}), 400
-        
-        # Mock anatomical expression data
-        mock_anatomical_data = [
-            {
-                'gene_id': 'ensembl_ENSG00000126351',
-                'organ': 'UBERON:0000955',
-                'organ_name': 'brain',
-                'expression_level': 'high',
-                'confidence': 'high'
-            },
-            {
-                'gene_id': 'ensembl_ENSG00000151090',
-                'organ': 'UBERON:0000948',
-                'organ_name': 'heart',
-                'expression_level': 'medium',
-                'confidence': 'medium'
-            }
-        ]
-        
-        return jsonify({'anatomical_data': mock_anatomical_data})
-        
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 

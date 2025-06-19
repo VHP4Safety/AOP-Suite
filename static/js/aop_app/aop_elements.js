@@ -424,65 +424,101 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function setupButtonHandlers() {
+        // Remove any existing event handlers first to prevent multiple bindings
+        $("#toggle_bounding_boxes").off("click");
+        $("#toggle_compounds").off("click");
+        $("#see_genes").off("click");
+        $("#reset_layout").off("click");
+        $("#download_network").off("click");
+        $("#toggle_go_processes").off("click");
+        $("#show_go_hierarchy").off("click");
+        
         // Toggle Bounding Boxes
-        $("#toggle_bounding_boxes").on("click", function () {
+        $("#toggle_bounding_boxes").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Bounding boxes button clicked - starting toggle');
             toggleBoundingBoxes();
         });
 
         // Toggle compounds
-        $("#toggle_compounds").on("click", function() {
+        $("#toggle_compounds").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             if (window.toggleCompounds) {
                 window.toggleCompounds();
             }
         });
 
         // Toggle genes
-        $("#see_genes").on("click", function () {
+        $("#see_genes").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             toggleGenes();
         });
 
         // Reset layout
-        $("#reset_layout").on("click", function () {
+        $("#reset_layout").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             positionNodes(window.cy);
         });
 
         // Download network
-        $("#download_network").on("click", function () {
+        $("#download_network").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
             downloadNetwork();
         });
 
         // Toggle GO processes
-        $("#toggle_go_processes").on("click", function() {
+        $("#toggle_go_processes").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             toggleGOProcesses();
         });
 
-        $("#show_go_hierarchy").on("click", function() {
+        $("#show_go_hierarchy").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             showGOProcessHierarchy();
         });
 
         // OpenTargets dropdown handlers
-        $("#opentargets_query_compounds").on("click", function() {
+        $("#opentargets_query_compounds").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             queryOpenTargetsCompounds();
         });
 
-        $("#opentargets_query_targets").on("click", function() {
+        $("#opentargets_query_targets").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             queryOpenTargetsTargets();
         });
 
-        $("#opentargets_query_diseases").on("click", function() {
+        $("#opentargets_query_diseases").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             queryOpenTargetsDiseases();
         });
 
         // Bgee dropdown handlers
-        $("#bgee_query_expression").on("click", function() {
+        $("#bgee_query_expression").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             queryBgeeExpression();
         });
 
-        $("#bgee_query_developmental").on("click", function() {
+        $("#bgee_query_developmental").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             queryBgeeDevelopmental();
         });
 
-        $("#bgee_query_anatomical").on("click", function() {
+        $("#bgee_query_anatomical").on("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
             queryBgeeAnatomical();
         });
     }
