@@ -231,6 +231,14 @@ document.addEventListener("DOMContentLoaded", function () {
             if (window.setupNetworkChangeTracking) {
                 window.setupNetworkChangeTracking();
             }
+            
+            // Trigger immediate AOP table population after modules are initialized
+            setTimeout(() => {
+                console.log("Modules initialized - triggering AOP table population");
+                if (window.populateAopTable) {
+                    window.populateAopTable(true); // true = immediate
+                }
+            }, 500);
         }, 200);
     }
 
@@ -373,11 +381,9 @@ document.addEventListener("DOMContentLoaded", function () {
             const edge = evt.target;
             console.debug(`Edge added: ${edge.id()}`);
             
-            // Update AOP table when edges are added
+            // Use debounced update for edge additions
             if (window.populateAopTable) {
-                setTimeout(() => {
-                    window.populateAopTable();
-                }, 200);
+                window.populateAopTable(false); // false = debounced
             }
             
             // Smooth animation for edge additions
@@ -393,11 +399,9 @@ document.addEventListener("DOMContentLoaded", function () {
             const edge = evt.target;
             console.debug(`Edge removed: ${edge.id()}`);
             
-            // Update AOP table when edges are removed  
+            // Use debounced update for edge removals
             if (window.populateAopTable) {
-                setTimeout(() => {
-                    window.populateAopTable();
-                }, 200);
+                window.populateAopTable(false); // false = debounced
             }
             
             // Smooth animation for edge removals
@@ -468,13 +472,10 @@ document.addEventListener("DOMContentLoaded", function () {
             updateCompoundTableFromNetwork();
         }
         
-        // Always update AOP table for any node/edge changes (since it shows relationships)
-        console.log("Triggering AOP table update");
+        // Use debounced AOP table update for network changes
+        console.log("Triggering debounced AOP table update");
         if (window.populateAopTable) {
-            setTimeout(() => {
-                console.log("Executing delayed AOP table update");
-                window.populateAopTable();
-            }, 200); // Increased delay to ensure network is fully updated
+            window.populateAopTable(false); // false = use debounced version
         } else {
             console.error("populateAopTable function not available");
         }
@@ -490,12 +491,17 @@ document.addEventListener("DOMContentLoaded", function () {
         $("#toggle_go_processes").off("click");
         $("#show_go_hierarchy").off("click");
         
-        // Toggle Bounding Boxes
+        // Group by AOP - now uses table functionality
         $("#toggle_bounding_boxes").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
-            console.log('Bounding boxes button clicked - starting toggle');
-            toggleBoundingBoxes();
+            console.log('Group by AOP button clicked');
+            
+            if (window.aopTableManager) {
+                window.aopTableManager.groupByAllAops();
+            } else {
+                console.error('AOP Table Manager not available');
+            }
         });
 
         // Toggle compounds
@@ -739,45 +745,12 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function toggleBoundingBoxes() {
-        const action = window.boundingBoxesVisible ? 'remove' : 'add';
-        
-        fetch('/toggle_bounding_boxes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                action: action,
-                cy_elements: window.cy.elements().jsons() 
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(updatedElements => {
-            if (Array.isArray(updatedElements)) {
-                // Use batch operation for smooth transitions
-                window.cy.batch(() => {
-                    window.cy.elements().remove();
-                    window.cy.add(updatedElements);
-                });
-                
-                window.boundingBoxesVisible = !window.boundingBoxesVisible;
-                $("#toggle_bounding_boxes").text(window.boundingBoxesVisible ? "Remove AOP Boxes" : "Group by AOP");
-                
-                // Smooth animation after bounding box toggle
-                const fontSlider = document.getElementById('font-size-slider');
-                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-                
-                setTimeout(() => {
-                    positionNodes(window.cy, fontSizeMultiplier, true);
-                }, 100);
-            }
-        })
-        .catch(error => {
-            console.error("Error toggling bounding boxes:", error);
-        });
+        // Legacy function - now redirects to table manager
+        if (window.aopTableManager) {
+            window.aopTableManager.groupByAllAops();
+        } else {
+            console.error('AOP Table Manager not available for bounding boxes');
+        }
     }
 
     function downloadNetwork() {
@@ -941,15 +914,15 @@ function updateCompoundTableFromNetwork() {
 
 // Event listener for data-type-dropdown
 $(document).ready(function() {
-    // Initial population of AOP table with longer delay
+    // Initial population of AOP table with immediate update after longer delay
     setTimeout(() => {
         console.log("DOM ready - triggering initial AOP table population");
         if (window.populateAopTable) {
-            window.populateAopTable();
+            window.populateAopTable(true); // true = immediate, not debounced
         } else {
             console.error("populateAopTable not available in DOM ready");
         }
-    }, 3000); // Increased delay to ensure everything is loaded
+    }, 3000); // Keep the delay to ensure everything is loaded
 });
 
 function populateaopTable() {

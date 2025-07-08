@@ -7,7 +7,10 @@ class AOPTableManager {
         this.currentData = [];
         this.filteredData = [];
         this.filterText = '';
-        this.selectedAop = null; // Track currently selected AOP
+        this.selectedAop = null; // Track currently selected AOP (single selection with layout)
+        this.groupedAops = new Set(); // Track grouped AOPs (multiple selection without layout change)
+        this.isUpdating = false; // Prevent concurrent updates
+        this.updateTimeout = null; // For debouncing
         this.init();
     }
 
@@ -57,10 +60,8 @@ class AOPTableManager {
     generateTableHTML() {
         const headers = [
             'Source Node',
-            'Type',
             'KER Label',
             'Target Node', 
-            'Type',
             'AOP IDs',
             'AOP Titles'
         ];
@@ -82,9 +83,6 @@ class AOPTableManager {
                      data-node-id="${row.source_id}">${this.highlightMatch(row.source_label)}</div>
             </td>`;
             
-            // Source type
-            html += `<td>${row.source_type}</td>`;
-            
             // KER Label
             html += `<td><span class="ker-label-cell">${this.highlightMatch(row.ker_label)}</span></td>`;
             
@@ -96,9 +94,6 @@ class AOPTableManager {
                           data-node-id="${row.target_id}">${this.highlightMatch(row.target_label)}</div>` 
                     : 'N/A'}
             </td>`;
-            
-            // Target type
-            html += `<td>${row.target_type}</td>`;
             
             // AOP IDs - make clickable
             html += `<td>
@@ -121,11 +116,12 @@ class AOPTableManager {
         const connectedRows = this.filteredData.filter(r => r.is_connected).length;
         const disconnectedRows = filteredRows - connectedRows;
         
-        html += `<tfoot><tr><td colspan="7" class="text-muted small">
+        html += `<tfoot><tr><td colspan="5" class="text-muted small">
             Showing ${filteredRows} of ${totalRows} entries 
             (${connectedRows} connected, ${disconnectedRows} disconnected nodes)
             ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
             ${this.selectedAop ? ` - Filtered by AOP: ${this.selectedAop}` : ''}
+            ${this.groupedAops.size > 0 ? ` - Grouped AOPs: ${this.groupedAops.size}` : ''}
         </td></tr></tfoot>`;
 
         return html;
@@ -137,8 +133,12 @@ class AOPTableManager {
         const aopIds = aopList.split(',').map(id => id.trim());
         return aopIds.map(aopId => {
             const isSelected = this.selectedAop === aopId;
-            const className = isSelected ? 'aop-link selected-aop' : 'aop-link';
-            return `<span class="${className}" data-aop-id="${aopId}" title="Click to filter network by this AOP">${this.highlightMatch(aopId)}</span>`;
+            const isGrouped = this.groupedAops.has(aopId);
+            let className = 'aop-link';
+            if (isSelected) className += ' selected-aop';
+            if (isGrouped) className += ' grouped-aop';
+            
+            return `<span class="${className}" data-aop-id="${aopId}" title="Click to filter network by this AOP (Ctrl+Click to group)">${this.highlightMatch(aopId)}</span>`;
         }).join(', ');
     }
 
@@ -152,8 +152,12 @@ class AOPTableManager {
         return titles.map((title, index) => {
             const correspondingAopId = aopIds[index] || aopIds[0] || ''; // Fallback to first ID
             const isSelected = this.selectedAop === correspondingAopId;
-            const className = isSelected ? 'aop-title-link selected-aop' : 'aop-title-link';
-            return `<span class="${className}" data-aop-id="${correspondingAopId}" title="Click to filter network by this AOP: ${correspondingAopId}">${this.highlightMatch(title)}</span>`;
+            const isGrouped = this.groupedAops.has(correspondingAopId);
+            let className = 'aop-title-link';
+            if (isSelected) className += ' selected-aop';
+            if (isGrouped) className += ' grouped-aop';
+            
+            return `<span class="${className}" data-aop-id="${correspondingAopId}" title="Click to filter network by this AOP (Ctrl+Click to group): ${correspondingAopId}">${this.highlightMatch(title)}</span>`;
         }).join('; ');
     }
 
@@ -181,13 +185,41 @@ class AOPTableManager {
                 e.preventDefault();
                 e.stopPropagation();
                 const aopId = e.target.getAttribute('data-aop-id');
-                this.toggleAopFilter(aopId);
+                
+                if (e.ctrlKey || e.metaKey) {
+                    // Ctrl+Click for grouping (multiple selection without layout change)
+                    this.toggleAopGroup(aopId);
+                } else {
+                    // Normal click for filtering (single selection with layout change)
+                    this.toggleAopFilter(aopId);
+                }
             });
         });
     }
 
+    toggleAopGroup(aopId) {
+        console.log('Toggling AOP group for:', aopId);
+        
+        if (this.groupedAops.has(aopId)) {
+            this.groupedAops.delete(aopId);
+        } else {
+            this.groupedAops.add(aopId);
+        }
+        
+        // Clear single selection when grouping
+        if (this.selectedAop) {
+            this.selectedAop = null;
+        }
+        
+        this.applyGroupHighlighting();
+        this.renderTable();
+    }
+
     toggleAopFilter(aopId) {
         console.log('Toggling AOP filter for:', aopId);
+        
+        // Clear grouped selections when doing single filter
+        this.groupedAops.clear();
         
         // If clicking the same AOP, clear the filter
         if (this.selectedAop === aopId) {
@@ -208,6 +240,229 @@ class AOPTableManager {
         this.renderTable();
     }
 
+    clearAllAopSelections() {
+        console.log('Clearing all AOP selections');
+        this.selectedAop = null;
+        this.groupedAops.clear();
+        this.showAllNetworkNodes();
+        this.renderTable();
+    }
+
+    // New method for "Group by AOP" button - highlights all AOPs without layout change
+    groupByAllAops() {
+        console.log('Grouping by all AOPs');
+        
+        // Clear single selection
+        this.selectedAop = null;
+        
+        // Get all unique AOP IDs from current data
+        const allAopIds = new Set();
+        this.currentData.forEach(row => {
+            if (row.aop_list && row.aop_list !== 'N/A') {
+                const aopIds = row.aop_list.split(',').map(id => id.trim());
+                aopIds.forEach(id => allAopIds.add(id));
+            }
+        });
+        
+        // Toggle: if all are already grouped, clear them; otherwise group all
+        const allAlreadyGrouped = Array.from(allAopIds).every(id => this.groupedAops.has(id));
+        
+        if (allAlreadyGrouped) {
+            this.groupedAops.clear();
+            this.showAllNetworkNodes();
+        } else {
+            this.groupedAops = new Set(allAopIds);
+            this.applyGroupHighlighting();
+        }
+        
+        this.renderTable();
+        
+        // Update button text
+        const button = document.getElementById('toggle_bounding_boxes');
+        if (button) {
+            button.textContent = this.groupedAops.size > 0 ? 'Clear AOP Groups' : 'Group by AOP';
+        }
+    }
+
+    handleFilter(filterText) {
+        this.filterText = filterText.toLowerCase().trim();
+        
+        if (!this.filterText) {
+            this.filteredData = [...this.currentData];
+            this.showAllNetworkNodes();
+        } else {
+            this.filteredData = this.currentData.filter(row => this.matchesFilter(row));
+            this.filterNetworkNodes();
+        }
+        
+        this.renderTable();
+    }
+
+    matchesFilter(row) {
+        const searchText = this.filterText;
+        
+        // Search in all relevant fields
+        const searchFields = [
+            row.source_label,
+            row.target_label,
+            row.ker_label,
+            row.aop_list,
+            row.aop_titles,
+            row.source_type,
+            row.target_type
+        ].join(' ').toLowerCase();
+        
+        return searchFields.includes(searchText);
+    }
+
+    relayoutVisibleNodes(visibleNodeIds) {
+        if (!window.cy || visibleNodeIds.size === 0) return;
+
+        const visibleNodes = window.cy.nodes().filter(node => visibleNodeIds.has(node.id()));
+        
+        if (visibleNodes.length > 0) {
+            this.applyConsistentLayout(visibleNodes);
+        }
+    }
+
+    relayoutAllNodes() {
+        if (!window.cy) return;
+        this.applyConsistentLayout(window.cy.nodes());
+    }
+
+    // New method to ensure consistent layout behavior like reset layout button
+    applyConsistentLayout(elements = null) {
+        if (!window.cy) return;
+
+        const elementsToLayout = elements || window.cy.nodes();
+        
+        // Get current font size multiplier with correct default (matching reset layout behavior)
+        const fontSlider = document.getElementById('font-size-slider');
+        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+        
+        // Trigger resize first (like sidebar animations do)
+        window.cy.resize();
+        
+        // Add a slight delay to allow resize to complete, then animate layout
+        setTimeout(() => {
+            // Use the same layout configuration as reset layout button
+            const layout = elementsToLayout.layout({
+                name: 'breadthfirst',
+                directed: true,
+                padding: 30,
+                animate: true,
+                animationDuration: 500,
+                animationEasing: 'ease-out',
+                fit: true
+            });
+            
+            // Run the layout
+            layout.run();
+            
+            // After layout animation completes, apply styles smoothly
+            layout.one('layoutstop', function() {
+                // Apply styles with updated font size and smooth transitions
+                if (window.positionNodes) {
+                    window.positionNodes(window.cy, fontSizeMultiplier, true);
+                }
+            });
+        }, 100);
+    }
+
+    applyGroupHighlighting() {
+        if (!window.cy || this.groupedAops.size === 0) {
+            this.showAllNetworkNodes();
+            return;
+        }
+        
+        console.log('Applying group highlighting for AOPs:', Array.from(this.groupedAops));
+        
+        // Save original styles before modifying them
+        this.saveOriginalStyles();
+        
+        // Create color palette for different AOPs
+        const colors = [
+            '#ff6b35', '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', 
+            '#795548', '#607D8B', '#E91E63', '#00BCD4', '#8BC34A'
+        ];
+        
+        const aopColorMap = new Map();
+        Array.from(this.groupedAops).forEach((aopId, index) => {
+            aopColorMap.set(aopId, colors[index % colors.length]);
+        });
+        
+        // Find all nodes belonging to grouped AOPs
+        const nodeColorMap = new Map();
+        
+        window.cy.nodes().forEach(node => {
+            const nodeData = node.data();
+            const nodeAops = nodeData.aop || [];
+            const aopsToCheck = Array.isArray(nodeAops) ? nodeAops : [nodeAops]; // Fixed variable name
+            
+            // Check if node belongs to any grouped AOP
+            for (const nodeAop of aopsToCheck) {
+                if (!nodeAop) continue;
+                
+                let nodeAopId = '';
+                if (nodeAop.includes('aop/')) {
+                    nodeAopId = `AOP:${nodeAop.split('aop/').pop()}`;
+                } else if (nodeAop.startsWith('AOP:')) {
+                    nodeAopId = nodeAop;
+                } else if (nodeAop.match(/^\d+$/)) {
+                    nodeAopId = `AOP:${nodeAop}`;
+                }
+                
+                if (this.groupedAops.has(nodeAopId)) {
+                    nodeColorMap.set(node.id(), aopColorMap.get(nodeAopId));
+                    break; // Use first matching AOP color
+                }
+            }
+        });
+        
+        console.log(`Found ${nodeColorMap.size} nodes for grouped AOPs`);
+        
+        // Apply visual highlighting without layout change
+        window.cy.batch(() => {
+            window.cy.nodes().forEach(node => {
+                const nodeColor = nodeColorMap.get(node.id());
+                if (nodeColor) {
+                    node.removeClass('filtered-out aop-filtered')
+                         .addClass('aop-grouped')
+                         .style('opacity', 1)
+                         .style('border-width', '4px')
+                         .style('border-color', nodeColor);
+                } else {
+                    node.removeClass('aop-grouped')
+                         .style('opacity', 0.3)
+                         .style('border-width', '2px')
+                         .style('border-color', '#ccc');
+                }
+            });
+            
+            // Handle edges - highlight edges between grouped nodes
+            window.cy.edges().forEach(edge => {
+                const sourceColor = nodeColorMap.get(edge.source().id());
+                const targetColor = nodeColorMap.get(edge.target().id());
+                
+                if (sourceColor && targetColor) {
+                    // Use source node color for edge
+                    edge.style('opacity', 1)
+                        .style('line-color', sourceColor)
+                        .style('target-arrow-color', sourceColor)
+                        .style('width', '3px');
+                } else {
+                    edge.style('opacity', 0.2)
+                        .style('line-color', '#ccc')
+                        .style('target-arrow-color', '#ccc')
+                        .style('width', '1px');
+                }
+            });
+        });
+        
+        // Show status message
+        this.showFilterStatus(`Grouped ${this.groupedAops.size} AOPs with ${nodeColorMap.size} nodes`, 'info');
+    }
+
     filterByAop(aopId) {
         if (!window.cy || !aopId) return;
         
@@ -215,6 +470,9 @@ class AOPTableManager {
         
         // Find all nodes that belong to this AOP
         const aopNodes = new Set();
+        
+        // Save original styles before modifying them
+        this.saveOriginalStyles();
         
         // Check all nodes for the AOP data
         window.cy.nodes().forEach(node => {
@@ -304,32 +562,162 @@ class AOPTableManager {
         this.showFilterStatus(`Network filtered to show ${aopNodes.size} nodes from ${aopId}`, 'info');
     }
 
+    applyGroupHighlighting() {
+        if (!window.cy || this.groupedAops.size === 0) {
+            this.showAllNetworkNodes();
+            return;
+        }
+        
+        console.log('Applying group highlighting for AOPs:', Array.from(this.groupedAops));
+        
+        // Save original styles before modifying them
+        this.saveOriginalStyles();
+        
+        // Create color palette for different AOPs
+        const colors = [
+            '#ff6b35', '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', 
+            '#795548', '#607D8B', '#E91E63', '#00BCD4', '#8BC34A'
+        ];
+        
+        const aopColorMap = new Map();
+        Array.from(this.groupedAops).forEach((aopId, index) => {
+            aopColorMap.set(aopId, colors[index % colors.length]);
+        });
+        
+        // Find all nodes belonging to grouped AOPs
+        const nodeColorMap = new Map();
+        
+        window.cy.nodes().forEach(node => {
+            const nodeData = node.data();
+            const nodeAops = nodeData.aop || [];
+            const aopsToCheck = Array.isArray(nodeAops) ? nodeAops : [nodeAops]; // Fixed variable name
+            
+            // Check if node belongs to any grouped AOP
+            for (const nodeAop of aopsToCheck) {
+                if (!nodeAop) continue;
+                
+                let nodeAopId = '';
+                if (nodeAop.includes('aop/')) {
+                    nodeAopId = `AOP:${nodeAop.split('aop/').pop()}`;
+                } else if (nodeAop.startsWith('AOP:')) {
+                    nodeAopId = nodeAop;
+                } else if (nodeAop.match(/^\d+$/)) {
+                    nodeAopId = `AOP:${nodeAop}`;
+                }
+                
+                if (this.groupedAops.has(nodeAopId)) {
+                    nodeColorMap.set(node.id(), aopColorMap.get(nodeAopId));
+                    break; // Use first matching AOP color
+                }
+            }
+        });
+        
+        console.log(`Found ${nodeColorMap.size} nodes for grouped AOPs`);
+        
+        // Apply visual highlighting without layout change
+        window.cy.batch(() => {
+            window.cy.nodes().forEach(node => {
+                const nodeColor = nodeColorMap.get(node.id());
+                if (nodeColor) {
+                    node.removeClass('filtered-out aop-filtered')
+                         .addClass('aop-grouped')
+                         .style('opacity', 1)
+                         .style('border-width', '4px')
+                         .style('border-color', nodeColor);
+                } else {
+                    node.removeClass('aop-grouped')
+                         .style('opacity', 0.3)
+                         .style('border-width', '2px')
+                         .style('border-color', '#ccc');
+                }
+            });
+            
+            // Handle edges - highlight edges between grouped nodes
+            window.cy.edges().forEach(edge => {
+                const sourceColor = nodeColorMap.get(edge.source().id());
+                const targetColor = nodeColorMap.get(edge.target().id());
+                
+                if (sourceColor && targetColor) {
+                    // Use source node color for edge
+                    edge.style('opacity', 1)
+                        .style('line-color', sourceColor)
+                        .style('target-arrow-color', sourceColor)
+                        .style('width', '3px');
+                } else {
+                    edge.style('opacity', 0.2)
+                        .style('line-color', '#ccc')
+                        .style('target-arrow-color', '#ccc')
+                        .style('width', '1px');
+                }
+            });
+        });
+        
+        // Show status message
+        this.showFilterStatus(`Grouped ${this.groupedAops.size} AOPs with ${nodeColorMap.size} nodes`, 'info');
+    }
+
+    // New method to save original element styles before applying filters
+    saveOriginalStyles() {
+        if (!window.cy) return;
+        
+        // Save original node styles
+        window.cy.nodes().forEach(node => {
+            const currentStyle = node.style();
+            if (!node.data('original-border-color')) {
+                node.data('original-border-color', currentStyle['border-color'] || '#666');
+            }
+            if (!node.data('original-border-width')) {
+                node.data('original-border-width', currentStyle['border-width'] || '2px');
+            }
+            if (!node.data('original-opacity')) {
+                node.data('original-opacity', currentStyle['opacity'] || 1);
+            }
+        });
+        
+        // Save original edge styles
+        window.cy.edges().forEach(edge => {
+            const currentStyle = edge.style();
+            if (!edge.data('original-line-color')) {
+                edge.data('original-line-color', currentStyle['line-color'] || '#666');
+            }
+            if (!edge.data('original-target-arrow-color')) {
+                edge.data('original-target-arrow-color', currentStyle['target-arrow-color'] || '#666');
+            }
+            if (!edge.data('original-width')) {
+                edge.data('original-width', currentStyle['width'] || '2px');
+            }
+            if (!edge.data('original-opacity')) {
+                edge.data('original-opacity', currentStyle['opacity'] || 1);
+            }
+        });
+    }
+
     showAllNetworkNodes() {
         if (!window.cy) return;
 
         console.log('Showing all network nodes');
 
         window.cy.batch(() => {
-            // Reset all nodes
+            // Reset all nodes to their original styles
             window.cy.nodes().forEach(node => {
-                node.removeClass('filtered-out aop-filtered aop-highlighted')
-                    .style('opacity', 1)
-                    .style('border-width', '2px')
+                node.removeClass('filtered-out aop-filtered aop-highlighted aop-grouped')
+                    .style('opacity', node.data('original-opacity') || 1)
+                    .style('border-width', node.data('original-border-width') || '2px')
                     .style('border-color', node.data('original-border-color') || '#666');
             });
             
-            // Reset all edges
+            // Reset all edges to their original styles
             window.cy.edges().forEach(edge => {
                 edge.removeClass('filtered-out')
-                    .style('opacity', 1)
+                    .style('opacity', edge.data('original-opacity') || 1)
                     .style('line-color', edge.data('original-line-color') || '#666')
-                    .style('target-arrow-color', edge.data('original-arrow-color') || '#666')
-                    .style('width', '2px');
+                    .style('target-arrow-color', edge.data('original-target-arrow-color') || '#666')
+                    .style('width', edge.data('original-width') || '2px');
             });
         });
 
-        // Re-layout all nodes
-        this.relayoutAllNodes();
+        // Apply consistent layout like reset button
+        this.applyConsistentLayout();
         
         // Clear status message
         this.showFilterStatus('', 'info');
@@ -368,6 +756,24 @@ class AOPTableManager {
         } else {
             statusElement.innerHTML = '';
         }
+    }
+
+    renderTable() {
+        const tableContainer = document.querySelector('#aop-table-container, .aop-table-container');
+        if (!tableContainer) return;
+
+        let table = tableContainer.querySelector('.aop-table');
+        if (!table) {
+            table = document.createElement('table');
+            table.className = 'table table-striped table-hover aop-table';
+            tableContainer.appendChild(table);
+        }
+
+        const html = this.generateTableHTML();
+        table.innerHTML = html;
+
+        // Add click handlers for node highlighting
+        this.addNodeClickHandlers(table);
     }
 
     setupTableStyles() {
@@ -455,6 +861,8 @@ class AOPTableManager {
                     padding: 2px 4px;
                     border-radius: 3px;
                     transition: all 0.2s ease;
+                    display: inline-block;
+                    margin: 1px;
                 }
                 
                 .aop-link:hover, .aop-title-link:hover {
@@ -466,6 +874,18 @@ class AOPTableManager {
                     background-color: #ff6b35;
                     color: white;
                     font-weight: bold;
+                    box-shadow: 0 2px 4px rgba(255, 107, 53, 0.3);
+                }
+                
+                .aop-link.grouped-aop, .aop-title-link.grouped-aop {
+                    background-color: #4CAF50;
+                    color: white;
+                    font-weight: bold;
+                    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
+                }
+                
+                .aop-link.selected-aop.grouped-aop, .aop-title-link.selected-aop.grouped-aop {
+                    background: linear-gradient(45deg, #ff6b35, #4CAF50);
                 }
                 
                 .aop-highlighted {
@@ -473,8 +893,79 @@ class AOPTableManager {
                     border-width: 4px !important;
                     box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
                 }
+                
+                .aop-grouped {
+                    border-width: 4px !important;
+                    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+                }
             `;
             document.head.appendChild(styles);
+        }
+    }
+
+    filterNetworkNodes() {
+        if (!window.cy) return;
+
+        // Save original styles before filtering
+        this.saveOriginalStyles();
+
+        // Get visible node IDs from filtered data
+        const visibleNodeIds = new Set();
+        this.filteredData.forEach(row => {
+            if (row.source_id !== 'N/A') visibleNodeIds.add(row.source_id);
+            if (row.target_id !== 'N/A') visibleNodeIds.add(row.target_id);
+        });
+
+        // Animate network filtering
+        window.cy.batch(() => {
+            window.cy.nodes().forEach(node => {
+                if (visibleNodeIds.has(node.id())) {
+                    node.removeClass('filtered-out').style('opacity', 1);
+                } else {
+                    node.addClass('filtered-out').style('opacity', 0.1);
+                }
+            });
+            
+            // Also handle edges
+            window.cy.edges().forEach(edge => {
+                const sourceVisible = visibleNodeIds.has(edge.source().id());
+                const targetVisible = visibleNodeIds.has(edge.target().id());
+                
+                if (sourceVisible && targetVisible) {
+                    edge.removeClass('filtered-out').style('opacity', 1);
+                } else {
+                    edge.addClass('filtered-out').style('opacity', 0.1);
+                }
+            });
+        });
+
+        // Re-layout visible nodes with animation
+        this.relayoutVisibleNodes(visibleNodeIds);
+    }
+
+    highlightNodeInNetwork(nodeId) {
+        if (window.cy && nodeId) {
+            // Clear previous highlights
+            window.cy.elements().removeClass('highlighted');
+            
+            // Highlight the selected node
+            const node = window.cy.getElementById(nodeId);
+            if (node.length > 0) {
+                node.addClass('highlighted');
+                
+                // Center on the node with animation
+                window.cy.animate({
+                    center: { eles: node },
+                    zoom: Math.max(window.cy.zoom(), 1.5)
+                }, {
+                    duration: 500
+                });
+                
+                // Remove highlight after a few seconds
+                setTimeout(() => {
+                    node.removeClass('highlighted');
+                }, 3000);
+            }
         }
     }
 
@@ -484,134 +975,139 @@ class AOPTableManager {
         this.renderTable();
     }
 
-    handleFilter(filterText) {
-        this.filterText = filterText.toLowerCase().trim();
+    // Debounced version for network change events
+    debouncedUpdateTable(delay = 500) {
+        // Clear any existing timeout
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+
+        // Set new timeout
+        this.updateTimeout = setTimeout(() => {
+            if (!this.isUpdating) {
+                this.performTableUpdate();
+            }
+        }, delay);
+    }
+
+    async performTableUpdate() {
+        if (this.isUpdating) {
+            console.log('Table update already in progress, skipping');
+            return;
+        }
+
+        if (!window.cy) {
+            console.warn("Network not initialized for table update");
+            return;
+        }
+
+        this.isUpdating = true;
+        console.log('Starting AOP table update...');
+
+        try {
+            const cyElements = window.cy.elements().jsons();
+            
+            const response = await fetch('/populate_aop_table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cy_elements: cyElements })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.error) {
+                console.error("Error populating AOP table:", data.error);
+                return;
+            }
+            
+            this.updateTable(data.aop_data);
+            
+            // Apply consistent layout after populating the table
+            this.applyConsistentLayout();
+            
+            console.log(`AOP table updated with ${data.aop_data.length} entries`);
+            
+        } catch (error) {
+            console.error("Error updating AOP table:", error);
+        } finally {
+            this.isUpdating = false;
+        }
+    }
+
+    // New method for "Group by AOP" button - highlights all AOPs without layout change
+    groupByAllAops() {
+        console.log('Grouping by all AOPs');
         
-        if (!this.filterText) {
-            this.filteredData = [...this.currentData];
+        // Clear single selection
+        this.selectedAop = null;
+        
+        // Get all unique AOP IDs from current data
+        const allAopIds = new Set();
+        this.currentData.forEach(row => {
+            if (row.aop_list && row.aop_list !== 'N/A') {
+                const aopIds = row.aop_list.split(',').map(id => id.trim());
+                aopIds.forEach(id => allAopIds.add(id));
+            }
+        });
+        
+        // Toggle: if all are already grouped, clear them; otherwise group all
+        const allAlreadyGrouped = Array.from(allAopIds).every(id => this.groupedAops.has(id));
+        
+        if (allAlreadyGrouped) {
+            this.groupedAops.clear();
             this.showAllNetworkNodes();
         } else {
-            this.filteredData = this.currentData.filter(row => this.matchesFilter(row));
-            this.filterNetworkNodes();
+            this.groupedAops = new Set(allAopIds);
+            this.applyGroupHighlighting();
         }
         
         this.renderTable();
-    }
-
-    matchesFilter(row) {
-        const searchText = this.filterText;
         
-        // Search in all relevant fields
-        const searchFields = [
-            row.source_label,
-            row.target_label,
-            row.ker_label,
-            row.aop_list,
-            row.aop_titles,
-            row.source_type,
-            row.target_type
-        ].join(' ').toLowerCase();
-        
-        return searchFields.includes(searchText);
-    }
-
-    renderTable() {
-        const tableContainer = document.querySelector('#aop-table-container, .aop-table-container');
-        if (!tableContainer) return;
-
-        let table = tableContainer.querySelector('.aop-table');
-        if (!table) {
-            table = document.createElement('table');
-            table.className = 'table table-striped table-hover aop-table';
-            tableContainer.appendChild(table);
-        }
-
-        const html = this.generateTableHTML();
-        table.innerHTML = html;
-        
-        // Add click handlers for node highlighting
-        this.addNodeClickHandlers(table);
-    }
-
-    relayoutVisibleNodes(visibleNodeIds) {
-        if (!window.cy || visibleNodeIds.size === 0) return;
-
-        const visibleNodes = window.cy.nodes().filter(node => visibleNodeIds.has(node.id()));
-        
-        if (visibleNodes.length > 0) {
-            const layout = visibleNodes.layout({
-                name: 'cose',
-                animate: true,
-                animationDuration: 800,
-                animationEasing: 'ease-out',
-                nodeRepulsion: 8000,
-                nodeOverlap: 20,
-                idealEdgeLength: 100
-            });
-            
-            layout.run();
+        // Update button text
+        const button = document.getElementById('toggle_bounding_boxes');
+        if (button) {
+            button.textContent = this.groupedAops.size > 0 ? 'Clear AOP Groups' : 'Group by AOP';
         }
     }
 
-    relayoutAllNodes() {
-        if (!window.cy) return;
+    // Enhanced populate AOP table function with concurrency control
+    static populateAopTable(immediate = false) {
+        if (!window.aopTableManager) {
+            console.warn("AOP Table Manager not initialized");
+            return Promise.resolve();
+        }
 
-        const layout = window.cy.layout({
-            name: 'cose',
-            animate: true,
-            animationDuration: 800,
-            animationEasing: 'ease-out',
-            nodeRepulsion: 8000,
-            nodeOverlap: 20,
-            idealEdgeLength: 100
-        });
-        
-        layout.run();
+        if (immediate) {
+            // For immediate updates (like manual triggers)
+            return window.aopTableManager.performTableUpdate();
+        } else {
+            // For network change events, use debounced version
+            window.aopTableManager.debouncedUpdateTable();
+            return Promise.resolve();
+        }
     }
 }
 
 // Initialize the AOP Table Manager
 window.aopTableManager = new AOPTableManager();
 
-// Enhanced populate AOP table function
-window.populateAopTable = function() {
-    if (!window.cy) {
-        console.warn("Network not initialized");
-        return;
+// Enhanced populate AOP table function with concurrency control
+window.populateAopTable = function(immediate = false) {
+    if (!window.aopTableManager) {
+        console.warn("AOP Table Manager not initialized");
+        return Promise.resolve();
     }
 
-    const cyElements = window.cy.elements().jsons();
-    
-    fetch('/populate_aop_table', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cy_elements: cyElements })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.error) {
-            console.error("Error populating AOP table:", data.error);
-            return;
-        }
-        
-        window.aopTableManager.updateTable(data.aop_data);
-        console.log(`AOP table populated with ${data.aop_data.length} entries`);
-    })
-    .catch(error => {
-        console.error("Error populating AOP table:", error);
-    });
+    if (immediate) {
+        // For immediate updates (like manual triggers)
+        return window.aopTableManager.performTableUpdate();
+    } else {
+        // For network change events, use debounced version
+        window.aopTableManager.debouncedUpdateTable();
+        return Promise.resolve();
+    }
 };
-
-// Add CSS for node highlighting
-if (!document.querySelector('#network-highlight-styles')) {
-    const highlightStyles = document.createElement('style');
-    highlightStyles.id = 'network-highlight-styles';
-    highlightStyles.textContent = `
-        .highlighted {
-            border-width: 4px !important;
-            border-color: #ff6b35 !important;
-            z-index: 999 !important;
-        }
-    `;
-    document.head.appendChild(highlightStyles);
-}

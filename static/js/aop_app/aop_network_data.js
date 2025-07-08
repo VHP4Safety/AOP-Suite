@@ -256,11 +256,8 @@ class AOPNetworkDataManager {
     }
 
     addElementsToNetwork(elements) {
-        console.log('=== Adding Elements to Network ===');
-        console.log('Elements to add:', elements.length);
-
-        if (!window.cy || !elements || elements.length === 0) {
-            console.warn('Cannot add elements - cy or elements invalid');
+        if (!elements || elements.length === 0) {
+            console.log('No elements to add to network');
             return;
         }
 
@@ -352,70 +349,37 @@ class AOPNetworkDataManager {
         }
 
         if (newElements.length > 0) {
-            // Add new elements to the network with batch operation for smooth animation
             try {
-                console.log('Adding elements to Cytoscape...');
-                
+                // Add all elements in a single batch operation
                 window.cy.batch(() => {
-                    // Add elements one by one with error handling for individual elements
-                    const successfullyAdded = [];
-                    newElements.forEach((element, index) => {
-                        try {
-                            window.cy.add(element);
-                            successfullyAdded.push(element);
-                        } catch (elementError) {
-                            console.warn(`Failed to add element ${index} (${element.data?.id}):`, elementError.message);
-                            // Continue with other elements
-                        }
+                    newElements.forEach(element => {
+                        window.cy.add(element);
                     });
-
-                    console.log(`Successfully added ${successfullyAdded.length} out of ${newElements.length} elements`);
-
-                    setTimeout(() => {
-                        // Use the animated layout approach
-                        const layout = window.cy.layout({
-                            name: 'breadthfirst',
-                            directed: true,
-                            padding: 30,
-                            animate: true,
-                            animationDuration: 500,
-                            animationEasing: 'ease-out',
-                            fit: true
-                        });
-
-                        // Run the layout
-                        layout.run();
-
-                        // After layout animation completes, apply styles smoothly
-                        layout.one('layoutstop', function () {
-                            // Apply styles with updated font size and smooth transitions
-                            if (window.positionNodes) {
-                                window.positionNodes(window.cy);
-                            }
-                        });
-                    }, 100);
-
                 });
-                
-                console.log('Elements added successfully');
 
-                // Reposition nodes with smooth animation
+                console.log(`Added ${newElements.length} new elements to network`);
+
+                // Update layout after adding elements
                 if (window.positionNodes) {
-                    console.log('Repositioning nodes with smooth animation...');
-                    const fontSlider = document.getElementById('font-size-slider');
-                    const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-                    
                     setTimeout(() => {
+                        const fontSlider = document.getElementById('font-size-slider');
+                        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
                         window.positionNodes(window.cy, fontSizeMultiplier, true);
                     }, 100);
                 }
 
-                // Manually trigger AOP table update after adding network data
+                // Hide loading overlay if network has elements
+                const loadingOverlay = document.querySelector(".loading-overlay");
+                if (loadingOverlay && window.cy.elements().length > 0) {
+                    loadingOverlay.style.display = "none";
+                }
+
+                // Trigger immediate AOP table update after bulk network addition
                 if (window.populateAopTable) {
-                    console.log('Triggering AOP table update after network data addition');
+                    console.log('Triggering immediate AOP table update after bulk network addition');
                     setTimeout(() => {
-                        window.populateAopTable();
-                    }, 300);
+                        window.populateAopTable(true); // true = immediate update
+                    }, 500); // Shorter delay for bulk operations
                 }
 
                 console.log(`Successfully processed ${newElements.length} new elements to the network`);
