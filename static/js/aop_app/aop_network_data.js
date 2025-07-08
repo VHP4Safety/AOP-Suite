@@ -142,10 +142,15 @@ class AOPNetworkDataManager {
                     loadingOverlay.style.display = "none";
                 }
 
-                this.showStatus(
-                    `Successfully added ${result.elements_count} elements from ${validValues.length} ${queryType} value(s)`,
-                    'success'
-                );
+                let statusMessage = `Successfully added ${result.elements_count} elements from ${validValues.length} ${queryType} value(s)`;
+                
+                // Show warning popup if backup query was used
+                if (result.warning && result.warning.type === 'incomplete_aop_structure') {
+                    this.showIncompleteAopWarning(result.warning);
+                    statusMessage += ' (with limitations)';
+                }
+
+                this.showStatus(statusMessage, 'success');
 
                 // Clear the input
                 document.getElementById('query-values').value = '';
@@ -268,35 +273,141 @@ class AOPNetworkDataManager {
         console.log('Existing element IDs:', existingIds.size);
 
         const newElements = [];
+        const validNodes = new Set();
+        const skippedEdges = [];
 
-        // Filter out existing elements
+        // First pass: collect all valid nodes and track node IDs
         elements.forEach((element, index) => {
             const elementId = element.data?.id;
-            if (elementId && !existingIds.has(elementId)) {
-                newElements.push(element);
-                if (index < 5) {  // Log first few elements
-                    console.log(`New element ${index}:`, element);
-                }
-            } else {
+            
+            if (!elementId) {
+                console.warn(`Element ${index} has no ID, skipping:`, element);
+                return;
+            }
+            
+            if (existingIds.has(elementId)) {
                 if (index < 5) {
                     console.log(`Skipping duplicate element ${index}:`, elementId);
+                }
+                return;
+            }
+
+            // If it's a node (no source/target) or has group 'nodes'
+            if (!element.data?.source && !element.data?.target || element.group === 'nodes') {
+                newElements.push(element);
+                validNodes.add(elementId);
+                if (index < 5) {
+                    console.log(`New node element ${index}:`, element);
+                }
+            }
+        });
+
+        // Add existing nodes to valid nodes set
+        window.cy.nodes().forEach(node => {
+            validNodes.add(node.id());
+        });
+
+        // Second pass: handle edges - be more permissive for incomplete AOP structures
+        elements.forEach((element, index) => {
+            const elementId = element.data?.id;
+            
+            if (!elementId || existingIds.has(elementId)) {
+                return; // Skip duplicates and invalid elements
+            }
+
+            // If it's an edge (has source and target) or has group 'edges'
+            if ((element.data?.source && element.data?.target) || element.group === 'edges') {
+                const source = element.data?.source;
+                const target = element.data?.target;
+                
+                // Basic validation - ensure we have source and target
+                if (!source || !target) {
+                    console.warn(`Edge ${elementId} has missing source or target:`, { source, target });
+                    skippedEdges.push({ id: elementId, reason: 'Missing source or target' });
+                    return;
+                }
+                
+                // For incomplete AOP structures, we'll be more lenient
+                // Check if both source and target nodes exist, but don't skip if they don't
+                const sourceExists = validNodes.has(source);
+                const targetExists = validNodes.has(target);
+                
+                if (!sourceExists || !targetExists) {
+                    console.warn(`Edge ${elementId} references potentially missing nodes: source=${source} (exists: ${sourceExists}), target=${target} (exists: ${targetExists})`);
+                    // Still add the edge - Cytoscape will handle missing nodes gracefully
+                    // This allows us to preserve the graph structure even with incomplete data
+                }
+                
+                // Add the edge regardless - let Cytoscape handle it
+                newElements.push(element);
+                if (index < 5) {
+                    console.log(`New edge element ${index}:`, element);
                 }
             }
         });
 
         console.log('New elements to add:', newElements.length);
+        if (skippedEdges.length > 0) {
+            console.warn('Skipped edges due to missing source/target:', skippedEdges);
+        }
 
         if (newElements.length > 0) {
-            // Add new elements to the network
+            // Add new elements to the network with batch operation for smooth animation
             try {
                 console.log('Adding elements to Cytoscape...');
-                window.cy.add(newElements);
+                
+                window.cy.batch(() => {
+                    // Add elements one by one with error handling for individual elements
+                    const successfullyAdded = [];
+                    newElements.forEach((element, index) => {
+                        try {
+                            window.cy.add(element);
+                            successfullyAdded.push(element);
+                        } catch (elementError) {
+                            console.warn(`Failed to add element ${index} (${element.data?.id}):`, elementError.message);
+                            // Continue with other elements
+                        }
+                    });
+
+                    console.log(`Successfully added ${successfullyAdded.length} out of ${newElements.length} elements`);
+
+                    setTimeout(() => {
+                        // Use the animated layout approach
+                        const layout = window.cy.layout({
+                            name: 'breadthfirst',
+                            directed: true,
+                            padding: 30,
+                            animate: true,
+                            animationDuration: 500,
+                            animationEasing: 'ease-out',
+                            fit: true
+                        });
+
+                        // Run the layout
+                        layout.run();
+
+                        // After layout animation completes, apply styles smoothly
+                        layout.one('layoutstop', function () {
+                            // Apply styles with updated font size and smooth transitions
+                            if (window.positionNodes) {
+                                window.positionNodes(window.cy);
+                            }
+                        });
+                    }, 100);
+
+                });
+                
                 console.log('Elements added successfully');
 
-                // Reposition nodes
+                // Reposition nodes with smooth animation
                 if (window.positionNodes) {
-                    console.log('Repositioning nodes...');
-                    window.positionNodes(window.cy);
+                    console.log('Repositioning nodes with smooth animation...');
+                    const fontSlider = document.getElementById('font-size-slider');
+                    const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                    
+                    setTimeout(() => {
+                        window.positionNodes(window.cy, fontSizeMultiplier, true);
+                    }, 100);
                 }
 
                 // Manually trigger AOP table update after adding network data
@@ -307,13 +418,13 @@ class AOPNetworkDataManager {
                     }, 300);
                 }
 
-                console.log(`Successfully added ${newElements.length} new elements to the network`);
+                console.log(`Successfully processed ${newElements.length} new elements to the network`);
             } catch (cyError) {
                 console.error('Error adding elements to Cytoscape:', cyError);
                 this.showStatus(`Error adding elements to network: ${cyError.message}`, 'error');
             }
         } else {
-            console.log('All elements already exist in the network');
+            console.log('All elements already exist in the network or were invalid');
         }
     }
 
@@ -358,6 +469,78 @@ class AOPNetworkDataManager {
                     statusDiv.innerHTML = '';
                 }
             }, 5000);
+        }
+    }
+
+    showIncompleteAopWarning(warning) {
+        // Create modal HTML
+        const modalHtml = `
+            <div class="modal fade" id="aopWarningModal" tabindex="-1" role="dialog" aria-labelledby="aopWarningModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header bg-warning">
+                            <h5 class="modal-title" id="aopWarningModalLabel">
+                                <i class="fas fa-exclamation-triangle"></i> AOP Structure Warning
+                            </h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <p><strong>Limited AOP data retrieved:</strong></p>
+                            <p>${warning.message}</p>
+                            <div class="alert alert-info">
+                                <strong>What this means:</strong><br>
+                                ${warning.details}
+                            </div>
+                            <p><strong>Impact on your network:</strong></p>
+                            <ul>
+                                <li>You'll see the main AOP components (MIE and Adverse Outcome)</li>
+                                <li>Key Event Relationships (KERs) between intermediate steps may be missing</li>
+                                <li>The network may appear less connected than expected</li>
+                            </ul>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Understood</button>
+                            <button type="button" class="btn btn-primary" onclick="window.open('https://aopwiki.org/', '_blank')">
+                                Visit AOP-Wiki
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('aopWarningModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Show modal using Bootstrap
+        if (typeof $ !== 'undefined' && $.fn.modal) {
+            $('#aopWarningModal').modal('show');
+            
+            // Auto-remove modal when hidden
+            $('#aopWarningModal').on('hidden.bs.modal', function () {
+                $(this).remove();
+            });
+        } else {
+            // Fallback for non-Bootstrap environments
+            const modal = document.getElementById('aopWarningModal');
+            modal.style.display = 'block';
+            modal.classList.add('show');
+            
+            // Add click handlers for close buttons
+            modal.querySelectorAll('[data-dismiss="modal"], .close').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    modal.style.display = 'none';
+                    modal.remove();
+                });
+            });
         }
     }
 }

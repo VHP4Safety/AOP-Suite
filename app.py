@@ -171,19 +171,19 @@ def parkinson_main():
     return render_template('case_studies/parkinson/parkinson.html')
 
 
-@app.route("/services/qAOPapp")
-def qaop_app():
-    return render_template("services/qAOPapp.html")
+@app.route("/services/AOPapp")
+def aop_app():
+    return render_template("services/AOPapp.html")
 
 
-@app.route('/case_studies/parkinson/workflows/parkinson_qAOP')
-def parkinson_qaop():
-    return render_template('case_studies/parkinson/workflows/parkinson_qAOP.html')
+@app.route('/case_studies/parkinson/workflows/parkinson_AOP')
+def parkinson_aop():
+    return render_template('case_studies/parkinson/workflows/parkinson_AOP.html')
 
 
-@app.route("/case_studies/thyroid/workflows/thyroid_qAOP")
-def thyroid_qaop():
-    return render_template("case_studies/thyroid/workflows/thyroid_qAOP.html")
+@app.route("/case_studies/thyroid/workflows/thyroid_AOP")
+def thyroid_aop():
+    return render_template("case_studies/thyroid/workflows/thyroid_AOP.html")
 
 
 @app.route('/workflow/<workflow>')
@@ -220,13 +220,13 @@ from routes.aop_app import aop_app
 app.register_blueprint(aop_app)
 
 ################################################################################
-@app.route("/qaop_standalone")
-def qaop_standalone():
+@app.route("/aop_standalone")
+def aop_standalone():
     """
-    Standalone QAOP Network Builder - doesn't require template data
+    Standalone AOP Network Builder - doesn't require template data
     """
-    return render_template("qaop_app.html", 
-                         title="QAOP Network Builder - Standalone",
+    return render_template("aop_app.html", 
+                         title="AOP Network Builder - Standalone",
                          mie_query="",
                          qid="",
                          qid_wd="")

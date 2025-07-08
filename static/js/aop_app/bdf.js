@@ -55,13 +55,21 @@ async function addBdfOT(cids) {
 async function addBdfOTWithBridgeDb(cids) {
     const bridgedbData = await fetchBridgeDbXref(cids, "Human", "PubChem Compound", "All");
     try {
-        const params = new URLSearchParams({ bridgedb_data: JSON.stringify(bridgedbData) });
-        const response = await fetch(`/add_bdf_opentargets?${params.toString()}`, { method: 'GET' });
-        const text = await response.text(); // Get raw response text
-        console.log("Raw response:", text); // Log raw response for debugging
+        const response = await fetch('/add_bdf_opentargets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bridgedb_data: bridgedbData })
+        });
 
-        const sanitizedText = text.replace(/\bNaN\b/g, 'null'); // Replace NaN with null
-        const data = JSON.parse(sanitizedText); // Parse sanitized JSON
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const text = await response.text();
+        console.log("Raw OpenTargets response:", text);
+
+        const sanitizedText = text.replace(/\bNaN\b/g, 'null');
+        const data = JSON.parse(sanitizedText);
         populateBdfTableOT(data);
     } catch (error) {
         console.error('Error fetching OpenTargets data:', error);
@@ -96,7 +104,7 @@ async function addBdfBgeeWithBridgeDb(genes) {
 }
 
 // Event listener for OpenTargets query button
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('query_opentargets').addEventListener('click', async () => {
         try {
             const cids = await getAllCIDs();
@@ -145,7 +153,7 @@ function populateBdfTableOT(data) {
         const compoundRow = findCompoundRow(tableBody, row.identifier);
         if (compoundRow.length) {
             matchedRows.add(row.identifier);
-            
+
             // Format therapeutic areas with proper CURIE conversion
             const therapeuticAreas = await formatTherapeuticAreas(row.OpenTargets_diseases || []);
             compoundRow.append(`<td>${therapeuticAreas}</td>`);
@@ -221,49 +229,49 @@ async function formatTherapeuticAreas(diseases) {
         const therapeuticAreaStrings = diseases
             .map(diseaseObj => diseaseObj.therapeutic_areas || "")
             .filter(areas => areas.trim() !== "");
-        
+
         if (therapeuticAreaStrings.length === 0) {
             return "";
         }
-        
+
         // Send to backend for proper CURIE to IRI conversion
         const response = await fetch('/convert_therapeutic_areas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ therapeutic_areas: therapeuticAreaStrings })
         });
-        
+
         if (!response.ok) {
             throw new Error(`Backend conversion failed: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (data.error) {
             throw new Error(data.error);
         }
-        
+
         // Create unique areas map by namespace_id
         const uniqueAreas = new Map();
-        
+
         data.converted_areas.forEach(area => {
             const key = area.namespace_id;
             if (!uniqueAreas.has(key)) {
                 uniqueAreas.set(key, area);
             }
         });
-        
+
         // Return formatted links
         return Array.from(uniqueAreas.values())
             .map(area => area.link)
             .join(", ");
-            
+
     } catch (error) {
         console.error('Error formatting therapeutic areas:', error);
-        
+
         // Fallback to simple client-side formatting
         const uniqueAreas = new Map();
-        
+
         diseases.forEach(diseaseObj => {
             const areas = diseaseObj.therapeutic_areas || "";
             areas.split(",").forEach(area => {
@@ -277,7 +285,7 @@ async function formatTherapeuticAreas(diseases) {
                 }
             });
         });
-        
+
         return Array.from(uniqueAreas.values())
             .map(area => area.link)
             .join(", ");

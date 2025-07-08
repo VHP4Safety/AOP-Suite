@@ -152,9 +152,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
             console.debug("Cytoscape instance created with elements:", window.cy.elements());
             
-            // Initialize positioning
+            // Initialize positioning with correct font size from slider
             if (window.positionNodes) {
-                window.positionNodes(window.cy);
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5; // Use 0.5 as default to match HTML
+                window.positionNodes(window.cy, fontSizeMultiplier);
             }
             
             setupEventHandlers();
@@ -175,7 +177,9 @@ document.addEventListener("DOMContentLoaded", function () {
             });
 
             if (window.positionNodes) {
-                window.positionNodes(window.cy);
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5; // Use 0.5 as default to match HTML
+                window.positionNodes(window.cy, fontSizeMultiplier);
             }
             
             setupEventHandlers();
@@ -330,7 +334,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
 
-        // Network change listeners for automatic table updates
+        // Network change listeners for automatic table updates with smooth animations
         window.cy.on("add", "node", function (evt) {
             const node = evt.target;
             console.debug(`Node added: ${node.id()}`);
@@ -338,7 +342,14 @@ document.addEventListener("DOMContentLoaded", function () {
             // Auto-update tables based on node type
             autoUpdateTables(node, 'added');
             
-            positionNodes(window.cy);
+            // Always use smooth animation when nodes are added
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            
+            // Small delay to allow the addition to complete, then animate
+            setTimeout(() => {
+                positionNodes(window.cy, fontSizeMultiplier, true);
+            }, 50);
         });
 
         window.cy.on("remove", "node", function (evt) {
@@ -347,6 +358,15 @@ document.addEventListener("DOMContentLoaded", function () {
             
             // Auto-update tables based on node type
             autoUpdateTables(node, 'removed');
+            
+            // Always use smooth animation when nodes are removed
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            
+            // Small delay to allow the removal to complete, then animate
+            setTimeout(() => {
+                positionNodes(window.cy, fontSizeMultiplier, true);
+            }, 50);
         });
 
         window.cy.on("add", "edge", function (evt) {
@@ -359,6 +379,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     window.populateAopTable();
                 }, 200);
             }
+            
+            // Smooth animation for edge additions
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            
+            setTimeout(() => {
+                positionNodes(window.cy, fontSizeMultiplier, true);
+            }, 50);
         });
 
         window.cy.on("remove", "edge", function (evt) {
@@ -371,6 +399,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     window.populateAopTable();
                 }, 200);
             }
+            
+            // Smooth animation for edge removals
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            
+            setTimeout(() => {
+                positionNodes(window.cy, fontSizeMultiplier, true);
+            }, 50);
         });
 
         window.cy.on("data", "node", function (evt) {
@@ -379,6 +415,27 @@ document.addEventListener("DOMContentLoaded", function () {
             
             // Auto-update tables based on node type
             autoUpdateTables(node, 'updated');
+            
+            // Smooth animation for data changes that might affect layout
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            
+            setTimeout(() => {
+                positionNodes(window.cy, fontSizeMultiplier, true);
+            }, 50);
+        });
+
+        // Add batch operation handler for multiple simultaneous changes
+        window.cy.on("batch", function(evt) {
+            console.debug("Batch operation completed");
+            
+            // Smooth animation after batch operations
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            
+            setTimeout(() => {
+                positionNodes(window.cy, fontSizeMultiplier, true);
+            }, 100);
         });
 
         // Button event handlers
@@ -457,11 +514,43 @@ document.addEventListener("DOMContentLoaded", function () {
             toggleGenes();
         });
 
-        // Reset layout
+        // Reset layout with smooth animation
         $("#reset_layout").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
-            positionNodes(window.cy);
+            if (window.cy) {
+                // Get current font size multiplier with correct default
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5; // Use 0.5 as default
+                
+                // Trigger resize first (like sidebar animations do)
+                window.cy.resize();
+                
+                // Add a slight delay to allow resize to complete, then animate layout
+                setTimeout(() => {
+                    // Use the animated layout approach
+                    const layout = window.cy.layout({
+                        name: 'breadthfirst',
+                        directed: true,
+                        padding: 30,
+                        animate: true,
+                        animationDuration: 500,
+                        animationEasing: 'ease-out',
+                        fit: true
+                    });
+                    
+                    // Run the layout
+                    layout.run();
+                    
+                    // After layout animation completes, apply styles smoothly
+                    layout.one('layoutstop', function() {
+                        // Apply styles with updated font size and smooth transitions
+                        if (window.positionNodes) {
+                            window.positionNodes(window.cy, fontSizeMultiplier, true);
+                        }
+                    });
+                }, 100);
+            }
         });
 
         // Download network
@@ -523,6 +612,36 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
+    // Enhanced function to handle sidebar toggles with smooth transitions
+    function toggleSidebar(sidebarId) {
+        const sidebar = document.getElementById(sidebarId);
+        if (!sidebar) return;
+
+        sidebar.classList.toggle('collapsed');
+
+        // Trigger resize event for Cytoscape to adjust with smooth animation
+        setTimeout(() => {
+            if (window.cy) {
+                // Resize first
+                window.cy.resize();
+                
+                // Then apply layout with animation
+                setTimeout(() => {
+                    const fontSlider = document.getElementById('font-size-slider');
+                    const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5; // Use 0.5 as default
+                    
+                    // Use animated positioning
+                    if (window.positionNodes) {
+                        window.positionNodes(window.cy, fontSizeMultiplier, true);
+                    }
+                }, 50);
+            }
+        }, 300); // Match the CSS transition duration
+    }
+
+    // Make toggleSidebar available globally for HTML onclick handlers
+    window.toggleSidebar = toggleSidebar;
+
     function toggleGenes() {
         const action = window.genesVisible ? 'hide' : 'show';
         
@@ -546,6 +665,9 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
             
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            
             if (action === 'show' && data.gene_elements) {
                 // Add only new elements
                 data.gene_elements.forEach(element => {
@@ -559,16 +681,17 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                 });
                 
-                // Show all gene nodes and their edges
-                window.cy.elements(".uniprot-node, .ensembl-node").show();
-                window.cy.edges().forEach(function(edge) {
-                    const source = edge.source();
-                    const target = edge.target();
-                    
-                    // Show edge if both source and target are visible
-                    if (source.visible() && target.visible()) {
-                        edge.show();
-                    }
+                // Show all gene nodes and their edges with smooth animation
+                window.cy.batch(() => {
+                    window.cy.elements(".uniprot-node, .ensembl-node").show();
+                    window.cy.edges().forEach(function(edge) {
+                        const source = edge.source();
+                        const target = edge.target();
+                        
+                        if (source.visible() && target.visible()) {
+                            edge.show();
+                        }
+                    });
                 });
                 
                 $("#see_genes").text("Hide Genes");
@@ -580,26 +703,35 @@ document.addEventListener("DOMContentLoaded", function () {
                         window.populateGeneTable();
                     }
                 }, 100);
+                
+                // Smooth animation after showing genes
+                setTimeout(() => {
+                    positionNodes(window.cy, fontSizeMultiplier, true);
+                }, 150);
+                
             } else if (action === 'hide') {
-                // Hide gene nodes
-                window.cy.elements(".uniprot-node, .ensembl-node").hide();
-                // Hide edges connected to gene nodes
-                window.cy.edges().forEach(function(edge) {
-                    const source = edge.source();
-                    const target = edge.target();
-                    
-                    // Hide edge if either end is a gene node
-                    if (source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
-                        target.hasClass("uniprot-node") || target.hasClass("ensembl-node")) {
-                        edge.hide();
-                    }
+                // Hide gene nodes and edges with smooth animation
+                window.cy.batch(() => {
+                    window.cy.elements(".uniprot-node, .ensembl-node").hide();
+                    window.cy.edges().forEach(function(edge) {
+                        const source = edge.source();
+                        const target = edge.target();
+                        
+                        if (source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
+                            target.hasClass("uniprot-node") || target.hasClass("ensembl-node")) {
+                            edge.hide();
+                        }
+                    });
                 });
                 
                 $("#see_genes").text("See Genes");
                 window.genesVisible = false;
+                
+                // Smooth animation after hiding genes
+                setTimeout(() => {
+                    positionNodes(window.cy, fontSizeMultiplier, true);
+                }, 150);
             }
-            
-            positionNodes(window.cy);
         })
         .catch(error => {
             console.error("Error toggling genes:", error);
@@ -625,12 +757,23 @@ document.addEventListener("DOMContentLoaded", function () {
         })
         .then(updatedElements => {
             if (Array.isArray(updatedElements)) {
-                window.cy.elements().remove();
-                window.cy.add(updatedElements);
+                // Use batch operation for smooth transitions
+                window.cy.batch(() => {
+                    window.cy.elements().remove();
+                    window.cy.add(updatedElements);
+                });
+                
                 window.boundingBoxesVisible = !window.boundingBoxesVisible;
                 $("#toggle_bounding_boxes").text(window.boundingBoxesVisible ? "Remove AOP Boxes" : "Group by AOP");
+                
+                // Smooth animation after bounding box toggle
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                
+                setTimeout(() => {
+                    positionNodes(window.cy, fontSizeMultiplier, true);
+                }, 100);
             }
-            positionNodes(window.cy);
         })
         .catch(error => {
             console.error("Error toggling bounding boxes:", error);
@@ -809,7 +952,7 @@ $(document).ready(function() {
     }, 3000); // Increased delay to ensure everything is loaded
 });
 
-function populateQaopTable() {
+function populateaopTable() {
     // Redirect to the new function name
     if (window.populateAopTable) {
         return window.populateAopTable();

@@ -193,6 +193,7 @@ class ManualControls {
         
         let addedCount = 0;
         let skippedCount = 0;
+        const nodesToAdd = [];
         
         labels.forEach((label, index) => {
             if (!label) return;
@@ -218,33 +219,44 @@ class ManualControls {
                     classes: `${nodeType}-node`
                 };
 
-                // Add to network - this will trigger automatic table updates via network listeners
-                window.cy.add(nodeData);
+                nodesToAdd.push(nodeData);
                 addedCount++;
                 
-                console.log(`Added node: ${finalId} (type: ${nodeType})`);
+                console.log(`Prepared node: ${finalId} (type: ${nodeType})`);
 
             } catch (error) {
-                console.error(`Error adding node ${label}:`, error);
+                console.error(`Error preparing node ${label}:`, error);
                 skippedCount++;
             }
         });
+
+        // Add all nodes in a batch for smooth animation
+        if (nodesToAdd.length > 0) {
+            window.cy.batch(() => {
+                window.cy.add(nodesToAdd);
+            });
+            
+            // Hide loading overlay if this is the first element
+            const loadingOverlay = document.querySelector(".loading-overlay");
+            if (loadingOverlay && window.cy.elements().length > 0) {
+                loadingOverlay.style.display = "none";
+            }
+
+            // Reposition nodes with smooth animation
+            if (window.positionNodes) {
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                
+                setTimeout(() => {
+                    window.positionNodes(window.cy, fontSizeMultiplier, true);
+                }, 100);
+            }
+        }
 
         // Show summary
         let message = `Added ${addedCount} node(s)`;
         if (skippedCount > 0) {
             message += `, skipped ${skippedCount} duplicate(s)`;
-        }
-        
-        // Hide loading overlay if this is the first element
-        const loadingOverlay = document.querySelector(".loading-overlay");
-        if (loadingOverlay && window.cy.elements().length > 0) {
-            loadingOverlay.style.display = "none";
-        }
-
-        // Reposition nodes
-        if (window.positionNodes) {
-            window.positionNodes(window.cy);
         }
 
         // Clear form
@@ -351,12 +363,17 @@ class ManualControls {
                 }
             };
 
-            // Add to network - this will trigger AOP table update via network listeners
+            // Add to network with smooth animation
             window.cy.add(edgeData);
 
-            // Reposition nodes
+            // Reposition nodes with smooth animation
             if (window.positionNodes) {
-                window.positionNodes(window.cy);
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                
+                setTimeout(() => {
+                    window.positionNodes(window.cy, fontSizeMultiplier, true);
+                }, 50);
             }
 
             // Clear form
@@ -368,14 +385,13 @@ class ManualControls {
             $("#source-node-search").val("");
             $("#target-node-search").val("");
 
-            // Manually trigger AOP table update with more aggressive timing
+            // Manually trigger AOP table update
             if (window.populateAopTable) {
                 console.log("Manual edge addition - triggering AOP table update");
                 setTimeout(() => {
                     window.populateAopTable();
                 }, 100);
                 
-                // Backup trigger in case the first one doesn't work
                 setTimeout(() => {
                     window.populateAopTable();
                 }, 500);

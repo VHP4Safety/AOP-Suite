@@ -12,6 +12,10 @@ import re
 import traceback
 
 from datetime import datetime
+from services.aop_network_service import aop_service
+
+# Add this constant for network state persistence
+NETWORK_STATES_DIR = os.path.join(os.path.dirname(__file__), "../saved_networks")
 
 aop_app = Blueprint("aop_app", __name__)
 
@@ -347,7 +351,7 @@ def extract_ker_id(ker_uri):
 def fetch_sparql_data(query):
     print("=== Fetching SPARQL Data ===")
     print(f"SPARQL endpoint: {AOPWIKISPARQL_ENDPOINT}")
-    print(f"Query preview (first 200 chars): {query[:200]}...")
+    print(f"Query preview: {query}...")
     
     try:
         print("Making HTTP request to SPARQL endpoint...")
@@ -387,87 +391,166 @@ def fetch_sparql_data(query):
     cytoscape_elements = []
     node_dict = {}
     
+    # Track what we found for reporting
+    mie_count = 0
+    ao_count = 0
+    ke_count = 0
+    ker_count = 0
+    
     for i, result in enumerate(data.get("results", {}).get("bindings", [])):
         if i < 3:  # Debug first few results
             print(f"Processing result {i}: {result}")
         
-        ke_upstream = result.get("KE_upstream", {}).get("value", "")
-        ke_upstream_title = result.get("KE_upstream_title", {}).get("value", "")
-        ke_downstream = result.get("KE_downstream", {}).get("value", "")
-        ke_downstream_title = result.get("KE_downstream_title", {}).get("value", "")
+        # Extract all values, using "NA" for missing ones
+        ke_upstream = result.get("KE_upstream", {}).get("value", "NA")
+        ke_upstream_title = result.get("KE_upstream_title", {}).get("value", "NA")
+        ke_downstream = result.get("KE_downstream", {}).get("value", "NA")
+        ke_downstream_title = result.get("KE_downstream_title", {}).get("value", "NA")
         mie = result.get("MIE", {}).get("value", "")
+        mie_title = result.get("MIEtitle", {}).get("value", "")
         ao = result.get("ao", {}).get("value", "")
-        ker_uri = result.get("KER", {}).get("value", "")
-        ker_id = extract_ker_id(ker_uri)
+        ao_title = result.get("AOtitle", {}).get("value", "")
+        ker_uri = result.get("KER", {}).get("value", "NA")
+        ker_id = extract_ker_id(ker_uri) if ker_uri != "NA" else "NA"
         aop = result.get("aop", {}).get("value", "")
         aop_title = result.get("aop_title", {}).get("value", "")
         
-        # Process nodes (existing logic)
-        if ke_upstream not in node_dict:
-            node_dict[ke_upstream] = {
-                "data": {
-                    "id": ke_upstream,
-                    "label": ke_upstream_title,
-                    "KEupTitle": ke_upstream_title,
-                    "is_mie": ke_upstream == mie,
-                    "uniprot_id": result.get("uniprot_id", {}).get("value", ""),
-                    "protein_name": result.get("protein_name", {}).get("value", ""),
-                    "organ": result.get("KE_upstream_organ", {}).get("value", ""),
-                    "aop": [aop] if aop else [],
-                    "aop_title": [aop_title] if aop_title else [],
+        # Always process MIE node if it exists
+        if mie:
+            if mie not in node_dict:
+                node_dict[mie] = {
+                    "data": {
+                        "id": mie,
+                        "label": mie_title if mie_title else "NA",
+                        "KEupTitle": mie_title if mie_title else "NA",
+                        "is_mie": True,
+                        "type": "mie",
+                        "uniprot_id": result.get("uniprot_id", {}).get("value", ""),
+                        "protein_name": result.get("protein_name", {}).get("value", ""),
+                        "organ": result.get("KE_upstream_organ", {}).get("value", ""),
+                        "aop": [aop] if aop else [],
+                        "aop_title": [aop_title] if aop_title else [],
+                    }
                 }
-            }
-        else:
-            if aop and aop not in node_dict[ke_upstream]["data"]["aop"]:
-                node_dict[ke_upstream]["data"]["aop"].append(aop)
-            if (
-                aop_title
-                and aop_title not in node_dict[ke_upstream]["data"]["aop_title"]
-            ):
-                node_dict[ke_upstream]["data"]["aop_title"].append(aop_title)
-        if ke_upstream == mie:
-            node_dict[ke_upstream]["data"]["is_mie"] = True
-        if ke_downstream not in node_dict:
-            node_dict[ke_downstream] = {
-                "data": {
-                    "id": ke_downstream,
-                    "label": ke_downstream_title,
-                    "is_ao": ke_downstream == ao,
-                    "uniprot_id": result.get("uniprot_id", {}).get("value", ""),
-                    "protein_name": result.get("protein_name", {}).get("value", ""),
-                    "organ": result.get("KE_downstream_organ", {}).get("value", ""),
-                    "aop": [aop] if aop else [],
-                    "aop_title": [aop_title] if aop_title else [],
+                mie_count += 1
+            else:
+                # Update existing MIE with additional AOP info
+                if aop and aop not in node_dict[mie]["data"]["aop"]:
+                    node_dict[mie]["data"]["aop"].append(aop)
+                if aop_title and aop_title not in node_dict[mie]["data"]["aop_title"]:
+                    node_dict[mie]["data"]["aop_title"].append(aop_title)
+
+        # Always process AO node if it exists
+        if ao:
+            if ao not in node_dict:
+                node_dict[ao] = {
+                    "data": {
+                        "id": ao,
+                        "label": ao_title if ao_title else "NA",
+                        "is_ao": True,
+                        "type": "ao",
+                        "uniprot_id": result.get("uniprot_id", {}).get("value", ""),
+                        "protein_name": result.get("protein_name", {}).get("value", ""),
+                        "organ": result.get("KE_downstream_organ", {}).get("value", ""),
+                        "aop": [aop] if aop else [],
+                        "aop_title": [aop_title] if aop_title else [],
+                    }
                 }
-            }
-        else:
-            if aop and aop not in node_dict[ke_downstream]["data"]["aop"]:
-                node_dict[ke_downstream]["data"]["aop"].append(aop)
-            if (
-                aop_title
-                and aop_title not in node_dict[ke_downstream]["data"]["aop_title"]
-            ):
-                node_dict[ke_downstream]["data"]["aop_title"].append(aop_title)
-        if ke_downstream == ao:
-            node_dict[ke_downstream]["data"]["is_ao"] = True
-        edge_id = f"{ke_upstream}_{ke_downstream}"
-        cytoscape_elements.append(
-            {
-                "data": {
-                    "id": edge_id,
-                    "source": ke_upstream,
-                    "target": ke_downstream,
-                    "curie": f"aop.relationships:{ker_id}",
-                    "ker_label": ker_id,
+                ao_count += 1
+            else:
+                # Update existing AO with additional AOP info
+                if aop and aop not in node_dict[ao]["data"]["aop"]:
+                    node_dict[ao]["data"]["aop"].append(aop)
+                if aop_title and aop_title not in node_dict[ao]["data"]["aop_title"]:
+                    node_dict[ao]["data"]["aop_title"].append(aop_title)
+
+        # Process intermediate KE nodes only if they exist and are different from MIE/AO
+        if ke_upstream != "NA" and ke_upstream not in [mie, ao]:
+            if ke_upstream not in node_dict:
+                node_dict[ke_upstream] = {
+                    "data": {
+                        "id": ke_upstream,
+                        "label": ke_upstream_title if ke_upstream_title != "NA" else "NA",
+                        "KEupTitle": ke_upstream_title if ke_upstream_title != "NA" else "NA",
+                        "is_mie": False,
+                        "is_ao": False,
+                        "type": "key_event",
+                        "uniprot_id": result.get("uniprot_id", {}).get("value", ""),
+                        "protein_name": result.get("protein_name", {}).get("value", ""),
+                        "organ": result.get("KE_upstream_organ", {}).get("value", ""),
+                        "aop": [aop] if aop else [],
+                        "aop_title": [aop_title] if aop_title else [],
+                    }
                 }
-            }
-        )
+                ke_count += 1
+            else:
+                # Update existing KE with additional AOP info
+                if aop and aop not in node_dict[ke_upstream]["data"]["aop"]:
+                    node_dict[ke_upstream]["data"]["aop"].append(aop)
+                if aop_title and aop_title not in node_dict[ke_upstream]["data"]["aop_title"]:
+                    node_dict[ke_upstream]["data"]["aop_title"].append(aop_title)
+                
+        if ke_downstream != "NA" and ke_downstream not in [mie, ao]:
+            if ke_downstream not in node_dict:
+                node_dict[ke_downstream] = {
+                    "data": {
+                        "id": ke_downstream,
+                        "label": ke_downstream_title if ke_downstream_title != "NA" else "NA",
+                        "is_mie": False,
+                        "is_ao": False,
+                        "type": "key_event",
+                        "uniprot_id": result.get("uniprot_id", {}).get("value", ""),
+                        "protein_name": result.get("protein_name", {}).get("value", ""),
+                        "organ": result.get("KE_downstream_organ", {}).get("value", ""),
+                        "aop": [aop] if aop else [],
+                        "aop_title": [aop_title] if aop_title else [],
+                    }
+                }
+                ke_count += 1
+            else:
+                # Update existing KE with additional AOP info
+                if aop and aop not in node_dict[ke_downstream]["data"]["aop"]:
+                    node_dict[ke_downstream]["data"]["aop"].append(aop)
+                if aop_title and aop_title not in node_dict[ke_downstream]["data"]["aop_title"]:
+                    node_dict[ke_downstream]["data"]["aop_title"].append(aop_title)
+
+        # Only create edges if we have actual KER data (not "NA")
+        if (ker_uri != "NA" and ke_upstream != "NA" and ke_downstream != "NA"):
+            edge_id = f"{ke_upstream}_{ke_downstream}"
+            # Check if edge already exists
+            edge_exists = any(edge["data"]["id"] == edge_id for edge in cytoscape_elements)
+            if not edge_exists:
+                cytoscape_elements.append({
+                    "data": {
+                        "id": edge_id,
+                        "source": ke_upstream,
+                        "target": ke_downstream,
+                        "curie": f"aop.relationships:{ker_id}",
+                        "ker_label": ker_id,
+                        "type": "key_event_relationship"
+                    }
+                })
+                ker_count += 1
     
     final_elements = list(node_dict.values()) + cytoscape_elements
     print(f"Created {len(node_dict)} nodes and {len(cytoscape_elements)} edges")
-    print(f"Total elements to return: {len(final_elements)}")
+    print(f"MIEs: {mie_count}, AOs: {ao_count}, KEs: {ke_count}, KERs: {ker_count}")
     
-    return final_elements
+    # Prepare detailed report
+    report = {
+        "total_nodes": len(node_dict),
+        "total_edges": len(cytoscape_elements),
+        "mie_count": mie_count,
+        "ao_count": ao_count,
+        "ke_count": ke_count,
+        "ker_count": ker_count,
+        "has_complete_pathways": ker_count > 0
+    }
+    
+    return {
+        "elements": final_elements,
+        "report": report
+    }
 
 @aop_app.route("/get_aop_network")
 def get_aop_network():
@@ -686,7 +769,7 @@ def load_and_show_genes():
 
 @aop_app.route("/toggle_genes", methods=["POST"])
 def toggle_genes():
-    """Toggle gene visibility in the network."""
+    """Toggle gene visibility in the network using proper data models."""
     try:
         data = request.get_json(silent=True)
         if not data or "action" not in data:
@@ -705,11 +788,33 @@ def toggle_genes():
                     mie_node_ids.append(element_id)
             
             if mie_node_ids:
-                return load_and_show_genes_for_mies(mie_node_ids)
+                gene_elements = load_and_show_genes_for_mies(mie_node_ids)
+                if isinstance(gene_elements, tuple):
+                    gene_data = gene_elements[0].get_json()["gene_elements"]
+                else:
+                    gene_data = gene_elements.get("gene_elements", [])
+                
+                # Add gene data using proper service method
+                if aop_service.get_current_network():
+                    result = aop_service.add_gene_data(gene_data)
+                    # Return updated network
+                    updated_network = aop_service.get_network_cytoscape()
+                    return jsonify({"gene_elements": updated_network}), 200
+                else:
+                    return jsonify({"gene_elements": gene_data}), 200
             else:
                 return jsonify({"gene_elements": []}), 200
 
         elif action == "hide":
+            # Filter out gene nodes from current network
+            if aop_service.get_current_network():
+                filtered_elements = []
+                for element in aop_service.get_network_cytoscape():
+                    element_data = element.get("data", {})
+                    element_type = element_data.get("type", "")
+                    if element_type not in ["uniprot", "ensembl"]:
+                        filtered_elements.append(element)
+                return jsonify(filtered_elements), 200
             return jsonify({"success": True}), 200
         else:
             return jsonify({"error": "Invalid action"}), 400
@@ -927,7 +1032,7 @@ def get_go_processes():
         
         # Parse the cytoscape elements
         cy_elements = json.loads(cy_elements_str)
-        
+
         # Extract Key Event nodes
         ke_nodes = []
         for element in cy_elements:
@@ -942,7 +1047,7 @@ def get_go_processes():
                         'label': data.get('label', ''),
                         'title': data.get('KEupTitle', data.get('label', ''))
                     })
-        
+
         if not ke_nodes:
             return jsonify({
                 'error': False,
@@ -957,52 +1062,162 @@ def get_go_processes():
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
-@aop_app.route("/populate_qaop_table", methods=["POST"])
-def populate_qaop_table():
-    """Populate QAOP (Quantitative AOP) table from Cytoscape elements."""
+@aop_app.route("/populate_aop_table", methods=["POST"])
+def populate_aop_table():
+    """Populate AOP table from Cytoscape elements with enhanced data."""
     try:
         data = request.get_json(silent=True)
         if not data or "cy_elements" not in data:
             return jsonify({"error": "Cytoscape elements required"}), 400
         
         cy_elements = data["cy_elements"]
-        qaop_data = []
+        aop_data = []
         
-        # Create a lookup for node labels
-        node_labels = {}
+        # Create a lookup for node labels and AOP data
+        node_data = {}
+        connected_nodes = set()
+        
         for element in cy_elements:
             if element.get("group") != "edges" and element.get("classes") != "bounding-box":
                 element_data = element.get("data", {})
                 node_id = element_data.get("id")
-                node_label = element_data.get("label")
-                if node_id and node_label:
-                    node_labels[node_id] = node_label
+                if node_id:
+                    # Format label with fallback to IRI if missing
+                    label = element_data.get("label", "")
+                    if not label or label == "NA":
+                        # Extract readable part from IRI
+                        iri_part = node_id.split("/")[-1] if "/" in node_id else node_id
+                        label = f"{iri_part} (missing label)"
+                    
+                    node_data[node_id] = {
+                        "label": label,
+                        "type": element_data.get("type", "unknown"),
+                        "is_mie": element_data.get("is_mie", False),
+                        "is_ao": element_data.get("is_ao", False),
+                        "aop": element_data.get("aop", []),
+                        "aop_title": element_data.get("aop_title", [])
+                    }
         
-        # Process edges with KER labels
+        # Process edges with KER labels and track connected nodes
         for element in cy_elements:
-            if (element.get("group") == "edges" and 
-                element.get("data", {}).get("ker_label") and
-                element.get("data", {}).get("curie")):
-                
-                edge_data = element["data"]
+            if element.get("group") == "edges":
+                edge_data = element.get("data", {})
                 source_id = edge_data.get("source", "")
                 target_id = edge_data.get("target", "")
-                ker_label = edge_data.get("ker_label", "")
-                curie = edge_data.get("curie", "")
                 
-                # Get labels from lookup
-                source_label = node_labels.get(source_id, source_id)
-                target_label = node_labels.get(target_id, target_id)
+                # Track connected nodes
+                if source_id:
+                    connected_nodes.add(source_id)
+                if target_id:
+                    connected_nodes.add(target_id)
+                
+                # Only process edges with KER data
+                if edge_data.get("ker_label") and edge_data.get("curie"):
+                    ker_label = edge_data.get("ker_label", "")
+                    curie = edge_data.get("curie", "")
+                    
+                    # Get source and target data
+                    source_data = node_data.get(source_id, {})
+                    target_data = node_data.get(target_id, {})
+                    
+                    source_label = source_data.get("label", source_id)
+                    target_label = target_data.get("label", target_id)
+                    source_type = source_data.get("type", "unknown")
+                    target_type = target_data.get("type", "unknown")
+                    
+                    # Collect all AOPs from both source and target nodes
+                    all_aops = set()
+                    aop_titles = set()
+                    
+                    # Add AOPs from source
+                    source_aops = source_data.get("aop", [])
+                    source_aop_titles = source_data.get("aop_title", [])
+                    if not isinstance(source_aops, list):
+                        source_aops = [source_aops] if source_aops else []
+                    if not isinstance(source_aop_titles, list):
+                        source_aop_titles = [source_aop_titles] if source_aop_titles else []
+                    
+                    for aop in source_aops:
+                        if aop and "aop/" in aop:
+                            aop_id = aop.split("aop/")[-1]
+                            all_aops.add(f"AOP:{aop_id}")
+                    
+                    for title in source_aop_titles:
+                        if title:
+                            aop_titles.add(title)
+                    
+                    # Add AOPs from target
+                    target_aops = target_data.get("aop", [])
+                    target_aop_titles = target_data.get("aop_title", [])
+                    if not isinstance(target_aops, list):
+                        target_aops = [target_aops] if target_aops else []
+                    if not isinstance(target_aop_titles, list):
+                        target_aop_titles = [target_aop_titles] if target_aop_titles else []
+                    
+                    for aop in target_aops:
+                        if aop and "aop/" in aop:
+                            aop_id = aop.split("aop/")[-1]
+                            all_aops.add(f"AOP:{aop_id}")
+                    
+                    for title in target_aop_titles:
+                        if title:
+                            aop_titles.add(title)
+                    
+                    # Convert to sorted lists for consistent display
+                    aop_list = sorted(list(all_aops))
+                    aop_string = ",".join(aop_list) if aop_list else "N/A"
+                    aop_titles_string = "; ".join(sorted(list(aop_titles))) if aop_titles else "N/A"
 
-                qaop_data.append({
-                    "source_id": source_id,
-                    "source_label": source_label,
-                    "curie": curie,
-                    "target_id": target_id,
-                    "target_label": target_label
+                    aop_data.append({
+                        "source_id": source_id,
+                        "source_label": source_label,
+                        "source_type": source_type,
+                        "ker_label": ker_label,
+                        "curie": curie,
+                        "target_id": target_id,
+                        "target_label": target_label,
+                        "target_type": target_type,
+                        "aop_list": aop_string,
+                        "aop_titles": aop_titles_string,
+                        "is_connected": True
+                    })
+        
+        # Add disconnected nodes as separate entries
+        for node_id, node_info in node_data.items():
+            if node_id not in connected_nodes:
+                # Get AOP information for disconnected nodes
+                node_aops = node_info.get("aop", [])
+                node_aop_titles = node_info.get("aop_title", [])
+                
+                if not isinstance(node_aops, list):
+                    node_aops = [node_aops] if node_aops else []
+                if not isinstance(node_aop_titles, list):
+                    node_aop_titles = [node_aop_titles] if node_aop_titles else []
+                
+                aop_ids = []
+                for aop in node_aops:
+                    if aop and "aop/" in aop:
+                        aop_id = aop.split("aop/")[-1]
+                        aop_ids.append(f"AOP:{aop_id}")
+                
+                aop_string = ",".join(sorted(aop_ids)) if aop_ids else "N/A"
+                aop_titles_string = "; ".join(sorted(node_aop_titles)) if node_aop_titles else "N/A"
+                
+                aop_data.append({
+                    "source_id": node_id,
+                    "source_label": node_info.get("label", node_id),
+                    "source_type": node_info.get("type", "unknown"),
+                    "ker_label": "N/A (disconnected)",
+                    "curie": "N/A",
+                    "target_id": "N/A",
+                    "target_label": "N/A",
+                    "target_type": "N/A",
+                    "aop_list": aop_string,
+                    "aop_titles": aop_titles_string,
+                    "is_connected": False
                 })
         
-        return jsonify({"qaop_data": qaop_data}), 200
+        return jsonify({"aop_data": aop_data}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -1085,44 +1300,9 @@ def populate_gene_table():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@aop_app.route("/add_aop_network_data", methods=["POST"])
-def add_aop_network_data():
-    """Add AOP network data based on query type and values."""
-    try:
-        data = request.get_json(silent=True)
-        if not data:
-            return jsonify({"error": "No data provided"}), 400
-        
-        query_type = data.get("query_type", "")
-        values = data.get("values", "")
-        
-        if not query_type or not values:
-            return jsonify({"error": "Query type and values are required"}), 400
-        
-        # Build SPARQL query
-        sparql_query = build_flexible_aop_sparql_query(query_type, values)
-        
-        if not sparql_query:
-            return jsonify({"error": "Invalid query type"}), 400
-        
-        # Fetch data using existing function
-        elements = fetch_sparql_data(sparql_query)
-        
-        if isinstance(elements, dict) and "error" in elements:
-            return jsonify({"error": elements["error"]}), 500
-        
-        return jsonify({
-            "success": True,
-            "elements": elements,
-            "elements_count": len(elements) if isinstance(elements, list) else 0
-        }), 200
-        
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 def build_flexible_aop_sparql_query(query_type: str, values: str) -> str:
     """
-    Build SPARQL query based on query type and values.
+    Build SPARQL query with OPTIONAL KER relationships.
     
     Args:
         query_type: Type of query ('mie', 'aop', 'ke_upstream', 'ke_downstream')
@@ -1147,7 +1327,7 @@ def build_flexible_aop_sparql_query(query_type: str, values: str) -> str:
     formatted_values = " ".join(processed_values)
     print(f"Processed values: {formatted_values}")
     
-    # Base query
+    # Base query with all KER relationships as OPTIONAL
     base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ
 WHERE {
   %VALUES_CLAUSE%
@@ -1156,13 +1336,15 @@ WHERE {
        aopo:has_adverse_outcome ?ao ;
        aopo:has_molecular_initiating_event ?MIE .
   ?MIE dc:title ?MIEtitle .
-  ?aop aopo:has_key_event_relationship ?KER .
-  ?KER a aopo:KeyEventRelationship ;
-       aopo:has_upstream_key_event ?KE_upstream ;
-       aopo:has_downstream_key_event ?KE_downstream .
-  ?KE_upstream dc:title ?KE_upstream_title .
-  ?KE_downstream dc:title ?KE_downstream_title .
-  OPTIONAL { ?KE_upstream aopo:OrganContext ?KE_upstream_organ . ?KE_downstream aopo:OrganContext ?KE_downstream_organ . }
+  OPTIONAL {
+    ?aop aopo:has_key_event_relationship ?KER .
+    ?KER a aopo:KeyEventRelationship ;
+         aopo:has_upstream_key_event ?KE_upstream ;
+         aopo:has_downstream_key_event ?KE_downstream .
+    ?KE_upstream dc:title ?KE_upstream_title .
+    ?KE_downstream dc:title ?KE_downstream_title .
+    OPTIONAL { ?KE_upstream aopo:OrganContext ?KE_upstream_organ . ?KE_downstream aopo:OrganContext ?KE_downstream_organ . }
+  }
 }"""
     
     # Build VALUES clause based on query type
@@ -1188,136 +1370,74 @@ WHERE {
     
     return final_query
 
-# Network state storage
-NETWORK_STATES_DIR = os.path.join(os.path.dirname(__file__), "../static/data/network_states")
-
-@aop_app.route("/get_bridgedb_xref", methods=["POST"])
-def get_bridgedb_xref():
-    """
-    Get cross-references using BridgeDb service.
-    """
-    data = request.get_json(silent=True)
-    if not data or "identifiers" not in data:
-        return jsonify({"error": "Invalid input"}), 400
-
-    data_input = pd.DataFrame(data["identifiers"], columns=["identifier"])
-    input_species = data.get("input_species", "Human")
-    input_datasource = data.get("input_datasource", "PubChem Compound")
-    output_datasource = data.get("output_datasource", "All")
-
-    try:
-        bridgedb_df, bridgedb_metadata = id_mapper.bridgedb_xref(
-            identifiers=data_input,
-            input_species=input_species,
-            input_datasource=input_datasource,
-            output_datasource=output_datasource,
-        )
-        return jsonify({
-            "bridgedb_df": bridgedb_df.fillna("NaN").to_dict(orient="records"),
-            "bridgedb_metadata": bridgedb_metadata
-        }), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@aop_app.route("/add_bdf_opentargets", methods=["GET"])
-def add_bdf_opentargets():
-    """
-    Get compound-disease interactions from OpenTargets using BridgeDb data.
-    """
-    try:
-        bridgedb_data = request.args.get("bridgedb_data", "")
-        if not bridgedb_data:
-            return jsonify({"error": "BridgeDb data is required"}), 400
-
-        # Parse the JSON string
-        bridgedb_list = json.loads(bridgedb_data)
-        
-        # Convert to DataFrame
-        if not bridgedb_list:
-            return jsonify([]), 200
-            
-        bridgedb_df = pd.DataFrame(bridgedb_list)
-        
-        # Get OpenTargets data
-        ot_df, ot_metadata = opentargets.get_compound_disease_interactions(bridgedb_df=bridgedb_df)
-
-        # Replace NaN with None (null in JSON)
-        ot_df = ot_df.where(pd.notnull(ot_df), None)
-
-        return jsonify(ot_df.to_dict(orient="records")), 200
-    except Exception as e:
-        print(f"OpenTargets error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-@aop_app.route("/add_bdf_bgee", methods=["POST"])
-def add_bdf_bgee():
-    """
-    Get gene expression data from Bgee using BridgeDb data.
-    """
+@aop_app.route("/add_aop_network_data", methods=["POST"])
+def add_aop_network_data():
+    """Add AOP network data based on query type and values."""
     try:
         data = request.get_json(silent=True)
-        if not data or "bridgedb_data" not in data:
-            return jsonify({"error": "BridgeDb data is required"}), 400
-
-        # Convert to DataFrame
-        bridgedb_list = data["bridgedb_data"]
-        if not bridgedb_list:
-            return jsonify({}), 200
-            
-        bridgedb_df = pd.DataFrame(bridgedb_list)
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
         
-        # Get Bgee data
-        bgee_df, bgee_metadata = bgee.get_gene_expression(bridgedb_df=bridgedb_df)
-
-        # Replace NaN with None (null in JSON)
-        bgee_df = bgee_df.where(pd.notnull(bgee_df), None)
-
-        result = bgee_df.to_dict(orient="records")
-
-        # Log the result to the server log
-        print("Result of /add_bdf_bgee:", result)
-
-        return jsonify(result), 200
-    except Exception as e:
-        print(f"Bgee error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
-
-@aop_app.route("/convert_therapeutic_areas", methods=["POST"])
-def convert_therapeutic_areas():
-    """Convert therapeutic areas to proper IRIs."""
-    try:
-        data = request.get_json(silent=True)
-        if not data or "therapeutic_areas" not in data:
-            return jsonify({"error": "No therapeutic areas provided"}), 400
+        query_type = data.get("query_type", "")
+        values = data.get("values", "")
         
-        converted_areas = []
-        for area_string in data["therapeutic_areas"]:
-            # Split comma-separated CURIEs and process each individually
-            individual_curies = [curie.strip() for curie in area_string.split(',')]
-            
-            converted_links = []
-            for curie in individual_curies:
-                if curie:  # Skip empty strings
-                    # Split on colon to get namespace and id for proper conversion
-                    if ':' in curie:
-                        namespace, local_id = curie.split(':', 1)
-                        # Try to get proper IRI using bioregistry
-                        proper_iri = get_iri(namespace, local_id)
-                        if proper_iri:
-                            converted_links.append(f'<a href="{proper_iri}" target="_blank">{curie}</a>')
-                        else:
-                            # Fallback to original curie
-                            converted_links.append(f'<a href="#" target="_blank">{curie}</a>')
-                    else:
-                        # No colon found, treat as plain text
-                        converted_links.append(f'<a href="#" target="_blank">{curie}</a>')
-            
-            converted_areas.append({
-                "namespace_id": area_string,
-                "link": ', '.join(converted_links)
-            })
+        if not query_type or not values:
+            return jsonify({"error": "Query type and values are required"}), 400
         
-        return jsonify({"converted_areas": converted_areas}), 200
+        # Build SPARQL query
+        sparql_query = build_flexible_aop_sparql_query(query_type, values)
+        
+        if not sparql_query:
+            return jsonify({"error": "Invalid query type"}), 400
+        
+        # Execute query
+        print("=== Executing SPARQL query ===")
+        result = fetch_sparql_data(sparql_query)
+        
+        # Check for errors
+        if isinstance(result, dict) and "error" in result:
+            return jsonify({"error": result["error"]}), 500
+        
+        # Extract elements and report
+        elements = result.get("elements", [])
+        report = result.get("report", {})
+        
+        # Prepare response
+        response_data = {
+            "success": True,
+            "elements": elements,
+            "elements_count": len(elements),
+            "report": report
+        }
+        
+        # Generate specific warning message based on what was found
+        warnings = []
+        
+        if report.get("mie_count", 0) == 0:
+            warnings.append("No Molecular Initiating Events (MIEs) found")
+        
+        if report.get("ao_count", 0) == 0:
+            warnings.append("No Adverse Outcomes (AOs) found")
+            
+        if report.get("ker_count", 0) == 0:
+            if report.get("mie_count", 0) > 0 or report.get("ao_count", 0) > 0:
+                warnings.append("No Key Event Relationships (KERs) found - only basic AOP structure available")
+            else:
+                warnings.append("No pathway relationships found")
+        
+        if report.get("ke_count", 0) == 0 and report.get("ker_count", 0) > 0:
+            warnings.append("No intermediate Key Events found - only direct relationships")
+        
+        if warnings:
+            response_data["warning"] = {
+                "type": "incomplete_aop_data",
+                "message": f"AOP data retrieved with limitations: {'; '.join(warnings)}",
+                "details": f"Found: {report.get('mie_count', 0)} MIEs, {report.get('ao_count', 0)} AOs, {report.get('ke_count', 0)} intermediate KEs, {report.get('ker_count', 0)} KERs",
+                "specific_issues": warnings
+            }
+        
+        return jsonify(response_data), 200
+        
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

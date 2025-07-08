@@ -154,8 +154,9 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
                         const compoundId = compound ? compound.term : smiles;
                         const uniprotNodeId = `uniprot_${proteinInfo.uniprotId}`;
                         
-                        // Add compound node if it doesn't exist
-                        if (!cy.getElementById(compoundId).length) {
+                        // Check if compound node exists, if not create it but keep it hidden initially
+                        let compoundNode = cy.getElementById(compoundId);
+                        if (!compoundNode.length) {
                             cyElements.push({
                                 data: { 
                                     id: compoundId, 
@@ -180,7 +181,8 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
                                         type: "interaction", 
                                         label: `pChEMBL: ${value}`,
                                         model: model
-                                    }
+                                    },
+                                    classes: "qspr-prediction-edge"
                                 });
                             }
                         }
@@ -211,6 +213,19 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
 
         if (cyElements.length) {
             cy.add(cyElements);
+            
+            // Keep compound nodes hidden by default unless they're already selected
+            cy.nodes('.chemical-node').forEach(node => {
+                const isSelected = $("#compound_table tbody tr").filter(function() {
+                    return $(this).find(".compound-link").text().trim() === node.data('label');
+                }).hasClass('selected');
+                
+                if (!isSelected) {
+                    node.hide();
+                    node.connectedEdges().hide();
+                }
+            });
+            
             positionNodes(cy);
         }
     } else {

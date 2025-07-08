@@ -1,16 +1,21 @@
-function positionNodes(cy, fontSizeMultiplier = 1) {
+function positionNodes(cy, fontSizeMultiplier = 0.5, animate = false) { // Changed default from 1 to 0.5
     if (!cy || !cy.elements) {
         console.warn("Invalid Cytoscape instance passed to positionNodes");
         return;
     }
 
-    cy.layout({
-        //animate: true,
-        name: 'breadthfirst',
-        directed: true,
-        padding: 30,
-        //rankDir: "RL"
-    }).run();
+    // Only run layout if animate is false (for reset layout, we handle animation separately)
+    if (!animate) {
+        cy.layout({
+            name: 'breadthfirst',
+            directed: true,
+            padding: 30,
+        }).run();
+    }
+    
+    // Apply styles with optional animation
+    const transitionDuration = animate ? "0.3s" : "0s";
+    
     cy.style([
         {
             selector: "node",
@@ -30,7 +35,10 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "color": "#000",
                 "font-size": `${40 * fontSizeMultiplier}px`,
                 "border-width": "2px",
-                "border-color": "#000"
+                "border-color": "#000",
+                "transition-property": "width, height, font-size, text-max-width",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         },
         {
@@ -50,6 +58,9 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "border-width": 2,
                 "border-color": "#000",
                 "text-margin-y": 3,
+                "transition-property": "width, height, font-size, text-max-width",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         },
         {
@@ -66,7 +77,10 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "text-rotation": "autorotate",
                 "font-size": `${40 * fontSizeMultiplier}px`,
                 "font-weight": "bold",
-                "color": "#000"
+                "color": "#000",
+                "transition-property": "width, font-size",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         },
         {
@@ -82,6 +96,9 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "font-size": `${45 * fontSizeMultiplier}px`,
                 "font-weight": "bold",
                 "border-width": 0,
+                "transition-property": "font-size",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         },
         {
@@ -96,7 +113,10 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "font-size": `${45 * fontSizeMultiplier}px`,
                 "font-weight": "bold",
                 "border-width": 0,
-                "border-color": "transparent"
+                "border-color": "transparent",
+                "transition-property": "font-size",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         },
         {
@@ -107,7 +127,9 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "text-margin-y": -15,
                 "font-size": `${40 * fontSizeMultiplier}px`,
                 "curve-style": "unbundled-bezier",
-
+                "transition-property": "font-size",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         },
         {
@@ -122,26 +144,32 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "text-rotation": "autorotate",
                 "font-size": `${40 * fontSizeMultiplier}px`,
                 "font-weight": "bold",
-                "color": "#000"
+                "color": "#000",
+                "transition-property": "width, font-size",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         },
         {
-            selector: "edge[label='part of']",
+            selector: ".qspr-prediction-edge",
             style: {
-                "width": `${40 * fontSizeMultiplier}px`,
-                "line-color": "#ccffcc",
-                "opacity": 0.5,
+                "width": `${35 * fontSizeMultiplier}px`,
+                "line-color": "#ff6b6b",
+                "opacity": 0.7,
                 "target-arrow-shape": "triangle",
-                "target-arrow-color": "#ccffcc",
+                "target-arrow-color": "#ff6b6b",
                 "text-margin-y": 1,
                 "text-rotation": "autorotate",
-                "font-size": `${40 * fontSizeMultiplier}px`,
+                "font-size": `${35 * fontSizeMultiplier}px`,
                 "font-weight": "bold",
-                "color": "#000"
+                "color": "#000",
+                "line-style": "dashed",
+                "transition-property": "width, font-size",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         },
         {
-            // Bounding boxes (aop nodes) should auto-size based on their children.
             selector: ".bounding-box",
             style: {
                 "shape": "roundrectangle",
@@ -154,13 +182,16 @@ function positionNodes(cy, fontSizeMultiplier = 1) {
                 "font-size": `${50 * fontSizeMultiplier}px`,
                 "text-wrap": "wrap",
                 "font-weight": "bold",
-                "text-max-width": `${1400 * fontSizeMultiplier}px`
+                "text-max-width": `${1400 * fontSizeMultiplier}px`,
+                "transition-property": "font-size, text-max-width",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
             }
         }
     ]).update();
 }
 
-// Add event listener for font size slider with safety checks
+// Enhanced font slider event listener with smooth transitions
 document.addEventListener('DOMContentLoaded', function() {
     const fontSlider = document.getElementById('font-size-slider');
     if (fontSlider) {
@@ -168,7 +199,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const fontSizeMultiplier = parseFloat(this.value);
             console.log('Font size:', fontSizeMultiplier);
             if (window.cy) {
-                positionNodes(window.cy, fontSizeMultiplier);
+                // Use smooth transitions for font size changes
+                positionNodes(window.cy, fontSizeMultiplier, true);
             }
         });
     }
@@ -177,7 +209,10 @@ document.addEventListener('DOMContentLoaded', function() {
 // Add window resize handler with safety checks
 window.addEventListener("resize", function() { 
     if (window.cy) {
-        positionNodes(window.cy);
+        // Get the current font size from slider to maintain consistency
+        const fontSlider = document.getElementById('font-size-slider');
+        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+        positionNodes(window.cy, fontSizeMultiplier);
     }
 });
 

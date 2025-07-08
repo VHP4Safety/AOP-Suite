@@ -143,12 +143,12 @@
             <!-- AOP Network Data Controls -->
             <div class="panel">
                 <div class="panel-header">
-                    <h3><i class="fas fa-network-wired"></i> Query AOPWIKI</h3>
+                    <h3><i class="fas fa-network-wired"></i> Populate network</h3>
                 </div>
                 <div class="panel-content">
                     <div class="collapsible-section">
                         <div class="collapsible-header" data-target="aop-network-content">
-                            <h4><i class="fas fa-plus-circle"></i> Populate network...</h4>
+                            <h4><i class="fas fa-plus-circle"></i> Query AOP WIKI RDF</h4>
                             <i class="fas fa-chevron-down collapse-icon"></i>
                         </div>
                         <div class="collapsible-content" id="aop-network-content">
@@ -237,33 +237,23 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <!-- QSPR Predictions Section -->
-                    <div class="collapsible-section">
-                        <div class="collapsible-header" data-target="qsprpred-content">
-                            <h4><i class="fas fa-dna"></i> QSPR Predictions</h4>
-                            <i class="fas fa-chevron-down collapse-icon"></i>
-                        </div>
-                        <div class="collapsible-content" id="qsprpred-content">
-                            <div class="form-group">
-                                <label for="threshold_pchembl">pChEMBL Threshold:</label>
-                                <input type="number" step="0.1" class="form-control" id="threshold_pchembl" value="6.5">
-                                <small class="form-text">Activity of 10<sup id="activity_display">-6.5</sup> M</small>
-                                <script>
-                                    document.getElementById('threshold_pchembl')?.addEventListener('input', function () {
-                                        const value = this.value;
-                                        const activityDisplay = document.getElementById('activity_display');
-                                        if (activityDisplay) {
-                                            activityDisplay.textContent = `-${value}`;
-                                        }
-                                    });
-                                </script>
-                            </div>
-                            <button id="fetch_predictions" type="button" class="btn btn-primary w-100">
-                                <i class="fas fa-flask"></i> Fetch Predictions
-                            </button>
-                        </div>
+            <!-- QSPR Predictions Controls -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3><i class="fas fa-flask"></i> QSPR Predictions</h3>
+                </div>
+                <div class="panel-content">
+                    <div class="form-group">
+                        <label for="threshold_pchembl">pChEMBL Threshold:</label>
+                        <input type="number" step="0.1" class="form-control" id="threshold_pchembl" value="6.5">
+                        <small class="form-text">Activity of 10<sup id="activity_display">-6.5</sup> M</small>
                     </div>
+                    <button id="fetch_predictions" type="button" class="btn btn-primary w-100">
+                        <i class="fas fa-flask"></i> Fetch Predictions
+                    </button>
                 </div>
             </div>
 
@@ -371,23 +361,8 @@
                     <div id="loading_aop_table" class="loading-indicator" style="display: none;">
                         <i class="fas fa-spinner fa-spin"></i> Loading AOP data...
                     </div>
-                    <div class="table-wrapper">
-                        <table id="aop_table" class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Source</th>
-                                    <th>Relationship</th>
-                                    <th>Target</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td colspan="3" style="text-align: center; color: #6c757d; font-style: italic;">
-                                        No relationships in current network
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div id="aop-table-container" class="table-wrapper">
+                        <!-- Filter and table will be dynamically inserted here by aop_table_enhancements.js -->
                     </div>
                 </div>
             </div>
@@ -493,17 +468,22 @@
     // Update activity display
     function updateActivity() {
         const value = document.getElementById('threshold_pchembl').value;
-        document.getElementById('activity_display').textContent = `-${value}`;
-    }
-
-    // Only add event listener if element exists
-    const thresholdInput = document.getElementById('threshold_pchembl');
-    if (thresholdInput) {
-        thresholdInput.addEventListener('input', updateActivity);
+        const activityDisplay = document.getElementById('activity_display');
+        if (activityDisplay) {
+            activityDisplay.textContent = `-${value}`;
+        }
     }
 
     // Sidebar collapse functionality
     document.addEventListener('DOMContentLoaded', function () {
+        // Initialize threshold input event listener
+        const thresholdInput = document.getElementById('threshold_pchembl');
+        if (thresholdInput) {
+            thresholdInput.addEventListener('input', updateActivity);
+            // Initialize display on load
+            updateActivity();
+        }
+
         // Toggle buttons in nav
         document.getElementById('toggle-left-sidebar')?.addEventListener('click', function () {
             toggleSidebar('left-sidebar');
@@ -584,5 +564,6 @@
 <script src="/static/js/aop_app/custom_tables.js"></script>
 <script src="/static/js/aop_app/table_aop.js"></script>
 <script src="/static/js/aop_app/aop_network_data.js"></script>
+<script src="/static/js/aop_app/aop_table_enhancements.js"></script>
 
 {% endblock %}
