@@ -1,4 +1,4 @@
-# UI Design - AOP Network Builder
+# AOP Network Builder
 
 This repository contains a web-based tool for building, visualizing, and analyzing Adverse Outcome Pathway (AOP) networks. 
 
