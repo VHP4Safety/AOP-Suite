@@ -12,9 +12,6 @@
     <!-- Top Navigation Bar -->
     <header class="top-nav">
         <div class="nav-section">
-            <button id="toggle-left-sidebar" class="sidebar-toggle btn-secondary">
-                <i class="fas fa-bars"></i>
-            </button>
             <h1><i class="fas fa-project-diagram"></i> {{ title if title is defined else 'AOP Network Builder' }}</h1>
         </div>
         <div class="nav-controls">
@@ -28,30 +25,195 @@
             <button id="load_network" class="btn btn-secondary">
                 <i class="fas fa-upload"></i> Load Network
             </button>
-            <button id="toggle-right-sidebar" class="sidebar-toggle btn-secondary">
-                <i class="fas fa-table"></i>
+            <button id="toggle-workspace-sidebar" class="sidebar-toggle btn-secondary">
+                <i class="fas fa-briefcase"></i>
             </button>
         </div>
     </header>
 
     <!-- Main Content Area -->
     <div class="main-content">
-        <!-- Left Sidebar -->
-        <aside class="left-sidebar" id="left-sidebar">
-            <div class="sidebar-header">
-                <h3><i class="fas fa-cog"></i> Controls</h3>
-                <button class="sidebar-close" data-target="left-sidebar">
-                    <i class="fas fa-times"></i>
-                </button>
+        <!-- Central Area -->
+        <div class="central-area">
+            <!-- Network Area -->
+            <div class="network-area">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3><i class="fas fa-project-diagram"></i> Network Visualization</h3>
+                        <div class="network-stats">
+                            <div class="network-stat">
+                                <i class="fas fa-circle"></i>
+                                <span class="network-stat-value" id="node-count">0</span>
+                                <span>nodes</span>
+                            </div>
+                            <div class="network-stat">
+                                <i class="fas fa-link"></i>
+                                <span class="network-stat-value" id="edge-count">0</span>
+                                <span>edges        </span>
+                            </div>
+                        </div>
+                        <div class="network-controls">
+                            <button id="see_genes" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-dna"></i> See Genes
+                            </button>
+                            <button id="toggle_bounding_boxes" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-layer-group"></i> Group by AOP
+                            </button>
+                            <button id="reset_layout" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-sync"></i> Reset Layout
+                            </button>
+                            <button id="download_network" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-download"></i> Download
+                            </button>
+                            <div class="selection-controls" id="selection-controls" style="display: none;">
+                                <span class="selection-info" id="selection-info">0 selected</span>
+                                <button id="delete_selected" class="btn btn-sm btn-danger">
+                                    <i class="fas fa-trash"></i> Delete Selected
+                                </button>
+                                <button id="clear_selection" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-times"></i> Clear Selection
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel-content network-container">
+                        <div class="loading-overlay">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin fa-3x"></i>
+                                <p>Loading network...</p>
+                            </div>
+                        </div>
+                        <div id="cy"></div>
+                    </div>
+                </div>
             </div>
 
-
-            <!-- Manual Data Controls -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-plus-circle"></i> Add Data Manually</h3>
+            <!-- Bottom Panel Area (Tables) -->
+            <div class="bottom-panel-area" id="bottom-panel-area">
+                <div class="bottom-panel-header">
+                    <div class="bottom-panel-tabs">
+                        <button class="bottom-tab-btn active" data-table="aop">
+                            <i class="fas fa-network-wired"></i> AOP
+                        </button>
+                        <button class="bottom-tab-btn" data-table="compounds">
+                            <i class="fas fa-flask"></i> Compounds
+                        </button>
+                        <button class="bottom-tab-btn" data-table="genes">
+                            <i class="fas fa-dna"></i> Genes
+                        </button>
+                    </div>
                 </div>
-                <div class="panel-content">
+                <div class="bottom-panel-content">
+                    <!-- AOP Table Panel -->
+                    <div class="table-panel network-table-panel active" id="aop-table-container-panel">
+                        <div class="panel-content">
+                            <div id="loading_aop_table" class="loading-indicator" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i> Loading AOP data...
+                            </div>
+                            <div id="aop-table-container" class="table-wrapper">
+                                <!-- Filter and table will be dynamically inserted here by aop_table_enhancements.js -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Compounds Table Panel -->
+                    <div class="table-panel compound-table-panel" id="compounds-table-container-panel">
+                        <div class="panel-content">
+                            <div class="compound-selection-hint">
+                                <p>Click compound rows to show their pathways in the network</p>
+                            </div>
+                            <div class="table-wrapper">
+                                <div id="loading_compound" class="loading-indicator">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading compounds...
+                                </div>
+                                <table id="compound_table" class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Compound</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Genes Table Panel -->
+                    <div class="table-panel gene-table-panel" id="genes-table-container-panel">
+                        <div class="panel-content">
+                            <div class="table-wrapper">
+                                <table id="gene_table" class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Gene</th>
+                                            <th>Expression</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Workspace Sidebar -->
+        <aside class="workspace-sidebar" id="workspace-sidebar">
+            <div class="workspace-header">
+                <h3 class="workspace-title"><i class="fas fa-briefcase"></i> Workspace</h3>
+                <div class="workspace-controls">
+                    <button class="workspace-mode-btn active" data-mode="query">
+                        <i class="fas fa-search"></i> Query
+                    </button>
+                    <button class="workspace-mode-btn" data-mode="enhance">
+                        <i class="fas fa-magic"></i> Enhance
+                    </button>
+                    <button class="sidebar-close" data-target="workspace-sidebar">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="workspace-content">
+                <!-- Query Mode -->
+                <div class="workspace-mode query-mode active" id="query-mode">
+                    <div class="mode-status info">
+                        <i class="fas fa-info-circle"></i> Build your network by querying data sources or adding elements manually.
+                    </div>
+
+                    <!-- Query AOP WIKI Section -->
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" data-target="aop-network-content">
+                            <h4><i class="fas fa-plus-circle"></i> Query AOP WIKI RDF</h4>
+                            <i class="fas fa-chevron-down collapse-icon"></i>
+                        </div>
+                        <div class="collapsible-content" id="aop-network-content">
+                            <div class="aop-network-controls">
+                                <div class="form-group">
+                                    <label for="query-type">Query Type:</label>
+                                    <select id="query-type" class="form-control">
+                                        <option value="mie">Add by MIE</option>
+                                        <option value="aop">Add by AOP</option>
+                                        <option value="ke_upstream">Add by Upstream KE</option>
+                                        <option value="ke_downstream">Add by Downstream KE</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="query-values">AOP Identifiers or Names:</label>
+                                    <textarea id="query-values" class="form-control" rows="4"
+                                        placeholder="Search by AOP name or enter identifiers (one per line)&#10;Examples:&#10;liver fibrosis&#10;1&#10;aop:2&#10;https://identifiers.org/aop/3"></textarea>
+                                </div>
+                                <button id="add-aop-data" class="btn btn-primary">
+                                    <i class="fas fa-plus"></i> Add to Network
+                                </button>
+                                <div id="aop-data-status" class="mt-2"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Add Nodes Section -->
                     <div class="collapsible-section">
                         <div class="collapsible-header" data-target="add-nodes-content">
@@ -73,14 +235,11 @@
                                     <label for="node-label">Node Labels:</label>
                                     <input type="text" id="node-label" class="form-control"
                                         placeholder="Enter node labels (space or comma separated)">
-                                    <small class="form-text">Examples: "Gene1 Gene2" or "Protein A, Protein B, Protein
-                                        C"</small>
                                 </div>
                                 <div class="form-group">
                                     <label for="node-id">Node IDs (optional):</label>
                                     <input type="text" id="node-id" class="form-control"
                                         placeholder="Auto-generated if empty (space or comma separated)">
-                                    <small class="form-text">If provided, must match the number of labels</small>
                                 </div>
                                 <button id="add-node" class="btn btn-success">
                                     <i class="fas fa-plus"></i> Add Node
@@ -128,8 +287,7 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="edge-label">Connection Label (optional):</label>
-                                    <input type="text" id="edge-label" class="form-control"
-                                        placeholder="Enter connection label">
+                                    <input type="text" id="edge-label" class="form-control" placeholder="Enter connection label">
                                 </div>
                                 <button id="add-connection" class="btn btn-success">
                                     <i class="fas fa-link"></i> Add Edge
@@ -138,231 +296,85 @@
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- AOP Network Data Controls -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-network-wired"></i> Populate network</h3>
-                </div>
-                <div class="panel-content">
-                    <div class="collapsible-section">
-                        <div class="collapsible-header" data-target="aop-network-content">
-                            <h4><i class="fas fa-plus-circle"></i> Query AOP WIKI RDF</h4>
-                            <i class="fas fa-chevron-down collapse-icon"></i>
-                        </div>
-                        <div class="collapsible-content" id="aop-network-content">
-                            <div class="aop-network-controls">
-                                <div class="form-group">
-                                    <label for="query-type">Query Type:</label>
-                                    <select id="query-type" class="form-control">
-                                        <option value="mie">Add by MIE</option>
-                                        <option value="aop">Add by AOP</option>
-                                        <option value="ke_upstream">Add by Upstream KE</option>
-                                        <option value="ke_downstream">Add by Downstream KE</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="query-values">AOP Identifiers or Names:</label>
-                                    <textarea id="query-values" class="form-control" rows="4"
-                                        placeholder="Search by AOP name or enter identifiers (one per line)&#10;Examples:&#10;liver fibrosis&#10;1&#10;aop:2&#10;https://identifiers.org/aop/3"></textarea>
-                                    <small class="form-text">
-                                        Enter one AOP per line:<br>
-                                        • Search by name: "liver fibrosis", "reproductive dysfunction"<br>
-                                        • Or enter IDs: 1, aop:1, https://identifiers.org/aop/1<br>
-                                        • Mix both approaches as needed
-                                    </small>
-                                </div>
-                                <button id="add-aop-data" class="btn btn-primary">
-                                    <i class="fas fa-plus"></i> Add to Network
+                <!-- Enhance Mode -->
+                <div class="workspace-mode enhance-mode" id="enhance-mode">
+                    <div class="mode-status info">
+                        <i class="fas fa-magic"></i> Enhance your network with additional data sources and annotations.
+                    </div>
+
+                    <div class="enhance-grid">
+                        <!-- GO Processes Card -->
+                        <div class="enhance-card" id="go-processes-card">
+                            <div class="enhance-card-header">
+                                <i class="fas fa-project-diagram"></i>
+                                <h4 class="enhance-card-title">GO Processes</h4>
+                            </div>
+                            <div class="enhance-card-content">
+                                Add Gene Ontology biological processes to your network. Show hierarchical relationships and process annotations.
+                            </div>
+                            <div class="enhance-card-controls">
+                                <button id="toggle_go_processes" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-hexagon"></i> Show GO Processes
                                 </button>
-                                <div id="aop-data-status" class="mt-2"></div>
+                                <button id="show_go_hierarchy" class="btn btn-secondary btn-sm w-100 mt-1">
+                                    <i class="fas fa-sitemap"></i> Show Hierarchy
+                                </button>
                             </div>
                         </div>
-                    </div>
-                    <div class="collapsible-section">
-                        <div class="collapsible-header" data-target="go-processes-content">
-                            <h4><i class="fas fa-project-diagram"></i> GO Biological Processes</h4>
-                            <i class="fas fa-chevron-down collapse-icon"></i>
-                        </div>
-                        <div class="collapsible-content" id="go-processes-content">
-                            <div class="go-processes-controls">
-                                <div class="form-group">
-                                </div>
-                                <div class="button-group">
-                                    <button id="toggle_go_processes" class="btn btn-primary">
-                                        <i class="fas fa-hexagon"></i> Show GO Processes
-                                    </button>
-                                    <button id="show_go_hierarchy" class="btn btn-secondary">
-                                        <i class="fas fa-sitemap"></i> Show GO Hierarchy
-                                    </button>
-                                </div>
-                                <div class="form-group">
-                                    <small class="form-text text-muted">
-                                        • <strong>Show GO Processes:</strong> Add direct biological processes from current Key Events<br>
-                                        • <strong>Show GO Hierarchy:</strong> Include parent-child relationships in the hierarchy
-                                    </small>
-                                </div>
-                                <div id="go-processes-status" class="mt-2"></div>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- OpenTargets Section -->
-                    <div class="collapsible-section">
-                        <div class="collapsible-header" data-target="opentargets-content">
-                            <h4><i class="fas fa-bullseye"></i> OpenTargets</h4>
-                            <i class="fas fa-chevron-down collapse-icon"></i>
-                        </div>
-                        <div class="collapsible-content" id="opentargets-content">
-                            <div class="opentargets-controls">
-                                <button id="query_opentargets" class="btn btn-secondary w-100">
+                        <!-- OpenTargets Card -->
+                        <div class="enhance-card" id="opentargets-card">
+                            <div class="enhance-card-header">
+                                <i class="fas fa-bullseye"></i>
+                                <h4 class="enhance-card-title">OpenTargets</h4>
+                            </div>
+                            <div class="enhance-card-content">
+                                Query OpenTargets for drug-target associations, disease associations, and therapeutic hypotheses.
+                            </div>
+                            <div class="enhance-card-controls">
+                                <button id="query_opentargets" class="btn btn-primary btn-sm w-100">
                                     <i class="fas fa-bullseye"></i> Query OpenTargets
                                 </button>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Bgee Section -->
-                    <div class="collapsible-section">
-                        <div class="collapsible-header" data-target="bgee-content">
-                            <h4><i class="fas fa-dna"></i> Bgee Expression</h4>
-                            <i class="fas fa-chevron-down collapse-icon"></i>
-                        </div>
-                        <div class="collapsible-content" id="bgee-content">
-                            <div class="bgee-controls">
-                                <button id="query_bgee" class="btn btn-secondary w-100">
+                        <!-- Bgee Expression Card -->
+                        <div class="enhance-card" id="bgee-card">
+                            <div class="enhance-card-header">
+                                <i class="fas fa-dna"></i>
+                                <h4 class="enhance-card-title">Bgee Expression</h4>
+                            </div>
+                            <div class="enhance-card-content">
+                                Add gene expression data from Bgee database. Explore tissue-specific and developmental expression patterns.
+                            </div>
+                            <div class="enhance-card-controls">
+                                <button id="query_bgee" class="btn btn-primary btn-sm w-100">
                                     <i class="fas fa-dna"></i> Query Bgee
                                 </button>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
 
-            <!-- QSPR Predictions Controls -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-flask"></i> QSPR Predictions</h3>
-                </div>
-                <div class="panel-content">
-                    <div class="form-group">
-                        <label for="threshold_pchembl">pChEMBL Threshold:</label>
-                        <input type="number" step="0.1" class="form-control" id="threshold_pchembl" value="6.5">
-                        <small class="form-text">Activity of 10<sup id="activity_display">-6.5</sup> M</small>
-                    </div>
-                    <button id="fetch_predictions" type="button" class="btn btn-primary w-100">
-                        <i class="fas fa-flask"></i> Fetch Predictions
-                    </button>
-                </div>
-            </div>
-
-        </aside>
-
-        <!-- Center Network Area -->
-        <main class="network-area">
-            <div class="panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-project-diagram"></i> Network Visualization</h3>
-                    <div class="network-controls">
-                        <button id="see_genes" class="btn btn-sm btn-secondary">
-                            <i class="fas fa-dna"></i> See Genes
-                        </button>
-                        <button id="toggle_bounding_boxes" class="btn btn-sm btn-secondary">
-                            <i class="fas fa-layer-group"></i> Group by AOP
-                        </button>
-                        <button id="reset_layout" class="btn btn-sm btn-secondary">
-                            <i class="fas fa-sync"></i> Reset Layout
-                        </button>
-                        <button id="download_network" class="btn btn-sm btn-secondary">
-                            <i class="fas fa-download"></i> Download
-                        </button>
-                    </div>
-                </div>
-                <div class="panel-content network-container">
-                    <div class="loading-overlay">
-                        <div class="text-center">
-                            <i class="fas fa-spinner fa-spin fa-3x"></i>
-                            <p>Loading network...</p>
+                        <!-- QSPR Predictions Card -->
+                        <div class="enhance-card" id="qspr-card">
+                            <div class="enhance-card-header">
+                                <i class="fas fa-flask"></i>
+                                <h4 class="enhance-card-title">QSPR Predictions</h4>
+                            </div>
+                            <div class="enhance-card-content">
+                                Generate QSPR predictions for compounds in your network. Set activity thresholds and fetch bioactivity predictions.
+                            </div>
+                            <div class="enhance-card-controls">
+                                <div class="form-group mb-2">
+                                    <label for="threshold_pchembl">pChEMBL Threshold:</label>
+                                    <input type="number" step="0.1" class="form-control" id="threshold_pchembl" value="6.5">
+                                    <small class="form-text">Activity of 10<sup id="activity_display">-6.5</sup> M</small>
+                                </div>
+                                <button id="fetch_predictions" type="button" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-flask"></i> Fetch Predictions
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div id="cy"></div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Right Sidebar -->
-        <aside class="right-sidebar" id="right-sidebar">
-            <div class="sidebar-header">
-                <h3><i class="fas fa-table"></i> Data Tables</h3>
-                <button class="sidebar-close" data-target="right-sidebar">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-
-            <!-- Compounds Table -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-flask"></i> Compounds</h3>
-                    <div class="compound-controls">
-                        <button id="toggle_compounds" class="btn btn-sm btn-secondary">
-                            <i class="fas fa-flask"></i> Toggle Compounds
-                        </button>
-                    </div>
-                </div>
-                <div class="panel-content">
-                    <div class="compound-selection-hint">
-                        <p>Click compound rows to show their pathways in the network</p>
-                    </div>
-                    <div class="table-wrapper">
-                        <div id="loading_compound" class="loading-indicator">
-                            <i class="fas fa-spinner fa-spin"></i> Loading compounds...
-                        </div>
-                        <table id="compound_table" class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Compound</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Genes Table - Always visible -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-dna"></i> Genes</h3>
-                </div>
-                <div class="panel-content">
-                    <div class="table-wrapper">
-                        <table id="gene_table" class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Gene</th>
-                                    <th>Expression</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- AOP Relationships Table - Always visible -->
-            <div class="panel">
-                <div class="panel-header">
-                    <h3><i class="fas fa-network-wired"></i> AOP Relationships</h3>
-                </div>
-                <div class="panel-content">
-                    <div id="loading_aop_table" class="loading-indicator" style="display: none;">
-                        <i class="fas fa-spinner fa-spin"></i> Loading AOP data...
-                    </div>
-                    <div id="aop-table-container" class="table-wrapper">
-                        <!-- Filter and table will be dynamically inserted here by aop_table_enhancements.js -->
                     </div>
                 </div>
             </div>
@@ -461,17 +473,509 @@
     let genesVisible = false;
     let boundingBoxesVisible = false;
     let compoundsVisible = false;
+    let selectedElements = []; // Track selected elements
 
     // Make sure cy is available globally from the start
     window.cy = null;
 
-    // Update activity display
-    function updateActivity() {
-        const value = document.getElementById('threshold_pchembl').value;
-        const activityDisplay = document.getElementById('activity_display');
-        if (activityDisplay) {
-            activityDisplay.textContent = `-${value}`;
+        // Update activity display
+        function updateActivity() {
+            const value = document.getElementById('threshold_pchembl').value;
+            const activityDisplay = document.getElementById('activity_display');
+            if (activityDisplay) {
+                activityDisplay.textContent = `-${value}`;
+            }
+        }            
+    // Selection management functions
+    function updateSelectionControls() {
+        const selectionControls = document.getElementById('selection-controls');
+        const selectionInfo = document.getElementById('selection-info');
+        
+        if (window.cy) {
+            const selected = window.cy.$(':selected');
+            selectedElements = selected.map(ele => ele.id());
+            
+            if (selected.length > 0) {
+                selectionControls.style.display = 'flex';
+                selectionInfo.textContent = `${selected.length} selected`;
+            } else {
+                selectionControls.style.display = 'none';
+                selectedElements = [];
+            }
         }
+    }
+
+    function initializeNetworkSelection() {
+        if (!window.cy) return;
+
+        // Enable box selection for multi-select
+        window.cy.boxSelectionEnabled(true);
+        
+        // Handle single click selection
+        window.cy.on('tap', function(evt) {
+            const target = evt.target;
+            
+            // If clicking on background, clear selection unless shift is held
+            if (target === window.cy) {
+                if (!evt.originalEvent.shiftKey) {
+                    window.cy.$(':selected').unselect();
+                }
+                return;
+            }
+            
+            // Handle node/edge selection
+            if (target.isNode() || target.isEdge()) {
+                evt.stopPropagation();
+                
+                if (evt.originalEvent.shiftKey) {
+                    // Shift+click: toggle selection
+                    if (target.selected()) {
+                        target.unselect();
+                    } else {
+                        target.select();
+                    }
+                } else {
+                    // Regular click: select only this element
+                    window.cy.$(':selected').unselect();
+                    target.select();
+                }
+            }
+        });
+
+        // Update selection controls when selection changes
+        window.cy.on('select unselect', function() {
+            updateSelectionControls();
+        });
+
+        // Prevent default href behavior on nodes/edges
+        window.cy.on('tap', 'node, edge', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+        });
+    }
+
+    function deleteSelectedElements() {
+        if (!window.cy || selectedElements.length === 0) return;
+
+        const elementsToRemove = window.cy.getElementById(selectedElements);
+        
+        // Confirm deletion
+        if (confirm(`Are you sure you want to delete ${selectedElements.length} selected element(s)?`)) {
+            // Remove elements from the network
+            elementsToRemove.remove();
+            
+            // Clear selection tracking
+            selectedElements = [];
+            updateSelectionControls();
+            
+            // Update network stats
+            updateNetworkStats();
+            
+            // Update any related tables/data if needed
+            if (window.updateTables) {
+                window.updateTables();
+            }
+        }
+    }
+
+    function clearSelection() {
+        if (window.cy) {
+            window.cy.$(':selected').unselect();
+            selectedElements = [];
+            updateSelectionControls();
+        }
+    }
+
+    // Initialize selection event handlers
+    function initializeSelectionHandlers() {
+        document.getElementById('delete_selected')?.addEventListener('click', deleteSelectedElements);
+        document.getElementById('clear_selection')?.addEventListener('click', clearSelection);
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            // Delete key to remove selected elements
+            if (e.key === 'Delete' && selectedElements.length > 0) {
+                e.preventDefault();
+                deleteSelectedElements();
+            }
+            
+            // Escape key to clear selection
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                clearSelection();
+            }
+            
+            // Ctrl+A to select all
+            if (e.ctrlKey && e.key === 'a') {
+                e.preventDefault();
+                if (window.cy) {
+                    window.cy.elements().select();
+                }
+            }
+        });
+    }
+
+    // Update network stats
+    function updateNetworkStats() {
+        if (window.cy) {
+            const nodeCount = window.cy.nodes().length;
+            const edgeCount = window.cy.edges().length;
+            
+            document.getElementById('node-count').textContent = nodeCount;
+            document.getElementById('edge-count').textContent = edgeCount;
+        }
+    }
+
+    // Bottom panel tab switching
+    function switchBottomTab(tableName) {
+        // Update button states
+        document.querySelectorAll('.bottom-tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('data-table') === tableName) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Update table panel visibility
+        document.querySelectorAll('.table-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+        document.getElementById(tableName + '-table-container-panel').classList.add('active');
+        
+        // Update table heights after tab switch
+        setTimeout(() => {
+            updateTableContainerHeights();
+            redrawDataTables();
+        }, 50);
+    }
+
+    // Workspace mode switching (fixed to properly hide/show)
+    function switchWorkspaceMode(mode) {
+        // Update button states
+        document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('data-mode') === mode) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Hide all workspace modes first
+        document.querySelectorAll('.workspace-mode').forEach(modeDiv => {
+            modeDiv.classList.remove('active');
+            modeDiv.style.display = 'none';
+        });
+        
+        // Show the selected mode
+        const selectedMode = document.getElementById(mode + '-mode');
+        if (selectedMode) {
+            selectedMode.classList.add('active');
+            selectedMode.style.display = 'block';
+        }
+    }
+
+    // Resizing functionality
+    function initializeResizing() {
+        // Workspace sidebar resizing
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        const workspaceSidebar = document.getElementById('workspace-sidebar');
+        const resizeHandle = workspaceSidebar.querySelector('::before');
+
+        workspaceSidebar.addEventListener('mousedown', function(e) {
+            if (e.offsetX <= 6) { // Within resize handle area
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = parseInt(window.getComputedStyle(workspaceSidebar).width, 10);
+                document.body.classList.add('resizing');
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isResizing) return;
+            
+            const width = startWidth - (e.clientX - startX);
+            const minWidth = 300;
+            const maxWidth = 1200;
+            
+            if (width >= minWidth && width <= maxWidth) {
+                workspaceSidebar.style.width = width + 'px';
+                if (window.cy) {
+                    window.cy.resize();
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', function() {
+            if (isResizing) {
+                isResizing = false;
+                document.body.classList.remove('resizing');
+            }
+        });
+
+        // Bottom panel resizing - Fixed implementation
+        let isResizingVertical = false;
+        let startY = 0;
+        let startNetworkHeight = 0;
+        let startBottomHeight = 0;
+
+        const bottomPanel = document.getElementById('bottom-panel-area');
+        const bottomPanelHeader = bottomPanel.querySelector('.bottom-panel-header');
+        
+        // Add cursor change on hover over resize area
+        bottomPanelHeader.addEventListener('mouseenter', function() {
+            document.body.style.cursor = 'row-resize';
+        });
+        
+        bottomPanelHeader.addEventListener('mouseleave', function() {
+            if (!isResizingVertical) {
+                document.body.style.cursor = '';
+            }
+        });
+        
+        // Add mousedown listener to the bottom panel header for easier targeting
+        bottomPanelHeader.addEventListener('mousedown', function(e) {
+            isResizingVertical = true;
+            startY = e.clientY;
+            
+            const networkArea = document.querySelector('.network-area');
+            const centralArea = document.querySelector('.central-area');
+            startNetworkHeight = networkArea.offsetHeight;
+            startBottomHeight = bottomPanel.offsetHeight;
+            
+            document.body.classList.add('resizing-vertical');
+            document.body.style.cursor = 'row-resize';
+            e.preventDefault();
+            e.stopPropagation();
+            
+            console.log('Started vertical resize'); // Debug
+        });
+
+        // Also add mousedown to the top border area for backwards compatibility
+        bottomPanel.addEventListener('mousedown', function(e) {
+            // Check if we're clicking on the top border (resize handle)
+            const rect = bottomPanel.getBoundingClientRect();
+            const clickY = e.clientY;
+            const borderTop = rect.top;
+            
+            // Allow resize if clicking within 10px of the top border (increased from 6px)
+            if (clickY >= borderTop - 10 && clickY <= borderTop + 10 && !isResizingVertical) {
+                isResizingVertical = true;
+                startY = e.clientY;
+                
+                const networkArea = document.querySelector('.network-area');
+                const centralArea = document.querySelector('.central-area');
+                startNetworkHeight = networkArea.offsetHeight;
+                startBottomHeight = bottomPanel.offsetHeight;
+                
+                document.body.classList.add('resizing-vertical');
+                document.body.style.cursor = 'row-resize';
+                e.preventDefault();
+                e.stopPropagation();
+                
+                console.log('Started vertical resize from border'); // Debug
+            }
+        });
+
+        // Global mousemove for resize
+        document.addEventListener('mousemove', function(e) {
+            if (!isResizingVertical) return;
+            
+            const deltaY = e.clientY - startY;
+            const networkArea = document.querySelector('.network-area');
+            const centralArea = document.querySelector('.central-area');
+            const totalHeight = centralArea.offsetHeight;
+            
+            // Calculate new heights - Fixed direction logic
+            const newNetworkHeight = startNetworkHeight + deltaY;
+            const newBottomHeight = totalHeight - newNetworkHeight;
+            
+            const minHeight = 150;
+            const maxNetworkHeight = totalHeight - minHeight;
+            const maxBottomHeight = totalHeight - minHeight;
+            
+            // Ensure minimum and maximum heights are respected
+            if (newNetworkHeight >= minHeight && 
+                newNetworkHeight <= maxNetworkHeight && 
+                newBottomHeight >= minHeight && 
+                newBottomHeight <= maxBottomHeight) {
+                
+                // Apply new heights immediately
+                networkArea.style.height = newNetworkHeight + 'px';
+                bottomPanel.style.height = newBottomHeight + 'px';
+                
+                // Update table container heights immediately during drag
+                updateTableContainerHeights();
+                
+                // Trigger Cytoscape resize immediately
+                if (window.cy) {
+                    window.cy.resize();
+                }
+            }
+            
+            e.preventDefault();
+        });
+
+        // Global mouseup for resize
+        document.addEventListener('mouseup', function() {
+            if (isResizingVertical) {
+                isResizingVertical = false;
+                document.body.classList.remove('resizing-vertical');
+                document.body.style.cursor = '';
+                
+                // Convert to percentages for responsive behavior
+                const networkArea = document.querySelector('.network-area');
+                const centralArea = document.querySelector('.central-area');
+                const totalHeight = centralArea.offsetHeight;
+                
+                if (totalHeight > 0) {
+                    const networkPercent = Math.max(20, Math.min(80, (networkArea.offsetHeight / totalHeight) * 100));
+                    const bottomPercent = 100 - networkPercent;
+                    
+                    networkArea.style.height = networkPercent + '%';
+                    bottomPanel.style.height = bottomPercent + '%';
+                }
+                
+                // Final table updates with a slight delay to ensure DOM is stable
+                setTimeout(() => {
+                    updateTableContainerHeights();
+                    redrawDataTables();
+                }, 50);
+                
+                // Final Cytoscape resize
+                if (window.cy) {
+                    setTimeout(() => {
+                        window.cy.resize();
+                        window.cy.fit();
+                    }, 100);
+                }
+                
+                //console.log('Ended vertical resize'); // Debug
+            }
+        });
+
+        // Table panel resizing and toggling
+        initializeTablePanelControls();
+    }
+
+    // Update table container heights to fill available space - Enhanced version
+    function updateTableContainerHeights() {
+        const bottomPanel = document.getElementById('bottom-panel-area');
+        const bottomPanelContent = bottomPanel.querySelector('.bottom-panel-content');
+        const bottomPanelHeader = bottomPanel.querySelector('.bottom-panel-header');
+        
+        if (bottomPanelContent && bottomPanelHeader) {
+            const headerHeight = bottomPanelHeader.offsetHeight;
+            // Use the actual pixel height of the bottom panel
+            const totalHeight = bottomPanel.offsetHeight;
+            // Remove the -20px padding to allow full use of the panel
+            const availableHeight = Math.max(50, totalHeight - headerHeight);
+
+            // Update all table panel heights
+            const tablePanels = bottomPanelContent.querySelectorAll('.table-panel');
+            tablePanels.forEach(panel => {
+                const panelContent = panel.querySelector('.panel-content');
+                if (panelContent) {
+                    panelContent.style.height = availableHeight + 'px';
+                    panelContent.style.overflowY = 'auto';
+
+                    // Update table wrapper heights
+                    const tableWrapper = panelContent.querySelector('.table-wrapper');
+                    if (tableWrapper) {
+                        // Get height of other elements in panel content
+                        const otherElements = Array.from(panelContent.children).filter(
+                            el => !el.classList.contains('table-wrapper')
+                        );
+                        let otherElementsHeight = 0;
+                        otherElements.forEach(el => {
+                            const computedStyle = window.getComputedStyle(el);
+                            const marginTop = parseInt(computedStyle.marginTop) || 0;
+                            const marginBottom = parseInt(computedStyle.marginBottom) || 0;
+                            otherElementsHeight += el.offsetHeight + marginTop + marginBottom;
+                        });
+
+                        // Use all available space for the table
+                        const tableHeight = Math.max(50, availableHeight - otherElementsHeight);
+                        tableWrapper.style.height = tableHeight + 'px';
+                        tableWrapper.style.overflowY = 'auto';
+                        tableWrapper.style.overflowX = 'auto';
+
+                        // Force immediate layout recalculation
+                        tableWrapper.offsetHeight; // Trigger reflow
+                    }
+                }
+            });
+
+            // Optionally remove debug log
+            // console.log('Updated table heights, available:', availableHeight);
+        }
+    }
+
+    // Redraw DataTables to adjust to new container sizes
+    function redrawDataTables() {
+        // Redraw any DataTables that might be present
+        if (window.$.fn.DataTable) {
+            window.$('.table').each(function() {
+                const table = window.$(this);
+                if (table.hasClass('dataTable')) {
+                    const dataTable = table.DataTable();
+                    setTimeout(() => {
+                        dataTable.columns.adjust();
+                        dataTable.draw();
+                    }, 50);
+                }
+            });
+        }
+        
+        // Also trigger custom table redraw events if they exist
+        const customEvent = new CustomEvent('tableResize');
+        document.dispatchEvent(customEvent);
+    }
+
+    // Table panel controls
+    function initializeTablePanelControls() {
+        // Toggle buttons
+        document.getElementById('toggle-compound-table')?.addEventListener('click', function() {
+            toggleTablePanel('compound-table-panel');
+        });
+
+        document.getElementById('toggle-gene-table')?.addEventListener('click', function() {
+            toggleTablePanel('gene-table-panel');
+        });
+
+        // Horizontal resizing for table panels
+        initializeTableResizing();
+        
+        // Initial table height setup
+        setTimeout(updateTableContainerHeights, 100);
+    }
+
+    function toggleTablePanel(panelId) {
+        const panel = document.getElementById(panelId);
+        const button = panel.querySelector('.table-toggle-btn');
+        
+        if (panel.classList.contains('collapsed')) {
+            panel.classList.remove('collapsed');
+            button.classList.add('active');
+        } else {
+            panel.classList.add('collapsed');
+            button.classList.remove('active');
+        }
+        
+        // Trigger layout update
+        setTimeout(() => {
+            if (window.cy) {
+                window.cy.resize();
+            }
+        }, 300);
+    }
+
+    function initializeTableResizing() {
+        // Add horizontal resizing for compound and gene tables
+        // Similar implementation to workspace resizing but for table panels
+        // This would handle the horizontal resize functionality for the side table panels
     }
 
     // Sidebar collapse functionality
@@ -480,17 +984,29 @@
         const thresholdInput = document.getElementById('threshold_pchembl');
         if (thresholdInput) {
             thresholdInput.addEventListener('input', updateActivity);
-            // Initialize display on load
             updateActivity();
         }
 
-        // Toggle buttons in nav
-        document.getElementById('toggle-left-sidebar')?.addEventListener('click', function () {
-            toggleSidebar('left-sidebar');
+        // Initialize resizing
+        initializeResizing();
+
+        // Initialize selection handlers
+        initializeSelectionHandlers();
+
+        // Bottom panel tab buttons
+        document.querySelectorAll('.bottom-tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tableName = this.getAttribute('data-table');
+                switchBottomTab(tableName);
+            });
         });
 
-        document.getElementById('toggle-right-sidebar')?.addEventListener('click', function () {
-            toggleSidebar('right-sidebar');
+        // Workspace mode buttons (fixed)
+        document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const mode = this.getAttribute('data-mode');
+                switchWorkspaceMode(mode);
+            });
         });
 
         // Close buttons in sidebars
@@ -527,6 +1043,37 @@
         document.querySelectorAll('.collapsible-content').forEach(content => {
             content.style.display = 'none';
         });
+
+        // Initialize network stats update
+        if (window.cy) {
+            updateNetworkStats();
+            window.cy.on('add remove', updateNetworkStats);
+        }
+        
+        // Initialize network selection when cy is ready
+        if (window.cy) {
+            initializeNetworkSelection();
+            updateNetworkStats();
+            window.cy.on('add remove', updateNetworkStats);
+        } else {
+            // Wait for cy to be initialized and then set up selection
+            const checkCy = setInterval(() => {
+                if (window.cy) {
+                    initializeNetworkSelection();
+                    updateNetworkStats();
+                    window.cy.on('add remove', updateNetworkStats);
+                    clearInterval(checkCy);
+                }
+            }, 100);
+        }
+        
+        // Initialize table heights
+        setTimeout(updateTableContainerHeights, 200);
+    });
+
+    // Toggle buttons in nav - Fixed workspace toggle
+    document.getElementById('toggle-workspace-sidebar')?.addEventListener('click', function () {
+        toggleSidebar('workspace-sidebar');
     });
 
     function toggleSidebar(sidebarId) {
@@ -543,6 +1090,9 @@
                     window.positionNodes(window.cy);
                 }
             }
+            // Also update table heights when sidebar toggles
+            updateTableContainerHeights();
+            redrawDataTables();
         }, 300);
     }
 </script>

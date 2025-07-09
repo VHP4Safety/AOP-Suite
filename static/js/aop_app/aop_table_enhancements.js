@@ -817,9 +817,9 @@ class AOPTableManager {
                     margin-right: 4px;
                 }
                 
-                .node-type-mie { background-color: #e3f2fd; color: #1976d2; }
-                .node-type-ao { background-color: #ffebee; color: #c62828; }
-                .node-type-key_event { background-color: #f3e5f5; color: #7b1fa2; }
+                .node-type-mie { background-color: #ccffcc; color:rgb(139, 192, 155); }
+                .node-type-ao { background-color: #ffe6e6; color: #c62828; }
+                .node-type-key_event { background-color: #ffff99; color:rgb(180, 180, 56); }
                 .node-type-unknown { background-color: #f5f5f5; color: #666; }
                 
                 .disconnected-row {

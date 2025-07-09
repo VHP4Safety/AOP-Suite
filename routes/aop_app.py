@@ -409,7 +409,7 @@ def fetch_sparql_data(query):
         mie = result.get("MIE", {}).get("value", "")
         mie_title = result.get("MIEtitle", {}).get("value", "")
         ao = result.get("ao", {}).get("value", "")
-        ao_title = result.get("AOtitle", {}).get("value", "")
+        ao_title = result.get("ao_title", {}).get("value", "")
         ker_uri = result.get("KER", {}).get("value", "NA")
         ker_id = extract_ker_id(ker_uri) if ker_uri != "NA" else "NA"
         aop = result.get("aop", {}).get("value", "")
@@ -570,7 +570,7 @@ def get_aop_network_by_mies(mies):
     if not mies:
         return jsonify({"error": "MIEs parameter is required"}), 400
     AOPWIKIPARKINSONSPARQL_QUERY = (
-        "SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title  ?KER ?ao ?AOtitle ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ\n"
+        "SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title  ?KER ?ao ?ao_title ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ\n"
         "WHERE {\n"
         "  VALUES ?MIE { " + mies + " }\n"
         "  ?aop a aopo:AdverseOutcomePathway ;\n"
@@ -1328,13 +1328,14 @@ def build_flexible_aop_sparql_query(query_type: str, values: str) -> str:
     print(f"Processed values: {formatted_values}")
     
     # Base query with all KER relationships as OPTIONAL
-    base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ
+    base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?ao_title ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ
 WHERE {
   %VALUES_CLAUSE%
   ?aop a aopo:AdverseOutcomePathway ;
        dc:title ?aop_title ;
        aopo:has_adverse_outcome ?ao ;
        aopo:has_molecular_initiating_event ?MIE .
+  ?ao dc:title ?ao_title .
   ?MIE dc:title ?MIEtitle .
   OPTIONAL {
     ?aop aopo:has_key_event_relationship ?KER .

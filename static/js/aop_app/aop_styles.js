@@ -20,8 +20,8 @@ function positionNodes(cy, fontSizeMultiplier = 0.5, animate = false) { // Chang
         {
             selector: "node",
             style: {
-                "width": `${270 * fontSizeMultiplier}px`,
-                "height": `${200 * fontSizeMultiplier}px`,
+                "width": `${350 * fontSizeMultiplier}px`,
+                "height": `${350 * fontSizeMultiplier}px`,
                 "background-color": ele =>
                     ele.data("is_mie") ? "#ccffcc" :
                         ele.data("is_ao") ? "#ffe6e6" :

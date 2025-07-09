@@ -314,34 +314,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function setupEventHandlers() {
-        // Node click event.
-        window.cy.on("tap", "node", function (evt) {
-            const node = evt.target;
-            const url = node.id();
-            console.debug(`Node tapped: ${node.id()}, data:`, node.data());
-            if (node.hasClass("uniprot-node")) {
-                window.open(`https://www.uniprot.org/uniprotkb/${url.replace("uniprot_", "")}`, "_blank");
-            } else if (node.hasClass("ensembl-node")) {
-                window.open(`https://identifiers.org/ensembl/${url.replace("ensembl_", "")}`, "_blank");
-            } else if (node.hasClass("go-process-node")) {
-                const uri = node.data("uri");
-                if (uri) {
-                    window.open(uri, "_blank");
-                }
-            } else if (node.hasClass("bounding-box")) {
-                window.open(node.data("aop"), "_blank");
-            } else {
-                window.open(`${url}`);
-            }
-        });
+        // Initialize selection functionality
+        initializeNetworkSelection();
         
-        window.cy.on("tap", "edge", function(evt) {
-            const edge = evt.target;
-            if (edge.data("ker_label")) {
-                window.open(`https://identifiers.org/aop.relationships/${edge.data("ker_label")}`);
-            }
-        });
-
         // Network change listeners for automatic table updates with smooth animations
         window.cy.on("add", "node", function (evt) {
             const node = evt.target;
@@ -446,6 +421,183 @@ document.addEventListener("DOMContentLoaded", function () {
         setupButtonHandlers();
     }
 
+    // Initialize network selection functionality
+    function initializeNetworkSelection() {
+        if (!window.cy) return;
+
+        // Enable box selection for multi-select
+        window.cy.boxSelectionEnabled(true);
+        
+        // Remove any existing tap handlers to prevent URL navigation
+        window.cy.removeListener('tap');
+        
+        // Handle single click selection
+        window.cy.on('tap', function(evt) {
+            const target = evt.target;
+            
+            // If clicking on background, clear selection unless shift is held
+            if (target === window.cy) {
+                if (!evt.originalEvent.shiftKey) {
+                    window.cy.$(':selected').unselect();
+                }
+                return;
+            }
+            
+            // Handle node/edge selection
+            if (target.isNode() || target.isEdge()) {
+                evt.stopPropagation();
+                evt.preventDefault(); // Prevent any default URL navigation
+                
+                if (evt.originalEvent.shiftKey) {
+                    // Shift+click: toggle selection
+                    if (target.selected()) {
+                        target.unselect();
+                    } else {
+                        target.select();
+                    }
+                } else {
+                    // Regular click: select only this element
+                    window.cy.$(':selected').unselect();
+                    target.select();
+                }
+            }
+        });
+
+        // Update selection controls when selection changes
+        window.cy.on('select unselect', function() {
+            updateSelectionControls();
+        });
+
+        // Prevent default href behavior on nodes/edges
+        window.cy.on('tap', 'node, edge', function(evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+        });
+    }
+
+    // Selection management functions
+    function updateSelectionControls() {
+        const selectionControls = document.getElementById('selection-controls');
+        const selectionInfo = document.getElementById('selection-info');
+        
+        if (!selectionControls || !selectionInfo) return;
+        
+        if (window.cy) {
+            const selected = window.cy.$(':selected');
+            
+            if (selected.length > 0) {
+                selectionControls.style.display = 'flex';
+                selectionInfo.textContent = `${selected.length} selected`;
+            } else {
+                selectionControls.style.display = 'none';
+            }
+        }
+    }
+
+    function deleteSelectedElements() {
+        if (!window.cy) return;
+
+        const selected = window.cy.$(':selected');
+        
+        if (selected.length === 0) {
+            console.log("No elements selected for deletion");
+            return;
+        }
+
+        // Confirm deletion
+        if (confirm(`Are you sure you want to delete ${selected.length} selected element(s)?`)) {
+            // Store element data for table updates
+            const deletedNodes = selected.nodes().map(node => ({
+                id: node.id(),
+                data: node.data(),
+                classes: node.classes()
+            }));
+            
+            const deletedEdges = selected.edges().map(edge => ({
+                id: edge.id(),
+                data: edge.data()
+            }));
+            
+            // Remove elements from the network
+            window.cy.batch(() => {
+                selected.remove();
+            });
+            
+            // Update tables based on deleted elements
+            updateTablesAfterDeletion(deletedNodes, deletedEdges);
+            
+            // Update selection controls
+            updateSelectionControls();
+            
+            // Trigger layout update with smooth animation
+            setTimeout(() => {
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                
+                if (window.positionNodes) {
+                    window.positionNodes(window.cy, fontSizeMultiplier, true);
+                }
+            }, 50);
+            
+            console.log(`Deleted ${selected.length} elements from network`);
+        }
+    }
+
+    function clearSelection() {
+        if (window.cy) {
+            window.cy.$(':selected').unselect();
+            updateSelectionControls();
+        }
+    }
+
+    function updateTablesAfterDeletion(deletedNodes, deletedEdges) {
+        // Update compound table if compounds were deleted
+        const deletedCompounds = deletedNodes.filter(node => 
+            node.classes.includes("chemical-node") || 
+            node.data.type === "chemical"
+        );
+        
+        if (deletedCompounds.length > 0) {
+            console.log(`Updating compound table after deleting ${deletedCompounds.length} compounds`);
+            
+            // Remove from compound_data if it exists
+            deletedCompounds.forEach(compound => {
+                if (window.compound_data && window.compound_data[compound.id]) {
+                    delete window.compound_data[compound.id];
+                }
+            });
+            
+            // Update compound table
+            setTimeout(() => {
+                updateCompoundTableFromNetwork();
+            }, 100);
+        }
+        
+        // Update gene table if genes were deleted
+        const deletedGenes = deletedNodes.filter(node => 
+            node.classes.includes("uniprot-node") || 
+            node.classes.includes("ensembl-node") || 
+            node.data.type === "uniprot" || 
+            node.data.type === "ensembl"
+        );
+        
+        if (deletedGenes.length > 0) {
+            console.log(`Updating gene table after deleting ${deletedGenes.length} genes`);
+            
+            setTimeout(() => {
+                updateGeneTable();
+            }, 100);
+        }
+        
+        // Update AOP table for any network changes
+        console.log("Updating AOP table after element deletion");
+        setTimeout(() => {
+            if (window.populateAopTable) {
+                window.populateAopTable(false); // debounced update
+            }
+        }, 100);
+    }
+
     // New function to automatically update tables based on network changes
     function autoUpdateTables(node, action) {
         const nodeData = node.data();
@@ -490,6 +642,47 @@ document.addEventListener("DOMContentLoaded", function () {
         $("#download_network").off("click");
         $("#toggle_go_processes").off("click");
         $("#show_go_hierarchy").off("click");
+        
+        // Selection control handlers
+        $(document).on('click', '#delete_selected', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            deleteSelectedElements();
+        });
+        
+        $(document).on('click', '#clear_selection', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            clearSelection();
+        });
+        
+        // Keyboard shortcuts
+        $(document).on('keydown', function(e) {
+            // Only process shortcuts if we're not in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            // Delete key to remove selected elements
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                deleteSelectedElements();
+            }
+            
+            // Escape key to clear selection
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                clearSelection();
+            }
+            
+            // Ctrl+A to select all
+            if (e.ctrlKey && e.key === 'a') {
+                e.preventDefault();
+                if (window.cy) {
+                    window.cy.elements().select();
+                }
+            }
+        });
         
         // Group by AOP - now uses table functionality
         $("#toggle_bounding_boxes").on("click", function (e) {
