@@ -715,7 +715,7 @@
             }
         });
 
-        // Bottom panel resizing - Fixed implementation
+        // Bottom panel resizing
         let isResizingVertical = false;
         let startY = 0;
         let startNetworkHeight = 0;
@@ -724,19 +724,13 @@
         const bottomPanel = document.getElementById('bottom-panel-area');
         const bottomPanelHeader = bottomPanel.querySelector('.bottom-panel-header');
         
-        // Add cursor change on hover over resize area
-        bottomPanelHeader.addEventListener('mouseenter', function() {
-            document.body.style.cursor = 'row-resize';
-        });
-        
-        bottomPanelHeader.addEventListener('mouseleave', function() {
-            if (!isResizingVertical) {
-                document.body.style.cursor = '';
-            }
-        });
-        
-        // Add mousedown listener to the bottom panel header for easier targeting
+        // Resize from the header area
         bottomPanelHeader.addEventListener('mousedown', function(e) {
+            // Prevent resize if clicking on tab buttons
+            if (e.target.closest('.bottom-tab-btn')) {
+                return;
+            }
+            
             isResizingVertical = true;
             startY = e.clientY;
             
@@ -749,34 +743,6 @@
             document.body.style.cursor = 'row-resize';
             e.preventDefault();
             e.stopPropagation();
-            
-            console.log('Started vertical resize'); // Debug
-        });
-
-        // Also add mousedown to the top border area for backwards compatibility
-        bottomPanel.addEventListener('mousedown', function(e) {
-            // Check if we're clicking on the top border (resize handle)
-            const rect = bottomPanel.getBoundingClientRect();
-            const clickY = e.clientY;
-            const borderTop = rect.top;
-            
-            // Allow resize if clicking within 10px of the top border (increased from 6px)
-            if (clickY >= borderTop - 10 && clickY <= borderTop + 10 && !isResizingVertical) {
-                isResizingVertical = true;
-                startY = e.clientY;
-                
-                const networkArea = document.querySelector('.network-area');
-                const centralArea = document.querySelector('.central-area');
-                startNetworkHeight = networkArea.offsetHeight;
-                startBottomHeight = bottomPanel.offsetHeight;
-                
-                document.body.classList.add('resizing-vertical');
-                document.body.style.cursor = 'row-resize';
-                e.preventDefault();
-                e.stopPropagation();
-                
-                console.log('Started vertical resize from border'); // Debug
-            }
         });
 
         // Global mousemove for resize
@@ -1102,18 +1068,18 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css">
 <script src="https://cdn.jsdelivr.net/npm/cytoscape-qtip@2.7.0/cytoscape-qtip.js"></script>
 
-<script src="/static/js/aop_app/aopName.js"></script>
-<script src="/static/js/aop_app/aop_elements.js"></script>
-<script src="/static/js/aop_app/aop_styles.js"></script>
-<script src="/static/js/aop_app/qsprpred.js"></script>
-<script src="/static/js/aop_app/compound.js"></script>
-<script src="/static/js/aop_app/gene.js"></script>
-<script src="/static/js/aop_app/bdf.js"></script>
-<script src="/static/js/aop_app/network_persistence.js"></script>
-<script src="/static/js/aop_app/manual_controls.js"></script>
-<script src="/static/js/aop_app/custom_tables.js"></script>
-<script src="/static/js/aop_app/table_aop.js"></script>
-<script src="/static/js/aop_app/aop_network_data.js"></script>
-<script src="/static/js/aop_app/aop_table_enhancements.js"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aopName.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_elements.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_styles.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/qsprpred.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/compound.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/gene.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/bdf.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/network_persistence.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/manual_controls.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/custom_tables.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/table_aop.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_network_data.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_table_enhancements.js') }}"></script>
 
 {% endblock %}

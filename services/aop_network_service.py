@@ -11,6 +11,14 @@ class AOPNetworkService:
     def __init__(self):
         self.networks: Dict[str, AOPNetwork] = {}
         self.current_network_id: Optional[str] = None
+        # Initialize with a default network for the main application
+        self.initialize_default_network()
+    
+    def initialize_default_network(self):
+        """Initialize a default network for the main application"""
+        default_id = self.create_network("Main AOP Network", "Primary network for AOP analysis")
+        self.current_network_id = default_id
+        return default_id
     
     def create_network(self, name: str, description: str = "") -> str:
         """Create a new AOP network"""
@@ -275,6 +283,34 @@ class AOPNetworkService:
         # For now, return empty list to avoid errors
         print(f"_fetch_aopwiki_sparql called with query: {mie_query}")
         return []
+
+    def get_network_for_route(self, route_params: Dict[str, Any]) -> str:
+        """Get or create network based on route parameters"""
+        mie_query = route_params.get('mie_query', '')
+        qid = route_params.get('qid', '')
+        qid_wd = route_params.get('qid_wd', '')
+        
+        # Create a unique network ID based on parameters
+        if mie_query:
+            network_name = f"AOP Network - {mie_query}"
+            network_id = f"mie_{mie_query.replace(' ', '_')}"
+        elif qid or qid_wd:
+            network_name = f"AOP Network - {qid}_{qid_wd}"
+            network_id = f"id_{qid}_{qid_wd}"
+        else:
+            # Use default network
+            return self.current_network_id
+        
+        # Create network if it doesn't exist
+        if network_id not in self.networks:
+            self.networks[network_id] = AOPNetwork(
+                id=network_id,
+                name=network_name,
+                description=f"Network for parameters: mie={mie_query}, qid={qid}, qid_wd={qid_wd}"
+            )
+        
+        self.current_network_id = network_id
+        return network_id
 
 # Global service instance
 aop_service = AOPNetworkService()

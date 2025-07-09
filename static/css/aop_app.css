@@ -98,7 +98,6 @@
     border-top: 3px solid #e9ecef;
     position: relative;
     background: white;
-    cursor: default;
 }
 
 /* Bottom Panel Header with Tabs */
@@ -107,6 +106,8 @@
     border-bottom: 1px solid #e9ecef;
     padding: 0.5rem 0.75rem;
     flex-shrink: 0;
+    cursor: row-resize;
+    position: relative;
 }
 
 .bottom-panel-tabs {
@@ -203,33 +204,63 @@
     background: white;
 }
 
-/* Resize handle for bottom panel - Make it more prominent */
-.bottom-panel-area::before {
-    content: '';
-    position: absolute;
-    top: -6px;
-    left: 0;
-    right: 0;
-    height: 12px;
-    background: transparent;
+/* Make resize handle only on the header, not the entire panel */
+.bottom-panel-header {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    padding: 0.5rem 0.75rem;
+    flex-shrink: 0;
     cursor: row-resize;
-    z-index: 1000;
+    position: relative;
 }
 
-.bottom-panel-area:hover::before {
+/* Remove the problematic ::before pseudo-element */
+/* .bottom-panel-area::before - REMOVED */
+
+/* Visual feedback for resize area only on header */
+.bottom-panel-header:hover {
+    background: rgba(0, 123, 255, 0.1);
+}
+
+/* Tab buttons should not have resize cursor */
+.bottom-tab-btn {
+    cursor: pointer !important;
+}
+
+/* Ensure table content areas don't have resize cursor */
+.bottom-panel-content {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    position: relative;
+    cursor: default;
+}
+
+.table-panel {
+    /* ...existing code... */
+    cursor: default;
+}
+
+.table-wrapper {
+    /* ...existing code... */
+    cursor: default;
+}
+
+/* Ensure table rows maintain pointer cursor for interaction */
+.table tbody tr {
+    cursor: pointer;
+    /* ...existing code... */
+}
+
+/* Make sure compound and gene links maintain proper cursor */
+.compound-link, 
+.table tbody tr td {
+    cursor: pointer;
+}
+
+/* Active resizing state - more specific */
+.resizing-vertical .bottom-panel-header {
     background: rgba(0, 123, 255, 0.2);
-}
-
-/* Active resizing state */
-.resizing-vertical .bottom-panel-area::before {
-    background: rgba(0, 123, 255, 0.5);
-}
-
-/* Resizing cursor override */
-.resizing-vertical,
-.resizing-vertical * {
-    cursor: row-resize !important;
-    user-select: none !important;
 }
 
 /* Bottom panel resizing */

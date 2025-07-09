@@ -1,6 +1,6 @@
 ################################################################################
 ### Loading the required modules
-from flask import Flask, request, jsonify, render_template, send_file, Blueprint, render_template, abort, g
+from flask import Flask, request, jsonify, render_template, send_file, Blueprint, render_template, abort, g, redirect, url_for
 import requests
 from wikidataintegrator import wdi_core
 import json
@@ -45,8 +45,37 @@ def get_aop_graph():
 ################################################################################
 ### The landing page
 @app.route('/')
-def home():
-    return render_template('home.html')
+def index():
+    """Main AOP Network Builder application"""
+    return render_template('services/AOPapp.html', 
+                         title='AOP Network Builder',
+                         mie_query='',
+                         qid='',
+                         qid_wd='')
+
+@app.route('/aop')
+def aop_redirect():
+    """Redirect old AOP route to main page"""
+    return redirect(url_for('index'))
+
+@app.route('/aop/<mie_query>')
+def aop_with_mie(mie_query):
+    """AOP app with specific MIE query"""
+    return render_template('services/AOPapp.html',
+                         title=f'AOP Network Builder - {mie_query}',
+                         mie_query=mie_query,
+                         qid='',
+                         qid_wd='')
+
+@app.route('/aop/<qid>/<qid_wd>')
+def aop_with_ids(qid, qid_wd):
+    """AOP app with specific IDs"""
+    return render_template('services/AOPapp.html',
+                         title=f'AOP Network Builder - {qid}',
+                         mie_query='',
+                         qid=qid,
+                         qid_wd=qid_wd)
+
 ################################################################################
 
 ################################################################################
@@ -293,8 +322,6 @@ def get_go_processes():
             
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-# ...existing code...
 
 if __name__ == '__main__':
     app.run(debug=True)

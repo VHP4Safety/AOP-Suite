@@ -1,5 +1,33 @@
 // AOP Network Data Addition functionality
 
+// Update API base URL to work from root
+const API_BASE_URL = '';  // Since we're now at root, no prefix needed
+
+// Update all fetch functions to use correct endpoints
+function fetchAOPData(queryType, queryValues) {
+    const url = `/api/aop_data`;
+
+    // Existing fetch logic...
+}
+
+function fetchBgeeData(genes) {
+    const url = `/api/bgee_data`;
+
+    // Existing fetch logic...
+}
+
+function fetchOpenTargetsData(compounds) {
+    const url = `/api/opentargets_data`;
+
+    // Existing fetch logic...
+}
+
+function fetchQSPRPredictions(compounds, threshold) {
+    const url = `/api/qspr_predictions`;
+
+    // Existing fetch logic...
+}
+
 class AOPNetworkDataManager {
     constructor() {
         console.log('=== AOPNetworkDataManager Constructor ===');
