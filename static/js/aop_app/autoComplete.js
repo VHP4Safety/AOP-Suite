@@ -99,8 +99,10 @@ class AutoCompleteManager {
     getDataSourceForQueryType(queryType) {
         if (queryType === 'aop') {
             return 'aop';
+        } else if (queryType === 'mie') {
+            return 'mie';
         } else {
-            // For MIE, ke_upstream, ke_downstream - use KE data
+            // For ke_upstream, ke_downstream - use KE data
             return 'ke';
         }
     }
@@ -372,7 +374,7 @@ class AutoCompleteManager {
         if (queryValuesElement) {
             const placeholders = {
                 'aop': 'Search by AOP name or enter identifiers (one per line)\nExamples:\nliver fibrosis\n1\naop:2\nhttps://identifiers.org/aop/3',
-                'mie': 'Search by KE name or enter identifiers (one per line)\nExamples:\nAryl hydrocarbon receptor activation\n18\naop.events:18\nhttps://identifiers.org/aop.events/18',
+                'mie': 'Search by MIE KE name or enter identifiers (one per line)\nExamples:\nBinding of inhibitor\n18\naop.events:18\nhttps://identifiers.org/aop.events/18',
                 'ke_upstream': 'Search by KE name or enter identifiers (one per line)\nExamples:\nMitochondrial dysfunction\n177\naop.events:177\nhttps://identifiers.org/aop.events/177',
                 'ke_downstream': 'Search by KE name or enter identifiers (one per line)\nExamples:\nLiver cancer\n1395\naop.events:1395\nhttps://identifiers.org/aop.events/1395'
             };
@@ -408,6 +410,17 @@ function extractKeId(identifier) {
     return identifier.toString();
 }
 
+function extractMieId(identifier) {
+    if (!identifier) return null;
+    if (identifier.includes('identifiers.org/aop.events/')) {
+        return identifier.split('/').pop();
+    }
+    if (identifier.includes('aop.events:')) {
+        return identifier.split(':').pop();
+    }
+    return identifier.toString();
+}
+
 function normalizeAopId(identifier) {
     const id = extractAopId(identifier);
     return `https://identifiers.org/aop/${id}`;
@@ -415,6 +428,11 @@ function normalizeAopId(identifier) {
 
 function normalizeKeId(identifier) {
     const id = extractKeId(identifier);
+    return `https://identifiers.org/aop.events/${id}`;
+}
+
+function normalizeMieId(identifier) {
+    const id = extractMieId(identifier);
     return `https://identifiers.org/aop.events/${id}`;
 }
 
@@ -427,6 +445,14 @@ function isIdentifierFormat(text) {
 }
 
 function isKeIdentifierFormat(text) {
+    if (!text) return false;
+    if (text.includes('identifiers.org/aop.events/')) return true;
+    if (/^aop\.events:\d+$/i.test(text)) return true;
+    if (/^\d+$/.test(text)) return true;
+    return false;
+}
+
+function isMieIdentifierFormat(text) {
     if (!text) return false;
     if (text.includes('identifiers.org/aop.events/')) return true;
     if (/^aop\.events:\d+$/i.test(text)) return true;
@@ -460,9 +486,22 @@ document.addEventListener('DOMContentLoaded', function() {
         searchKeys: ['name', 'id']
     });
 
+    // Register MIE data source
+    autoCompleteManager.registerDataSource('mie', {
+        csvUrl: '/static/data/mieName.csv',
+        idColumn: 'mie',
+        nameColumn: 'miename',
+        uriColumn: 'mie',
+        extractIdFunc: extractMieId,
+        normalizeIdFunc: normalizeMieId,
+        isIdentifierFunc: isMieIdentifierFormat,
+        searchKeys: ['name', 'id']
+    });
+
     // Load data sources
     autoCompleteManager.loadDataSource('aop');
     autoCompleteManager.loadDataSource('ke');
+    autoCompleteManager.loadDataSource('mie');
 
     // Setup autocomplete for query values element
     const queryValuesElement = document.getElementById('query-values');
@@ -483,10 +522,13 @@ document.addEventListener('DOMContentLoaded', function() {
 window.aopNameUtils = {
     findAopByText: (text) => autoCompleteManager.findByText(text, 'aop'),
     findKeByText: (text) => autoCompleteManager.findByText(text, 'ke'),
+    findMieByText: (text) => autoCompleteManager.findByText(text, 'mie'),
     findAopNameById: (id) => autoCompleteManager.findNameById(id, 'aop'),
     findKeNameById: (id) => autoCompleteManager.findNameById(id, 'ke'),
+    findMieNameById: (id) => autoCompleteManager.findNameById(id, 'mie'),
     findAopById: (id) => autoCompleteManager.findById(id, 'aop'),
     findKeById: (id) => autoCompleteManager.findById(id, 'ke'),
+    findMieById: (id) => autoCompleteManager.findById(id, 'mie'),
     searchAop: (text) => {
         const queryType = autoCompleteManager.getQueryTypeFromContext();
         return autoCompleteManager.searchByQueryType(text, queryType);
@@ -495,10 +537,13 @@ window.aopNameUtils = {
     setupAopAutocomplete: (element) => autoCompleteManager.setupAutocomplete(element),
     normalizeAopId,
     normalizeKeId,
+    normalizeMieId,
     extractAopId,
     extractKeId,
+    extractMieId,
     isIdentifierFormat,
     isKeIdentifierFormat,
+    isMieIdentifierFormat,
     updatePlaceholderText: () => autoCompleteManager.updatePlaceholderText()
 };
 
