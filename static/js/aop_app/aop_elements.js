@@ -190,15 +190,18 @@ document.addEventListener("DOMContentLoaded", function () {
             if (loadingOverlay) {
                 loadingOverlay.innerHTML = `
                     <div class="text-center">
-                        <i class="fas fa-project-diagram fa-3x mb-3" style="color: #6c757d;"></i>
+                        <img width="100px" alt="icon" src="/static/images/aopapp_favicon.ico"/>
                         <h4>AOP Network Builder</h4>
                         <p>Start building your network by:</p>
                         <ul style="text-align: left; display: inline-block;">
                             <li>Adding nodes and edges manually</li>
                             <li>Querying the AOP wiki for Key Events, AOPs, Compounds and Genes</li>
+                        </ul>
+                        <p>Enhance your network by:</p>
+                        <ul style="text-align: left; display: inline-block;">
                             <li>Querying OpenTargets for Compound data</li>
                             <li>Querying Bgee for organ-specific gene expression data</li>
-                            <li>Adding your own data tables as weights for the nodes.</li>
+                            <li>Adding your own data tables as weights for the nodes (Work in progress).</li>
                         </ul>
                     </div>
                 `;
