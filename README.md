@@ -8,9 +8,9 @@ This repository contains a web-based tool for building, visualizing, and analyzi
 The AOP Network Builder allows researchers to:
 
 - **Build AOP Networks**: Query AOP Wiki RDF data and construct biological pathway networks
-- **Integrate Multiple Data Sources**: Combine data from AOP Wiki, UniProt, Ensembl, Bgee, OpenTargets, and more
+- **Integrate Multiple Data Sources**: Combine data from AOP Wiki, UniProt, Ensembl, Bgee, OpenTargets, and more (work in progress)
 - **Interactive Visualization**: Use Cytoscape.js for dynamic network visualization with customizable layouts
-- **Data Enhancement**: Add gene expression data, QSPR predictions, and GO process annotations
+- **Data Enhancement**: Add gene expression data, QSPR predictions, and GO process annotations. Uses [BridgeDb](https://www.bridgedb.org/) to map identifiers across sources and query using [BioDataFuse](http://biodatafuse.org) and other [VHP4Safety](https://www.sciencrew.com/c/6586?title=VHP4Safety) API resouces
 
 ### Data Integration
 
@@ -22,7 +22,7 @@ The AOP Network Builder allows researchers to:
 
 ### Data Tables
 - **AOP Table**: Browse and filter pathway information with enhanced search
-- **Compounds Table**: View chemical entities with network highlighting
+- **Compounds Table**: Add chemical entities and their interactions with genes, key events and AOP components.
 - **Genes Table**: Display gene/protein data with expression levels
 
 ## Requirements
@@ -30,7 +30,7 @@ The AOP Network Builder allows researchers to:
 The application requires the following Python modules:
 
 ```bash
-pip install -r requirements.txt
+(uv) pip install -r requirements.txt
 ```
 
 ## Usage
@@ -38,6 +38,9 @@ pip install -r requirements.txt
 1. **Start Building**: Use the Query mode to search AOP Wiki or add elements manually
 2. **Enhance Networks**: Switch to Enhance mode to add expression data, predictions, or annotations  
 3. **Explore Data**: Use the interactive tables to browse and filter network components
-4. **Analyze Results**: Leverage the visualization tools to identify biological relationships
+4. **Analyze Results**: Leverage the visualization tools to identify biological relationships (work in progress)
 5. **Save Work**: Export networks or save current state for future sessions
 
+## Funding
+
+VHP4Safety – the Virtual Human Platform for safety assessment project [NWA 1292.19.272](https://www.nwo.nl/projecten/nwa129219272) is part of the NWA research program ‘Research along Routes by Consortia (ORC)’, which is funded by the Netherlands Organization for Scientific Research (NWO). The project started on June 1, 2021 with a budget of over 10 million Euros and will last for the duration of 5 years.
