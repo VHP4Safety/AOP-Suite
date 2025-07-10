@@ -10,7 +10,7 @@ The AOP Network Builder allows researchers to:
 - **Build AOP Networks**: Query AOP Wiki RDF data and construct biological pathway networks
 - **Integrate Multiple Data Sources**: Combine data from AOP Wiki, UniProt, Ensembl, Bgee, OpenTargets, and more (work in progress)
 - **Interactive Visualization**: Use Cytoscape.js for dynamic network visualization with customizable layouts
-- **Data Enhancement**: Add gene expression data, QSPR predictions, and GO process annotations. Uses [BridgeDb](https://www.bridgedb.org/) to map identifiers across sources and query using [BioDataFuse](http://biodatafuse.org) and other [VHP4Safety](https://www.sciencrew.com/c/6586?title=VHP4Safety) API resouces
+- **Data Enhancement**: Add gene expression data, QSPR predictions, and GO process annotations. Uses [BridgeDb](https://www.bridgedb.org/) to map identifiers across sources and query using [BioDataFuse](http://biodatafuse.org) and other [VHP4Safety](https://www.sciencrew.com/c/6586?title=VHP4Safety) API resouces (see full cloud repository [here](https://cloud.vhp4safety.nl/)
 
 ### Data Integration
 
