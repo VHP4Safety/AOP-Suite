@@ -654,14 +654,62 @@
     transition: all 0.3s ease;
 }
 
-/* Auto-update animations */
-@keyframes tableRowUpdate {
-    0% { background-color: #fff3cd; }
-    100% { background-color: inherit; }
+/* Gene table styling */
+#gene_table tbody tr {
+    transition: background-color 0.2s ease;
 }
 
-.table-row-updated {
-    animation: tableRowUpdate 1s ease-in-out;
+#gene_table tbody tr:hover {
+    background-color: #f8f9fa !important;
+    cursor: pointer;
+}
+
+#gene_table tbody tr.table-success {
+    background-color: #d1edff !important;
+    border-left: 4px solid #007bff;
+}
+
+/* Clickable cell styling */
+.clickable-cell {
+    transition: all 0.2s ease;
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.clickable-cell:hover {
+    background-color: #e7f3ff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+.highlighted-cell {
+    background-color: #fff3cd !important;
+    border: 2px solid #ffc107 !important;
+    font-weight: bold;
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+}
+
+/* Network highlighting for genes (enhanced) */
+.cy-container .highlighted {
+    border-width: 4px !important;
+    border-color: #007bff !important;
+    border-style: solid !important;
+    z-index: 9999 !important;
+}
+
+.cy-container .highlighted[type="ensembl"] {
+    background-color: #e3f2fd !important;
+    border-color: #2196f3 !important;
+}
+
+.cy-container .highlighted[type="uniprot"] {
+    background-color: #e8f5e8 !important;
+    border-color: #4caf50 !important;
+}
+
+/* Add a subtle glow effect */
+.cy-container .highlighted {
+    box-shadow: 0 0 20px rgba(0, 123, 255, 0.6) !important;
 }
 
 /* Utility Classes */

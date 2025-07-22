@@ -147,7 +147,7 @@
                                     <thead>
                                         <tr>
                                             <th>Gene</th>
-                                            <th>Expression</th>
+                                            <th>Protein</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1058,6 +1058,82 @@
             redrawDataTables();
         }, 300);
     }
+
+    // Gene table row click handler - add this to your existing script section
+    function setupGeneTableHandlers() {
+        $(document).off('click', '#gene_table tbody tr').on('click', '#gene_table tbody tr', function() {
+            const geneSymbol = $(this).data('gene');
+            const uniprotId = $(this).data('uniprot-id');
+            const ensemblId = $(this).data('ensembl-id');
+            
+            if (!geneSymbol) return;
+            
+            // Remove previous highlights
+            $('#gene_table tbody tr').removeClass('table-success');
+            
+            // Highlight clicked row
+            $(this).addClass('table-success');
+            
+            // Highlight corresponding nodes in the network
+            if (window.cy) {
+                // Remove previous highlights
+                window.cy.elements().removeClass('highlighted');
+                
+                // Find and highlight gene nodes
+                const ensemblNode = window.cy.getElementById(ensemblId);
+                const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
+                
+                if (ensemblNode.length > 0) {
+                    ensemblNode.addClass('highlighted');
+                    // Center on the node
+                    window.cy.center(ensemblNode);
+                }
+                
+                if (uniprotNode.length > 0) {
+                    uniprotNode.addClass('highlighted');
+                }
+                
+                // Also highlight connecting edges
+                const connectedEdges = ensemblNode.connectedEdges().union(uniprotNode.connectedEdges());
+                connectedEdges.addClass('highlighted');
+            }
+            
+            console.log(`Clicked gene: ${geneSymbol}, UniProt: ${uniprotId}`);
+        });
+    }
+    
+    // Add to your existing document ready function
+    document.addEventListener('DOMContentLoaded', function () {
+        // ...existing code...
+        setupGeneTableHandlers();
+        // ...existing code...
+    });
+    
+    // Initialize gene table handlers when document is ready
+    document.addEventListener('DOMContentLoaded', function () {
+        // ...existing code...
+        
+        // Setup gene table handlers after a delay to ensure everything is loaded
+        setTimeout(() => {
+            if (window.setupGeneCellClickHandlers) {
+                window.setupGeneCellClickHandlers();
+            }
+        }, 1000);
+        
+        // ...existing code...
+    });
+    
+    // Also reinitialize handlers when gene table is updated
+    window.populateGeneTable = function () {
+        if (window.updateGeneTable) {
+            return window.updateGeneTable().then(() => {
+                // Ensure handlers are set up after table update
+                if (window.setupGeneCellClickHandlers) {
+                    window.setupGeneCellClickHandlers();
+                }
+            });
+        }
+    };
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
