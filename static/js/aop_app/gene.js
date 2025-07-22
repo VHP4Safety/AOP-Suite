@@ -31,7 +31,7 @@ async function getAllGenes() {
     });
 }
 
-// Simplified toggle function that uses the backend endpoint
+// Toggle function
 async function toggleGenes() {
     if (!window.cy) {
         console.error("Cytoscape instance not available");

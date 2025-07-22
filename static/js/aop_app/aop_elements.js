@@ -815,54 +815,91 @@ document.addEventListener("DOMContentLoaded", function () {
     function toggleGenes() {
         const action = window.genesVisible ? 'hide' : 'show';
         
-        fetch('/toggle_genes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                action: action,
-                cy_elements: window.cy.elements().jsons() 
-            })
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            if (data.error) {
-                console.error("Gene toggle error:", data.error);
+        if (action === 'show') {
+            // Extract MIE, KE, and AO elements from the network
+            const keyEventUris = [];
+            
+            window.cy.nodes().forEach(node => {
+                const nodeData = node.data();
+                const nodeId = nodeData.id;
+                const nodeType = nodeData.type;
+                const isMie = nodeData.is_mie;
+                const isAo = nodeData.is_ao;
+                
+                // Collect all Key Events (MIEs, intermediate KEs, and AOs)
+                if (nodeId && (nodeId.includes('aop.events') || isMie || isAo || nodeType === 'mie' || nodeType === 'key_event' || nodeType === 'ao')) {
+                    // Ensure proper URI format for the SPARQL query
+                    if (nodeId.startsWith('http')) {
+                        keyEventUris.push(`<${nodeId}>`);
+                    } else if (nodeId.includes('aop.events')) {
+                        keyEventUris.push(`<${nodeId}>`);
+                    }
+                }
+            });
+            
+            if (keyEventUris.length === 0) {
+                console.log("No Key Events found in network for gene loading");
+                $("#see_genes").text("Hide Genes");
+                window.genesVisible = true;
                 return;
             }
             
-            const fontSlider = document.getElementById('font-size-slider');
-            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            console.log(`Found ${keyEventUris.length} Key Events for gene loading:`, keyEventUris);
             
-            if (action === 'show' && data.gene_elements) {
-                // Add only new elements
-                data.gene_elements.forEach(element => {
-                    const elementId = element.data?.id;
-                    if (elementId && !window.cy.getElementById(elementId).length) {
-                        try {
-                            window.cy.add(element);
-                        } catch (error) {
-                            console.warn("Error adding element:", elementId, error.message);
-                        }
-                    }
-                });
+            // Call the load_and_show_genes endpoint with the extracted KEs
+            fetch(`/load_and_show_genes?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
+                method: 'GET'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    console.error("Gene loading error:", data.error);
+                    this.showStatus(`Error loading genes: ${data.error}`, 'error');
+                    return;
+                }
                 
-                // Show all gene nodes and their edges with smooth animation
-                window.cy.batch(() => {
-                    window.cy.elements(".uniprot-node, .ensembl-node").show();
-                    window.cy.edges().forEach(function(edge) {
-                        const source = edge.source();
-                        const target = edge.target();
-                        
-                        if (source.visible() && target.visible()) {
-                            edge.show();
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                
+                if (data.gene_elements && data.gene_elements.length > 0) {
+                    // Add only new gene elements
+                    data.gene_elements.forEach(element => {
+                        const elementId = element.data?.id;
+                        if (elementId && !window.cy.getElementById(elementId).length) {
+                            try {
+                                window.cy.add(element);
+                            } catch (error) {
+                                console.warn("Error adding gene element:", elementId, error.message);
+                            }
                         }
                     });
-                });
+                    
+                    // Show all gene nodes and their edges with smooth animation
+                    window.cy.batch(() => {
+                        window.cy.elements(".uniprot-node, .ensembl-node").show();
+                        window.cy.edges().forEach(function(edge) {
+                            const source = edge.source();
+                            const target = edge.target();
+                            
+                            const sourceIsGene = source.hasClass("uniprot-node") || source.hasClass("ensembl-node");
+                            const targetIsGene = target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
+                            
+                            // Show edge if both nodes are visible and at least one is a gene
+                            if (source.visible() && target.visible() && (sourceIsGene || targetIsGene)) {
+                                edge.show();
+                            }
+                        });
+                    });
+                    
+                    console.log(`Added ${data.gene_elements.length} gene elements to network`);
+                } else {
+                    console.log("No gene elements returned from backend");
+                }
                 
                 $("#see_genes").text("Hide Genes");
                 window.genesVisible = true;
@@ -878,34 +915,43 @@ document.addEventListener("DOMContentLoaded", function () {
                 setTimeout(() => {
                     positionNodes(window.cy, fontSizeMultiplier, true);
                 }, 150);
-                
-            } else if (action === 'hide') {
-                // Hide gene nodes and edges with smooth animation
-                window.cy.batch(() => {
-                    window.cy.elements(".uniprot-node, .ensembl-node").hide();
-                    window.cy.edges().forEach(function(edge) {
-                        const source = edge.source();
-                        const target = edge.target();
-                        
-                        if (source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
-                            target.hasClass("uniprot-node") || target.hasClass("ensembl-node")) {
-                            edge.hide();
-                        }
-                    });
+            })
+            .catch(error => {
+                console.error("Error loading genes:", error);
+                this.showStatus(`Error loading genes: ${error.message}`, 'error');
+            });
+            
+        } else if (action === 'hide') {
+            // Hide gene nodes and edges with smooth animation
+            window.cy.batch(() => {
+                window.cy.elements(".uniprot-node, .ensembl-node").hide();
+                window.cy.edges().forEach(function(edge) {
+                    const source = edge.source();
+                    const target = edge.target();
+                    
+                    if (source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
+                        target.hasClass("uniprot-node") || target.hasClass("ensembl-node")) {
+                        edge.hide();
+                    }
                 });
-                
-                $("#see_genes").text("See Genes");
-                window.genesVisible = false;
-                
-                // Smooth animation after hiding genes
-                setTimeout(() => {
-                    positionNodes(window.cy, fontSizeMultiplier, true);
-                }, 150);
-            }
-        })
-        .catch(error => {
-            console.error("Error toggling genes:", error);
-        });
+            });
+            
+            $("#see_genes").text("See Genes");
+            window.genesVisible = false;
+            
+            // Smooth animation after hiding genes
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            setTimeout(() => {
+                positionNodes(window.cy, fontSizeMultiplier, true);
+            }, 150);
+        }
+    }
+
+    // Helper function to show status messages
+    function showStatus(message, type = 'info') {
+        // You can implement a status display system here if needed
+        console.log(`[${type.toUpperCase()}] ${message}`);
     }
 
     function toggleBoundingBoxes() {

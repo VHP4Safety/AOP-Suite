@@ -673,8 +673,105 @@ def get_case_mie_model():
     ].to_dict()
     return jsonify(model_to_mie), 200
 
+
 @aop_app.route("/load_and_show_genes", methods=["GET"])
 def load_and_show_genes():
+    """Load and return gene data (UniProt and Ensembl) for specified KEs."""
+    kes = request.args.get("kes", "")
+    if not kes:
+        return jsonify({"error": "kes parameter is required"}), 400
+    
+    sparqlquery = (
+        """
+        SELECT DISTINCT ?ke ?ensembl ?uniprot ?protein_name WHERE {
+            VALUES ?ke { """ + kes + """ }
+            ?ke a aopo:KeyEvent; edam:data_1025 ?object .
+            ?object skos:exactMatch ?id .
+            ?id a edam:data_1033; edam:data_1033 ?ensembl .
+            OPTIONAL { ?id edam:data_1009 ?uniprot . }
+            OPTIONAL { ?id rdfs:label ?protein_name . }
+        }
+        """
+    )
+    
+    try:
+        response = requests.get(AOPWIKISPARQL_ENDPOINT, 
+                                params={"query": sparqlquery, "format": "json"})
+        if response.status_code != 200:
+            return jsonify({"error": "SPARQL query failed"}), 500
+
+        data = response.json()
+        cytoscape_elements = []
+        
+        for i, result in enumerate(data.get("results", {}).get("bindings", [])):
+            ke = result.get("ke", {}).get("value", "")
+            ensembl = result.get("ensembl", {}).get("value", "")
+            uniprot = result.get("uniprot", {}).get("value", "")
+            protein_name = result.get("protein_name", {}).get("value", "")
+            
+            if ke and ensembl:
+                # Create Ensembl gene node
+                ensembl_node_id = f"ensembl_{ensembl}"
+                cytoscape_elements.append({
+                    "data": {
+                        "id": ensembl_node_id,
+                        "label": ensembl,
+                        "type": "ensembl",
+                        "ensembl_id": ensembl
+                    },
+                    "classes": "ensembl-node"
+                })
+                
+                # Create UniProt node if available
+                if uniprot:
+                    uniprot_node_id = f"uniprot_{uniprot}"
+                    cytoscape_elements.append({
+                        "data": {
+                            "id": uniprot_node_id,
+                            "label": protein_name or uniprot,
+                            "type": "uniprot",
+                            "uniprot_id": uniprot
+                        },
+                        "classes": "uniprot-node"
+                    })
+                    
+                    # Create edge from UniProt to Ensembl
+                    cytoscape_elements.append({
+                        "data": {
+                            "id": f"{uniprot_node_id}_{ensembl_node_id}",
+                            "source": uniprot_node_id,
+                            "target": ensembl_node_id,
+                            "label": "translates to"
+                        }
+                    })
+                    
+                    # Create edge from KE to UniProt
+                    cytoscape_elements.append({
+                        "data": {
+                            "id": f"{ke}_{uniprot_node_id}",
+                            "source": uniprot_node_id,
+                            "target": ke,
+                            "label": "part of"
+                        }
+                    })
+                else:
+                    # Create direct edge from KE to Ensembl if no UniProt
+                    cytoscape_elements.append({
+                        "data": {
+                            "id": f"{ke}_{ensembl_node_id}",
+                            "source": ensembl_node_id,
+                            "target": ke,
+                            "label": "part of"
+                        }
+                    })
+        
+        return jsonify({"gene_elements": cytoscape_elements}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+
+@aop_app.route("/load_and_show_genes_old", methods=["GET"])
+def load_and_show_genes_old():
     """Load and return gene data (UniProt and Ensembl) for specified MIEs."""
     mies = request.args.get("mies", "")
     if not mies:
