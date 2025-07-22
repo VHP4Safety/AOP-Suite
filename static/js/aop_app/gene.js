@@ -111,7 +111,12 @@ async function toggleGenes() {
             window.genesVisible = false;
         }
         
-        positionNodes(window.cy);
+        // Use the global positionNodes function which handles layout properly
+        if (window.positionNodes) {
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            window.positionNodes(window.cy, fontSizeMultiplier, true);
+        }
     } catch (error) {
         console.error("Error toggling genes:", error);
         console.error("Check that the /toggle_genes endpoint exists and returns valid JSON");

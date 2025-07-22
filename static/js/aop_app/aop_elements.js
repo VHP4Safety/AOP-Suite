@@ -720,39 +720,7 @@ document.addEventListener("DOMContentLoaded", function () {
         $("#reset_layout").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
-            if (window.cy) {
-                // Get current font size multiplier with correct default
-                const fontSlider = document.getElementById('font-size-slider');
-                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5; // Use 0.5 as default
-                
-                // Trigger resize first (like sidebar animations do)
-                window.cy.resize();
-                
-                // Add a slight delay to allow resize to complete, then animate layout
-                setTimeout(() => {
-                    // Use the animated layout approach
-                    const layout = window.cy.layout({
-                        name: 'breadthfirst',
-                        directed: true,
-                        padding: 30,
-                        animate: true,
-                        animationDuration: 500,
-                        animationEasing: 'ease-out',
-                        fit: true
-                    });
-                    
-                    // Run the layout
-                    layout.run();
-                    
-                    // After layout animation completes, apply styles smoothly
-                    layout.one('layoutstop', function() {
-                        // Apply styles with updated font size and smooth transitions
-                        if (window.positionNodes) {
-                            window.positionNodes(window.cy, fontSizeMultiplier, true);
-                        }
-                    });
-                }, 100);
-            }
+            resetNetworkLayout();
         });
 
         // Download network
@@ -962,6 +930,49 @@ document.addEventListener("DOMContentLoaded", function () {
         URL.revokeObjectURL(url);
     }
 
+    // New function to reset network layout with smooth animation
+    function resetNetworkLayout() {
+        if (!window.cy) {
+            console.warn("Cytoscape not available for layout reset");
+            return;
+        }
+
+        // Get current font size multiplier with correct default
+        const fontSlider = document.getElementById('font-size-slider');
+        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5; // Use 0.5 as default
+        
+        // Trigger resize first (like sidebar animations do)
+        window.cy.resize();
+        
+        // Add a slight delay to allow resize to complete, then animate layout
+        setTimeout(() => {
+            // Use the animated layout approach
+            const layout = window.cy.layout({
+                name: 'breadthfirst',
+                directed: true,
+                padding: 30,
+                animate: true,
+                animationDuration: 500,
+                animationEasing: 'ease-out',
+                fit: true
+            });
+            
+            // Run the layout
+            layout.run();
+            
+            // After layout animation completes, apply styles smoothly
+            layout.one('layoutstop', function() {
+                // Apply styles with updated font size and smooth transitions
+                if (window.positionNodes) {
+                    window.positionNodes(window.cy, fontSizeMultiplier, true);
+                }
+            });
+        }, 100);
+    }
+
+    // Make resetNetworkLayout available globally
+    window.resetNetworkLayout = resetNetworkLayout;
+
     // Initialize the application
     const dashboardContainer = document.querySelector("#compound-container");
     console.log("Dashboard container found:", dashboardContainer);
@@ -1113,21 +1124,27 @@ $(document).ready(function() {
     // Initial population of AOP table with immediate update after longer delay
     setTimeout(() => {
         console.log("DOM ready - triggering initial AOP table population");
-        if (window.populateAopTable) {
+        if (window.aopTableManager && window.aopTableManager.performTableUpdate) {
+            // Use the enhanced table manager if available
+            window.aopTableManager.performTableUpdate();
+        } else if (window.populateAopTable) {
             window.populateAopTable(true); // true = immediate, not debounced
         } else {
-            console.error("populateAopTable not available in DOM ready");
+            console.error("No AOP table manager available in DOM ready");
         }
     }, 3000); // Keep the delay to ensure everything is loaded
 });
 
 function populateaopTable() {
-    // Redirect to the new function name
-    if (window.populateAopTable) {
+    console.log('populateaopTable called - using enhanced table manager');
+    // Redirect to the enhanced table manager
+    if (window.aopTableManager && window.aopTableManager.performTableUpdate) {
+        return window.aopTableManager.performTableUpdate();
+    } else if (window.populateAopTable) {
         return window.populateAopTable();
     }
     
-    console.warn("populateAopTable function not available");
+    console.warn("No AOP table manager available");
     return Promise.resolve();
 }
 

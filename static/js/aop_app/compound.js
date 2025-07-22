@@ -334,13 +334,10 @@ function createCompoundNode(compoundName, smiles) {
         const newNode = window.cy.add(nodeData);
         console.log(`Created compound node: ${compoundName}`);
         
-        // Reposition nodes with smooth animation
-        if (window.positionNodes) {
-            const fontSlider = document.getElementById('font-size-slider');
-            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-            
+        // Use the global resetNetworkLayout for consistency
+        if (window.resetNetworkLayout) {
             setTimeout(() => {
-                window.positionNodes(window.cy, fontSizeMultiplier, true);
+                window.resetNetworkLayout();
             }, 50);
         }
         
@@ -417,13 +414,10 @@ function createMultipleCompoundNodes(compoundData) {
             window.cy.add(nodesToAdd);
         });
         
-        // Reposition nodes with smooth animation
-        if (window.positionNodes) {
-            const fontSlider = document.getElementById('font-size-slider');
-            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-            
+        // Use the global resetNetworkLayout
+        if (window.resetNetworkLayout) {
             setTimeout(() => {
-                window.positionNodes(window.cy, fontSizeMultiplier, true);
+                window.resetNetworkLayout();
             }, 100);
         }
     }
@@ -462,13 +456,10 @@ function showCompoundNode(compoundName, smiles) {
             return; // createCompoundNode handles its own animation
         }
         
-        // Smooth animation for showing nodes
-        if (window.positionNodes) {
-            const fontSlider = document.getElementById('font-size-slider');
-            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-            
+        // Use the global resetNetworkLayout for showing nodes
+        if (window.resetNetworkLayout) {
             setTimeout(() => {
-                window.positionNodes(window.cy, fontSizeMultiplier, true);
+                window.resetNetworkLayout();
             }, 50);
         }
     } catch (error) {
@@ -494,13 +485,10 @@ function hideCompoundNode(compoundName) {
             
             console.log(`Hidden compound node: ${compoundName}`);
             
-            // Reposition remaining visible nodes with smooth animation
-            if (window.positionNodes) {
-                const fontSlider = document.getElementById('font-size-slider');
-                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-                
+            // Use the global resetNetworkLayout
+            if (window.resetNetworkLayout) {
                 setTimeout(() => {
-                    window.positionNodes(window.cy, fontSizeMultiplier, true);
+                    window.resetNetworkLayout();
                 }, 50);
             }
         }
@@ -717,8 +705,8 @@ function updateCytoscapeSubset() {
     }
     
     // Update layout for better visualization
-    if (window.positionNodes) {
-        window.positionNodes(window.cy);
+    if (window.resetNetworkLayout) {
+        window.resetNetworkLayout();
     }
     
     console.log(`Showing ${activated.length} nodes and ${activatedEdges.length} edges including AOP network and selected compounds`);
@@ -896,7 +884,6 @@ function filterCompounds(searchTerm) {
         }
     });
 }
-
 // Immediate network update function - called on every selection change
 function updateNetworkWithSelectedCompounds() {
     console.log("Updating network with selected compounds...");
@@ -925,31 +912,31 @@ function updateCompoundTableFromNetwork() {
         console.warn("Cytoscape not available for compound table update");
         return;
     }
-    
+
     // Get all chemical nodes from the network
     const chemicalNodes = window.cy.nodes('.chemical-node');
     const tableBody = $("#compound_table tbody");
-    
+
     // Add network chemical nodes to table if they're not already there
     chemicalNodes.forEach(node => {
         const nodeData = node.data();
         const nodeLabel = nodeData.label;
         const nodeSmiles = nodeData.smiles || "";
         const nodeId = nodeData.id;
-        
+
         // Check if this compound is already in the table (either from backend or network)
-        const existingRow = tableBody.find(`tr`).filter(function() {
+        const existingRow = tableBody.find(`tr`).filter(function () {
             const rowLink = $(this).find('.compound-link');
             return rowLink.text().trim() === nodeLabel;
         });
-        
+
         if (existingRow.length === 0 && nodeLabel) {
             // Add new row for network compound
             const encodedSMILES = encodeURIComponent(nodeSmiles);
-            const imgUrl = nodeSmiles ? 
+            const imgUrl = nodeSmiles ?
                 `https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi=${encodedSMILES}` :
                 '';
-            
+
             tableBody.append(`
                 <tr data-smiles="${nodeSmiles}" data-compound-source="network" class="network-compound">
                     <td>
@@ -959,39 +946,39 @@ function updateCompoundTableFromNetwork() {
                     </td>
                 </tr>
             `);
-            
+
             console.log(`Added network compound to table: ${nodeLabel}`);
         } else if (existingRow.length > 0) {
             // Mark existing row as having a network counterpart
             existingRow.addClass('has-network-node');
         }
     });
-    
+
     // Clean up compounds that were added from network but no longer exist
-    tableBody.find('tr.network-compound').each(function() {
+    tableBody.find('tr.network-compound').each(function () {
         const row = $(this);
         const compoundLabel = row.find('.compound-link').text().trim();
-        
+
         // Check if this compound still exists in the network
         const networkNode = window.cy.nodes().filter(node => {
             return node.hasClass('chemical-node') && node.data('label') === compoundLabel;
         });
-        
+
         if (networkNode.length === 0) {
             row.remove();
             console.log(`Removed network compound from table: ${compoundLabel}`);
         }
     });
-    
+
     // Remove network marking from compounds that no longer have network nodes
-    tableBody.find('tr.has-network-node').each(function() {
+    tableBody.find('tr.has-network-node').each(function () {
         const row = $(this);
         const compoundLabel = row.find('.compound-link').text().trim();
-        
+
         const networkNode = window.cy.nodes().filter(node => {
             return node.hasClass('chemical-node') && node.data('label') === compoundLabel;
         });
-        
+
         if (networkNode.length === 0) {
             row.removeClass('has-network-node');
         }
@@ -1004,35 +991,35 @@ function hideMultipleCompoundNodes() {
         console.warn("Cytoscape not available for hiding compound nodes");
         return;
     }
-    
+
     // Hide all chemical/compound nodes in the network
     const compoundNodes = window.cy.nodes('.chemical-node, [type="chemical"]');
-    
+
     if (compoundNodes.length > 0) {
         window.cy.batch(() => {
             compoundNodes.hide();
-            
+
             // Also hide edges connected to compound nodes
             compoundNodes.forEach(node => {
                 node.connectedEdges().hide();
             });
         });
-        
+
         console.log(`Hidden ${compoundNodes.length} compound nodes from network`);
-        
+
         // Update the network layout after hiding nodes
         if (window.positionNodes) {
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-            
+
             setTimeout(() => {
                 window.positionNodes(window.cy, fontSizeMultiplier, true);
             }, 100);
         }
-        
+
         return true;
     }
-    
+
     console.log("No compound nodes found to hide");
     return false;
 }

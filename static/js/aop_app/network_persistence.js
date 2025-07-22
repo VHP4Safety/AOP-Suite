@@ -45,54 +45,6 @@ class NetworkState {
                 }
             };
 
-            // Update save/load functions to work with root URL
-            function saveNetworkState() {
-                try {
-                    const networkData = {
-                        timestamp: new Date().toISOString(),
-                        url: window.location.pathname,  // Will be "/" for main route
-                        elements: window.cy ? window.cy.elements().jsons() : [],
-                        style: this.extractStyleData(),
-                        layout: positions,
-                        metadata: {
-                            timestamp: new Date().toISOString(),
-                            version: "1.0",
-                            isAutoSave: isAutoSave,
-                            compoundsVisible: window.compoundsVisible || false,
-                            genesVisible: window.genesVisible || false,
-                            boundingBoxesVisible: window.boundingBoxesVisible || false
-                        }
-                    };
-                    
-                    // Save to localStorage with a key based on current route
-                    const saveKey = window.location.pathname === '/' ? 'aop_main_network' : `aop_network_${window.location.pathname.replace(/\//g, '_')}`;
-                    localStorage.setItem(saveKey, JSON.stringify(networkData));
-                    
-                    console.log('Network state saved successfully');
-                } catch (error) {
-                    console.error('Error saving network state:', error);
-                }
-            }
-
-            function loadNetworkState() {
-                try {
-                    const saveKey = window.location.pathname === '/' ? 'aop_main_network' : `aop_network_${window.location.pathname.replace(/\//g, '_')}`;
-                    const savedData = localStorage.getItem(saveKey);
-                    
-                    if (savedData) {
-                        const networkData = JSON.parse(savedData);
-                        console.log('Loading network state:', networkData);
-                        await this.restoreNetworkState(networkData);
-                        this.showNotification("Network loaded successfully", "success");
-                    } else {
-                        throw new Error(`Load failed: ${response.status}`);
-                    }
-                } catch (error) {
-                    console.error('Error loading network state:', error);
-                    this.showNotification("Failed to load network", "error");
-                }
-            }
-
             const response = await fetch('/save_network_state', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

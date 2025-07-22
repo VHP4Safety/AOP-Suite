@@ -1,5 +1,6 @@
 /**
  * Enhanced AOP Table functionality with filtering and network integration
+ * Merged functionality from table_aop.js and aop_table_enhancements.js
  */
 
 class AOPTableManager {
@@ -17,6 +18,7 @@ class AOPTableManager {
     init() {
         this.setupFilterInput();
         this.setupTableStyles();
+        this.setupNetworkListeners();
     }
 
     setupFilterInput() {
@@ -318,55 +320,23 @@ class AOPTableManager {
     relayoutVisibleNodes(visibleNodeIds) {
         if (!window.cy || visibleNodeIds.size === 0) return;
 
-        const visibleNodes = window.cy.nodes().filter(node => visibleNodeIds.has(node.id()));
-        
-        if (visibleNodes.length > 0) {
-            this.applyConsistentLayout(visibleNodes);
+        // Use the global resetNetworkLayout function for consistency
+        if (window.resetNetworkLayout) {
+            setTimeout(() => {
+                window.resetNetworkLayout();
+            }, 100);
         }
     }
 
     relayoutAllNodes() {
         if (!window.cy) return;
-        this.applyConsistentLayout(window.cy.nodes());
-    }
-
-    // New method to ensure consistent layout behavior like reset layout button
-    applyConsistentLayout(elements = null) {
-        if (!window.cy) return;
-
-        const elementsToLayout = elements || window.cy.nodes();
         
-        // Get current font size multiplier with correct default (matching reset layout behavior)
-        const fontSlider = document.getElementById('font-size-slider');
-        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-        
-        // Trigger resize first (like sidebar animations do)
-        window.cy.resize();
-        
-        // Add a slight delay to allow resize to complete, then animate layout
-        setTimeout(() => {
-            // Use the same layout configuration as reset layout button
-            const layout = elementsToLayout.layout({
-                name: 'breadthfirst',
-                directed: true,
-                padding: 30,
-                animate: true,
-                animationDuration: 500,
-                animationEasing: 'ease-out',
-                fit: true
-            });
-            
-            // Run the layout
-            layout.run();
-            
-            // After layout animation completes, apply styles smoothly
-            layout.one('layoutstop', function() {
-                // Apply styles with updated font size and smooth transitions
-                if (window.positionNodes) {
-                    window.positionNodes(window.cy, fontSizeMultiplier, true);
-                }
-            });
-        }, 100);
+        // Use the global resetNetworkLayout function
+        if (window.resetNetworkLayout) {
+            setTimeout(() => {
+                window.resetNetworkLayout();
+            }, 100);
+        }
     }
 
     applyGroupHighlighting() {
@@ -562,98 +532,184 @@ class AOPTableManager {
         this.showFilterStatus(`Network filtered to show ${aopNodes.size} nodes from ${aopId}`, 'info');
     }
 
-    applyGroupHighlighting() {
-        if (!window.cy || this.groupedAops.size === 0) {
-            this.showAllNetworkNodes();
+    // Update legacy table format with smooth transitions (from table_aop.js)
+    updateLegacyTable(aopData, tableBody) {
+        if (!tableBody || tableBody.length === 0) return;
+        
+        // Clear existing table content with smooth transition
+        tableBody.fadeOut(200, function() {
+            tableBody.empty();
+            
+            // Populate table with new data
+            aopData.forEach(row => {
+                const tr = $("<tr></tr>");
+                
+                // Source column
+                tr.append(`<td title="${row.source_id}">${row.source_label}</td>`);
+                
+                // Relationship column with CURIE link
+                const relationshipCell = $("<td></td>");
+                if (row.curie) {
+                    const curieLink = `<a href="#" class="curie-link" data-curie="${row.curie}" title="${row.curie}">${row.curie.split(':')[1] || row.curie}</a>`;
+                    relationshipCell.html(curieLink);
+                } else {
+                    relationshipCell.text('N/A');
+                }
+                tr.append(relationshipCell);
+                
+                // Target column
+                tr.append(`<td title="${row.target_id}">${row.target_label}</td>`);
+                
+                tableBody.append(tr);
+            });
+            
+            // Fade in the updated table content
+            tableBody.fadeIn(300);
+            console.log(`Populated legacy AOP table with ${aopData.length} relationships`);
+        });
+    }
+
+    // Show empty table state with smooth transition (from table_aop.js)
+    showEmptyAopTable() {
+        const tableBody = $("#aop_table tbody");
+        if (tableBody.length > 0) {
+            tableBody.fadeOut(200, function() {
+                tableBody.empty();
+                tableBody.append(`
+                    <tr>
+                        <td colspan="3" style="text-align: center; color: #6c757d; font-style: italic;">
+                            No relationships in current network
+                        </td>
+                    </tr>
+                `);
+                tableBody.fadeIn(300);
+            });
+        }
+        
+        // Also clear enhanced table
+        this.currentData = [];
+        this.filteredData = [];
+        this.renderTable();
+    }
+
+    // Setup network listeners with debounced smooth updates (from table_aop.js)
+    setupNetworkListeners() {
+        if (!window.cy) {
+            console.log('Cytoscape not ready, will setup AOP table listeners later');
             return;
         }
         
-        console.log('Applying group highlighting for AOPs:', Array.from(this.groupedAops));
+        console.log('Setting up AOP table network listeners');
         
-        // Save original styles before modifying them
-        this.saveOriginalStyles();
-        
-        // Create color palette for different AOPs
-        const colors = [
-            '#ff6b35', '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', 
-            '#795548', '#607D8B', '#E91E63', '#00BCD4', '#8BC34A'
-        ];
-        
-        const aopColorMap = new Map();
-        Array.from(this.groupedAops).forEach((aopId, index) => {
-            aopColorMap.set(aopId, colors[index % colors.length]);
+        // Listen for network changes with smooth transitions
+        window.cy.on('add remove', (event) => {
+            console.log('Network changed, updating AOP table with smooth transition');
+            // Debounce rapid changes and add smooth transition
+            clearTimeout(window.aopTableUpdateTimeout);
+            window.aopTableUpdateTimeout = setTimeout(() => {
+                // Add a subtle loading indicator during updates
+                const tableBody = $("#aop_table tbody");
+                if (tableBody.length > 0) {
+                    tableBody.addClass('updating');
+                }
+                
+                setTimeout(() => {
+                    this.performTableUpdate().then(() => {
+                        if (tableBody.length > 0) {
+                            tableBody.removeClass('updating');
+                        }
+                    });
+                }, 100);
+            }, 500);
         });
-        
-        // Find all nodes belonging to grouped AOPs
-        const nodeColorMap = new Map();
-        
-        window.cy.nodes().forEach(node => {
-            const nodeData = node.data();
-            const nodeAops = nodeData.aop || [];
-            const aopsToCheck = Array.isArray(nodeAops) ? nodeAops : [nodeAops]; // Fixed variable name
-            
-            // Check if node belongs to any grouped AOP
-            for (const nodeAop of aopsToCheck) {
-                if (!nodeAop) continue;
-                
-                let nodeAopId = '';
-                if (nodeAop.includes('aop/')) {
-                    nodeAopId = `AOP:${nodeAop.split('aop/').pop()}`;
-                } else if (nodeAop.startsWith('AOP:')) {
-                    nodeAopId = nodeAop;
-                } else if (nodeAop.match(/^\d+$/)) {
-                    nodeAopId = `AOP:${nodeAop}`;
-                }
-                
-                if (this.groupedAops.has(nodeAopId)) {
-                    nodeColorMap.set(node.id(), aopColorMap.get(nodeAopId));
-                    break; // Use first matching AOP color
-                }
+    }
+
+    // Enhanced debouncedUpdateTable with legacy support
+    debouncedUpdateTable(delay = 500) {
+        // Clear any existing timeout
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+
+        // Set new timeout
+        this.updateTimeout = setTimeout(() => {
+            if (!this.isUpdating) {
+                this.performTableUpdate();
             }
-        });
+        }, delay);
+    }
+
+    async performTableUpdate() {
+        if (this.isUpdating) {
+            console.log('Table update already in progress, skipping');
+            return;
+        }
+
+        if (!window.cy) {
+            console.warn("Network not initialized for table update");
+            return;
+        }
+
+        this.isUpdating = true;
+        console.log('Starting AOP table update...');
+
+        const tableBody = $("#aop_table tbody");
+        const loadingDiv = $("#loading_aop_table");
         
-        console.log(`Found ${nodeColorMap.size} nodes for grouped AOPs`);
-        
-        // Apply visual highlighting without layout change
-        window.cy.batch(() => {
-            window.cy.nodes().forEach(node => {
-                const nodeColor = nodeColorMap.get(node.id());
-                if (nodeColor) {
-                    node.removeClass('filtered-out aop-filtered')
-                         .addClass('aop-grouped')
-                         .style('opacity', 1)
-                         .style('border-width', '4px')
-                         .style('border-color', nodeColor);
-                } else {
-                    node.removeClass('aop-grouped')
-                         .style('opacity', 0.3)
-                         .style('border-width', '2px')
-                         .style('border-color', '#ccc');
-                }
-            });
+        // Show loading indicator if elements exist
+        if (loadingDiv.length > 0) {
+            loadingDiv.show();
+        }
+
+        try {
+            const cyElements = window.cy.elements().jsons();
             
-            // Handle edges - highlight edges between grouped nodes
-            window.cy.edges().forEach(edge => {
-                const sourceColor = nodeColorMap.get(edge.source().id());
-                const targetColor = nodeColorMap.get(edge.target().id());
-                
-                if (sourceColor && targetColor) {
-                    // Use source node color for edge
-                    edge.style('opacity', 1)
-                        .style('line-color', sourceColor)
-                        .style('target-arrow-color', sourceColor)
-                        .style('width', '3px');
-                } else {
-                    edge.style('opacity', 0.2)
-                        .style('line-color', '#ccc')
-                        .style('target-arrow-color', '#ccc')
-                        .style('width', '1px');
-                }
+            const response = await fetch('/populate_aop_table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cy_elements: cyElements })
             });
-        });
-        
-        // Show status message
-        this.showFilterStatus(`Grouped ${this.groupedAops.size} AOPs with ${nodeColorMap.size} nodes`, 'info');
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const data = await response.json();
+            
+            // Hide loading indicator
+            if (loadingDiv.length > 0) {
+                loadingDiv.hide();
+            }
+            
+            if (data.error) {
+                console.error("Error populating AOP table:", data.error);
+                this.showEmptyAopTable();
+                return;
+            }
+            
+            console.log('Enhanced AOP table manager - Received AOP table data:', data.aop_data);
+            
+            if (data.aop_data && data.aop_data.length > 0) {
+                // Update enhanced table
+                this.updateTable(data.aop_data);
+                
+                // Also update legacy table if it exists
+                this.updateLegacyTable(data.aop_data, tableBody);
+                
+                console.log(`Enhanced AOP table updated with ${data.aop_data.length} entries`);
+            } else {
+                this.showEmptyAopTable();
+            }
+            
+        } catch (error) {
+            console.error("Error updating AOP table:", error);
+            if (loadingDiv.length > 0) {
+                loadingDiv.hide();
+            }
+            this.showEmptyAopTable();
+        } finally {
+            this.isUpdating = false;
+        }
     }
 
     // New method to save original element styles before applying filters
@@ -716,8 +772,12 @@ class AOPTableManager {
             });
         });
 
-        // Apply consistent layout like reset button
-        this.applyConsistentLayout();
+        // Use the global resetNetworkLayout function
+        if (window.resetNetworkLayout) {
+            setTimeout(() => {
+                window.resetNetworkLayout();
+            }, 100);
+        }
         
         // Clear status message
         this.showFilterStatus('', 'info');
@@ -975,69 +1035,6 @@ class AOPTableManager {
         this.renderTable();
     }
 
-    // Debounced version for network change events
-    debouncedUpdateTable(delay = 500) {
-        // Clear any existing timeout
-        if (this.updateTimeout) {
-            clearTimeout(this.updateTimeout);
-        }
-
-        // Set new timeout
-        this.updateTimeout = setTimeout(() => {
-            if (!this.isUpdating) {
-                this.performTableUpdate();
-            }
-        }, delay);
-    }
-
-    async performTableUpdate() {
-        if (this.isUpdating) {
-            console.log('Table update already in progress, skipping');
-            return;
-        }
-
-        if (!window.cy) {
-            console.warn("Network not initialized for table update");
-            return;
-        }
-
-        this.isUpdating = true;
-        console.log('Starting AOP table update...');
-
-        try {
-            const cyElements = window.cy.elements().jsons();
-            
-            const response = await fetch('/populate_aop_table', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cy_elements: cyElements })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.error) {
-                console.error("Error populating AOP table:", data.error);
-                return;
-            }
-            
-            this.updateTable(data.aop_data);
-            
-            // Apply consistent layout after populating the table
-            this.applyConsistentLayout();
-            
-            console.log(`AOP table updated with ${data.aop_data.length} entries`);
-            
-        } catch (error) {
-            console.error("Error updating AOP table:", error);
-        } finally {
-            this.isUpdating = false;
-        }
-    }
-
     // New method for "Group by AOP" button - highlights all AOPs without layout change
     groupByAllAops() {
         console.log('Grouping by all AOPs');
@@ -1073,29 +1070,13 @@ class AOPTableManager {
             button.textContent = this.groupedAops.size > 0 ? 'Clear AOP Groups' : 'Group by AOP';
         }
     }
-
-    // Enhanced populate AOP table function with concurrency control
-    static populateAopTable(immediate = false) {
-        if (!window.aopTableManager) {
-            console.warn("AOP Table Manager not initialized");
-            return Promise.resolve();
-        }
-
-        if (immediate) {
-            // For immediate updates (like manual triggers)
-            return window.aopTableManager.performTableUpdate();
-        } else {
-            // For network change events, use debounced version
-            window.aopTableManager.debouncedUpdateTable();
-            return Promise.resolve();
-        }
-    }
 }
 
-// Initialize the AOP Table Manager
+// Initialize the AOP Table Manager immediately
+console.log('Initializing Enhanced AOP Table Manager...');
 window.aopTableManager = new AOPTableManager();
 
-// Enhanced populate AOP table function with concurrency control
+// Enhanced global functions that work with both table systems
 window.populateAopTable = function(immediate = false) {
     if (!window.aopTableManager) {
         console.warn("AOP Table Manager not initialized");
@@ -1111,3 +1092,59 @@ window.populateAopTable = function(immediate = false) {
         return Promise.resolve();
     }
 };
+
+// Legacy function support (from table_aop.js)
+window.initializeAopTable = function() {
+    console.log('Initializing AOP table functionality (legacy support)');
+    
+    // Set up listeners if Cytoscape is ready
+    if (window.cy) {
+        window.aopTableManager.setupNetworkListeners();
+        window.aopTableManager.performTableUpdate(); // Initial population
+    } else {
+        // Wait for Cytoscape to be ready
+        const checkCytoscape = setInterval(() => {
+            if (window.cy) {
+                clearInterval(checkCytoscape);
+                window.aopTableManager.setupNetworkListeners();
+                window.aopTableManager.performTableUpdate();
+            }
+        }, 500);
+        
+        // Clear interval after 10 seconds to avoid infinite checking
+        setTimeout(() => {
+            clearInterval(checkCytoscape);
+        }, 10000);
+    }
+};
+
+window.setupAopTableListeners = function() {
+    if (window.aopTableManager) {
+        window.aopTableManager.setupNetworkListeners();
+    }
+};
+
+// Handle CURIE link clicks (from table_aop.js)
+$(document).on('click', '.curie-link', function(e) {
+    e.preventDefault();
+    const curie = $(this).data('curie');
+    console.log('CURIE clicked:', curie);
+    
+    // Navigate to AOP Wiki or other actions
+    if (curie && curie.includes('aop.relationships:')) {
+        const kerId = curie.split(':')[1];
+        const aopWikiUrl = `https://aopwiki.org/relationships/${kerId}`;
+        window.open(aopWikiUrl, '_blank');
+    }
+});
+
+// Initialize when DOM is ready (legacy support)
+$(document).ready(function() {
+    // Ensure enhanced table manager is available
+    if (!window.aopTableManager) {
+        window.aopTableManager = new AOPTableManager();
+    }
+    
+    // Initialize with legacy support
+    window.initializeAopTable();
+});

@@ -163,8 +163,13 @@ class CustomTableManager {
                 // Update network with new elements
                 if (result.network_elements && window.cy) {
                     window.cy.elements().remove();
-                    window.cy.add(result.network_elements);
-                    positionNodes(window.cy);
+                    window.cy.add(result.network_elements);                    
+                    // Use the global resetNetworkLayout
+                    if (window.resetNetworkLayout) {
+                        setTimeout(() => {
+                            window.resetNetworkLayout();
+                        }, 100);
+                    }
                 }
                 
                 $("#table-mapping-modal").modal('hide');

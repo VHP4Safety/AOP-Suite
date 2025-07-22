@@ -52,7 +52,10 @@ async function fetchAndDisplayPredictions() {
     if (!window.genesVisible) {
         window.genesVisible = true;
         await window.toggleGenes();
-        positionNodes(window.cy);
+        // Use the global resetNetworkLayout
+        if (window.resetNetworkLayout) {
+            window.resetNetworkLayout();
+        }
     }
     
     try {
@@ -226,7 +229,10 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
                 }
             });
             
-            positionNodes(cy);
+            // Use the global resetNetworkLayout
+            if (window.resetNetworkLayout) {
+                window.resetNetworkLayout();
+            }
         }
     } else {
         console.error("Unexpected API response format:", response);

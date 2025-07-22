@@ -3,31 +3,6 @@
 // Update API base URL to work from root
 const API_BASE_URL = '';  // Since we're now at root, no prefix needed
 
-// Update all fetch functions to use correct endpoints
-function fetchAOPData(queryType, queryValues) {
-    const url = `/api/aop_data`;
-
-    // Existing fetch logic...
-}
-
-function fetchBgeeData(genes) {
-    const url = `/api/bgee_data`;
-
-    // Existing fetch logic...
-}
-
-function fetchOpenTargetsData(compounds) {
-    const url = `/api/opentargets_data`;
-
-    // Existing fetch logic...
-}
-
-function fetchQSPRPredictions(compounds, threshold) {
-    const url = `/api/qspr_predictions`;
-
-    // Existing fetch logic...
-}
-
 class AOPNetworkDataManager {
     constructor() {
         console.log('=== AOPNetworkDataManager Constructor ===');
@@ -260,8 +235,24 @@ class AOPNetworkDataManager {
                 if (/^\d+$/.test(trimmed)) {
                     return `https://identifiers.org/aop/${trimmed}`;
                 }
+            } else if (queryType === 'mie') {
+                // Handle MIE identifiers - use MIE-specific functions
+                if (window.aopNameUtils.isMieIdentifierFormat(trimmed)) {
+                    return window.aopNameUtils.normalizeMieId(trimmed);
+                }
+                
+                // For text searches, try to find matching MIE
+                const results = window.aopNameUtils.findMieByText(trimmed);
+                if (results.length > 0) {
+                    return results[0].fullUri;
+                }
+                
+                // If no match found, try to treat as ID anyway
+                if (/^\d+$/.test(trimmed)) {
+                    return `https://identifiers.org/aop.events/${trimmed}`;
+                }
             } else {
-                // Handle KE identifiers (for MIE, ke_upstream, ke_downstream)
+                // Handle KE identifiers (for ke_upstream, ke_downstream)
                 if (window.aopNameUtils.isKeIdentifierFormat(trimmed)) {
                     return window.aopNameUtils.normalizeKeId(trimmed);
                 }
@@ -387,12 +378,10 @@ class AOPNetworkDataManager {
 
                 console.log(`Added ${newElements.length} new elements to network`);
 
-                // Update layout after adding elements
-                if (window.positionNodes) {
+                // Update layout after adding elements using the global reset function
+                if (window.resetNetworkLayout) {
                     setTimeout(() => {
-                        const fontSlider = document.getElementById('font-size-slider');
-                        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-                        window.positionNodes(window.cy, fontSizeMultiplier, true);
+                        window.resetNetworkLayout();
                     }, 100);
                 }
 

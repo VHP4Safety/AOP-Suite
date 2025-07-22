@@ -111,7 +111,7 @@
                                 <i class="fas fa-spinner fa-spin"></i> Loading AOP data...
                             </div>
                             <div id="aop-table-container" class="table-wrapper">
-                                <!-- Filter and table will be dynamically inserted here by aop_table_enhancements.js -->
+                                <!-- Filter and table will be dynamically inserted here by aop_table.js -->
                             </div>
                         </div>
                     </div>
@@ -836,7 +836,7 @@
             const headerHeight = bottomPanelHeader.offsetHeight;
             // Use the actual pixel height of the bottom panel
             const totalHeight = bottomPanel.offsetHeight;
-            // Remove the -20px padding to allow full use of the panel
+            // Remove padding to allow full use of the panel
             const availableHeight = Math.max(50, totalHeight - headerHeight);
 
             // Update all table panel heights
@@ -850,7 +850,7 @@
                     // Update table wrapper heights
                     const tableWrapper = panelContent.querySelector('.table-wrapper');
                     if (tableWrapper) {
-                        // Get height of other elements in panel content
+                        // Get height of other elements in panel content (hints, controls, etc.)
                         const otherElements = Array.from(panelContent.children).filter(
                             el => !el.classList.contains('table-wrapper')
                         );
@@ -862,11 +862,22 @@
                             otherElementsHeight += el.offsetHeight + marginTop + marginBottom;
                         });
 
-                        // Use all available space for the table
-                        const tableHeight = Math.max(50, availableHeight - otherElementsHeight);
+                        // Use ALL available space for the table wrapper - no buffer needed
+                        const tableHeight = Math.max(100, availableHeight - otherElementsHeight);
                         tableWrapper.style.height = tableHeight + 'px';
                         tableWrapper.style.overflowY = 'auto';
                         tableWrapper.style.overflowX = 'auto';
+                        
+                        // Ensure the wrapper expands to use full height
+                        tableWrapper.style.minHeight = tableHeight + 'px';
+                        tableWrapper.style.maxHeight = tableHeight + 'px';
+                        
+                        // Make sure the table inside uses full wrapper height
+                        const actualTable = tableWrapper.querySelector('table');
+                        if (actualTable) {
+                            actualTable.style.height = '100%';
+                            actualTable.style.minHeight = '100%';
+                        }
 
                         // Force immediate layout recalculation
                         tableWrapper.offsetHeight; // Trigger reflow
@@ -874,8 +885,6 @@
                 }
             });
 
-            // Optionally remove debug log
-            // console.log('Updated table heights, available:', availableHeight);
         }
     }
 
@@ -895,9 +904,6 @@
             });
         }
         
-        // Also trigger custom table redraw events if they exist
-        const customEvent = new CustomEvent('tableResize');
-        document.dispatchEvent(customEvent);
     }
 
     // Table panel controls
@@ -910,9 +916,6 @@
         document.getElementById('toggle-gene-table')?.addEventListener('click', function() {
             toggleTablePanel('gene-table-panel');
         });
-
-        // Horizontal resizing for table panels
-        initializeTableResizing();
         
         // Initial table height setup
         setTimeout(updateTableContainerHeights, 100);
@@ -936,12 +939,6 @@
                 window.cy.resize();
             }
         }, 300);
-    }
-
-    function initializeTableResizing() {
-        // Add horizontal resizing for compound and gene tables
-        // Similar implementation to workspace resizing but for table panels
-        // This would handle the horizontal resize functionality for the side table panels
     }
 
     // Sidebar collapse functionality
@@ -1078,8 +1075,7 @@
 <script src="{{ url_for('static', filename='js/aop_app/network_persistence.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/manual_controls.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/custom_tables.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/table_aop.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_network_data.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/aop_table_enhancements.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_table.js') }}"></script>
 
 {% endblock %}
