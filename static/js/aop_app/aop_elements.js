@@ -304,10 +304,11 @@ document.addEventListener("DOMContentLoaded", function () {
                     return source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
                            target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
                 }).hide();
+                window.resetNetworkLayout();
                 
                 $("#see_genes").text("See Genes");
                 window.genesVisible = false;
-                
+                window.resetNetworkLayout();
                 console.log("Gene elements loaded but hidden by default");
             }
         })
@@ -934,6 +935,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         edge.hide();
                     }
                 });
+                window.resetNetworkLayout();
             });
             
             $("#see_genes").text("See Genes");
@@ -1086,6 +1088,7 @@ function updateGeneTable() {
                 `);
             });
             console.log(`Gene table updated with ${response.gene_data.length} genes.`);
+            window.resetNetworkLayout();
         } else {
             tableBody.append(`
                 <tr>
