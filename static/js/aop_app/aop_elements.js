@@ -1003,7 +1003,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (keyEventUris.length === 0) {
                 const scopeMessage = hasSelection ? "selected elements" : "network";
                 console.log(`No Key Events found in ${scopeMessage} for gene loading`);
-                $("#see_genes").text("Remove gene sets");
+                $("#see_genes").html('<i class="fas fa-dna"></i> Remove gene sets');
                 window.genesVisible = true;
                 return;
             }
@@ -1132,7 +1132,7 @@ document.addEventListener("DOMContentLoaded", function () {
             // Reset layout and update table
             window.resetNetworkLayout();
             window.genesVisible = false;
-            $("#see_genes").text("Get gene sets");
+            $("#see_genes").html('<i class="fas fa-dna"></i> Get gene sets');
 
             setTimeout(() => {
                 if (window.populateGeneTable) {
