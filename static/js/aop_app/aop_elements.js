@@ -1054,42 +1054,50 @@ document.addEventListener("DOMContentLoaded", function () {
                             }
                         });
 
-                        // Show all gene nodes and their edges with smooth animation
-                        window.cy.batch(() => {
+                        // Show genes based on selection
+                        if (hasSelection) {
+                            // Only show genes connected to selected nodes
+                            const selectedNodes = window.cy.$(':selected').nodes();
+                            const geneNodesToShow = window.cy.collection();
+                            
+                            selectedNodes.forEach(node => {
+                                const connectedGenes = node.connectedEdges().connectedNodes('.uniprot-node, .ensembl-node');
+                                geneNodesToShow.merge(connectedGenes);
+                            });
+                            
+                            geneNodesToShow.show();
+                            geneNodesToShow.connectedEdges().show();
+                            
+                            console.log(`Showed ${geneNodesToShow.length} genes connected to selected nodes`);
+                        } else {
+                            // Show all genes
                             window.cy.elements(".uniprot-node, .ensembl-node").show();
                             window.cy.edges().forEach(function (edge) {
                                 const source = edge.source();
                                 const target = edge.target();
-
                                 const sourceIsGene = source.hasClass("uniprot-node") || source.hasClass("ensembl-node");
                                 const targetIsGene = target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
-
-                                // Show edge if both nodes are visible and at least one is a gene
                                 if (source.visible() && target.visible() && (sourceIsGene || targetIsGene)) {
                                     edge.show();
                                 }
                             });
-                        });
-
-                        const resultMessage = hasSelection 
-                            ? `Added ${data.gene_elements.length} gene elements from selected Key Events`
-                            : `Added ${data.gene_elements.length} gene elements to network`;
-                        console.log(resultMessage);
-                    } else {
-                        console.log("No gene elements returned from backend");
+                            
+                            console.log(`Showed all gene nodes`);
+                        }
                     }
 
+                    // Update button and state - ALWAYS set to hide mode when showing genes
                     $("#see_genes").text("Hide Genes");
                     window.genesVisible = true;
 
-                    // Populate gene table after showing genes
+                    // Update gene table
                     setTimeout(() => {
                         if (window.populateGeneTable) {
                             window.populateGeneTable();
                         }
                     }, 100);
 
-                    // Smooth animation after showing genes
+                    // Layout update
                     setTimeout(() => {
                         positionNodes(window.cy, fontSizeMultiplier, true);
                     }, 150);
@@ -1099,31 +1107,46 @@ document.addEventListener("DOMContentLoaded", function () {
                     showStatus(`Error loading genes: ${error.message}`, 'error');
                 });
 
-        } else if (action === 'hide') {
-            // Hide gene nodes and edges with smooth animation
-            window.cy.batch(() => {
-                window.cy.elements(".uniprot-node, .ensembl-node").hide();
-                window.cy.edges().forEach(function (edge) {
-                    const source = edge.source();
-                    const target = edge.target();
-
-                    if (source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
-                        target.hasClass("uniprot-node") || target.hasClass("ensembl-node")) {
-                        edge.hide();
-                    }
+        } else {
+            // HIDE GENES
+            const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+            
+            if (hasSelection) {
+                // Hide only genes connected to selected nodes
+                const selectedNodes = window.cy.$(':selected').nodes();
+                const genesToHide = window.cy.collection();
+                const proteinsToHide = window.cy.collection();
+                
+                selectedNodes.forEach(node => {
+                    const connectedProts = node.connectedEdges().connectedNodes('.uniprot-node');
+                    connectedGenes= connectedProts.connectedEdges().connectedNodes('.ensembl-node');
+                    genesToHide.merge(connectedGenes);
+                    proteinsToHide.merge(connectedProts);
                 });
-                window.resetNetworkLayout();
-            });
+                
+                genesToHide.remove();
+                genesToHide.connectedEdges().remove();
+                proteinsToHide.remove();
+                proteinsToHide.connectedEdges().remove();
+                
+                console.log(`Removed ${genesToHide.length} genes and ${proteinsToHide.length} proteins connected to selected nodes`);
+            } else {
+                // Hide all genes
+                const allGenes = window.cy.elements(".uniprot-node, .ensembl-node");
+                allGenes.remove();
+                allGenes.connectedEdges().remove();
+                
+                console.log(`Removed all gene nodes`);
+            }
 
-            $("#see_genes").text("See Genes");
-            window.genesVisible = false;
-
-            // Smooth animation after hiding genes
-            const fontSlider = document.getElementById('font-size-slider');
-            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+            // Reset layout and update table
+            window.resetNetworkLayout();
+            
             setTimeout(() => {
-                positionNodes(window.cy, fontSizeMultiplier, true);
-            }, 150);
+                if (window.populateGeneTable) {
+                    window.populateGeneTable();
+                }
+            }, 100);
         }
     }
 
