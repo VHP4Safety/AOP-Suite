@@ -960,39 +960,66 @@ document.addEventListener("DOMContentLoaded", function () {
     // Make toggleSidebar available globally for HTML onclick handlers
     window.toggleSidebar = toggleSidebar;
 
+    // Helper function to get Key Events from network (either selected or all)
+    function getKeyEventsFromNetwork(useSelection = false) {
+        if (!window.cy) {
+            return [];
+        }
+
+        let nodes;
+        if (useSelection) {
+            const selected = window.cy.$(':selected');
+            // Only consider selected nodes, filter out edges
+            nodes = selected.nodes();
+            console.log(`Using ${nodes.length} selected nodes for Key Event extraction`);
+        } else {
+            nodes = window.cy.nodes();
+            console.log(`Using all ${nodes.length} nodes for Key Event extraction`);
+        }
+
+        const keyEventUris = [];
+        
+        nodes.forEach(node => {
+            const nodeData = node.data();
+            const nodeId = nodeData.id;
+            const nodeType = nodeData.type;
+            const isMie = nodeData.is_mie;
+            const isAo = nodeData.is_ao;
+
+            // Collect all Key Events (MIEs, intermediate KEs, and AOs)
+            if (nodeId && (nodeId.includes('aop.events') || isMie || isAo || nodeType === 'mie' || nodeType === 'key_event' || nodeType === 'ao')) {
+                // Ensure proper URI format for the SPARQL query
+                if (nodeId.startsWith('http')) {
+                    keyEventUris.push(`<${nodeId}>`);
+                } else if (nodeId.includes('aop.events')) {
+                    keyEventUris.push(`<${nodeId}>`);
+                }
+            }
+        });
+
+        return keyEventUris;
+    }
+
     function toggleGenes() {
         const action = window.genesVisible ? 'hide' : 'show';
 
         if (action === 'show') {
-            // Extract MIE, KE, and AO elements from the network
-            const keyEventUris = [];
-
-            window.cy.nodes().forEach(node => {
-                const nodeData = node.data();
-                const nodeId = nodeData.id;
-                const nodeType = nodeData.type;
-                const isMie = nodeData.is_mie;
-                const isAo = nodeData.is_ao;
-
-                // Collect all Key Events (MIEs, intermediate KEs, and AOs)
-                if (nodeId && (nodeId.includes('aop.events') || isMie || isAo || nodeType === 'mie' || nodeType === 'key_event' || nodeType === 'ao')) {
-                    // Ensure proper URI format for the SPARQL query
-                    if (nodeId.startsWith('http')) {
-                        keyEventUris.push(`<${nodeId}>`);
-                    } else if (nodeId.includes('aop.events')) {
-                        keyEventUris.push(`<${nodeId}>`);
-                    }
-                }
-            });
+            // Check if there are selected elements
+            const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+            
+            // Extract Key Event URIs from either selected nodes or all nodes
+            const keyEventUris = getKeyEventsFromNetwork(hasSelection);
 
             if (keyEventUris.length === 0) {
-                console.log("No Key Events found in network for gene loading");
+                const scopeMessage = hasSelection ? "selected elements" : "network";
+                console.log(`No Key Events found in ${scopeMessage} for gene loading`);
                 $("#see_genes").text("Hide Genes");
                 window.genesVisible = true;
                 return;
             }
 
-            console.log(`Found ${keyEventUris.length} Key Events for gene loading:`, keyEventUris);
+            const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
+            console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for gene loading:`, keyEventUris);
 
             // Call the load_and_show_genes endpoint with the extracted KEs
             fetch(`/load_and_show_genes?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
@@ -1007,7 +1034,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 .then(data => {
                     if (data.error) {
                         console.error("Gene loading error:", data.error);
-                        this.showStatus(`Error loading genes: ${data.error}`, 'error');
+                        showStatus(`Error loading genes: ${data.error}`, 'error');
                         return;
                     }
 
@@ -1044,7 +1071,10 @@ document.addEventListener("DOMContentLoaded", function () {
                             });
                         });
 
-                        console.log(`Added ${data.gene_elements.length} gene elements to network`);
+                        const resultMessage = hasSelection 
+                            ? `Added ${data.gene_elements.length} gene elements from selected Key Events`
+                            : `Added ${data.gene_elements.length} gene elements to network`;
+                        console.log(resultMessage);
                     } else {
                         console.log("No gene elements returned from backend");
                     }
@@ -1066,7 +1096,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 })
                 .catch(error => {
                     console.error("Error loading genes:", error);
-                    this.showStatus(`Error loading genes: ${error.message}`, 'error');
+                    showStatus(`Error loading genes: ${error.message}`, 'error');
                 });
 
         } else if (action === 'hide') {
