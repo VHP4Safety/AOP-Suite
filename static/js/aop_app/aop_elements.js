@@ -321,6 +321,11 @@ document.addEventListener("DOMContentLoaded", function () {
         // Initialize selection functionality
         initializeNetworkSelection();
 
+        // Ensure selection controls are created
+        setTimeout(() => {
+            updateSelectionControls();
+        }, 100);
+
         // Network change listeners for automatic table updates with smooth animations
         window.cy.on("add", "node", function (evt) {
             const node = evt.target;
@@ -429,6 +434,9 @@ document.addEventListener("DOMContentLoaded", function () {
     function initializeNetworkSelection() {
         if (!window.cy) return;
 
+        // Add styles for selected elements
+        addSelectionStyles();
+
         // Enable box selection for multi-select
         window.cy.boxSelectionEnabled(true);
 
@@ -479,37 +487,165 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     }
 
+    function addSelectionStyles() {
+        // Add CSS styles for element selection highlighting
+        if (!document.querySelector('#element-selection-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'element-selection-styles';
+            styles.textContent = `
+                /* Cytoscape selection styles are handled via the Cytoscape style sheet */
+            `;
+            document.head.appendChild(styles);
+        }
+
+        // Add Cytoscape-specific selection styles
+        if (window.cy) {
+            window.cy.style()
+                .selector('.element-selected')
+                .style({
+                    'border-width': '4px',
+                    'border-color': '#ff6b35',
+                    'border-opacity': 1,
+                    'overlay-color': '#ff6b35',
+                    'overlay-opacity': 0.3,
+                    'overlay-padding': '4px'
+                })
+                .selector('edge.element-selected')
+                .style({
+                    'line-color': '#ff6b35',
+                    'target-arrow-color': '#ff6b35',
+                    'source-arrow-color': '#ff6b35',
+                    'width': '4px',
+                    'opacity': 1
+                })
+                .update();
+        }
+    } // TODO add
+
     // Selection management functions
     function updateSelectionControls() {
         const selectionControls = document.getElementById('selection-controls');
         const selectionInfo = document.getElementById('selection-info');
 
-        if (!selectionControls || !selectionInfo) return;
+        if (!selectionControls || !selectionInfo) {
+            // Create selection controls if they don't exist
+            createSelectionControls();
+            return;
+        }
 
         if (window.cy) {
             const selected = window.cy.$(':selected');
+            const tableSelected = window.aopTableManager ? window.aopTableManager.selectedRows.size : 0;
 
-            if (selected.length > 0) {
+            if (selected.length > 0 || tableSelected > 0) {
                 selectionControls.style.display = 'flex';
-                selectionInfo.textContent = `${selected.length} selected`;
+                selectionControls.style.visibility = 'visible';
+                if (tableSelected > 0) {
+                    selectionInfo.textContent = `${selected.length} network, ${tableSelected} table rows selected`;
+                } else {
+                    selectionInfo.textContent = `${selected.length} selected`;
+                }
+                
+                // Add visual highlighting to selected network elements
+                highlightSelectedElements(selected);
             } else {
                 selectionControls.style.display = 'none';
+                // Remove highlighting when nothing is selected
+                clearElementHighlighting();
             }
         }
+    }
+
+    function createSelectionControls() {
+        // Check if selection controls already exist
+        if (document.getElementById('selection-controls')) return;
+        
+        // Find a suitable container or create one
+        let container = document.querySelector('.main-content') || document.querySelector('#cy').parentElement;
+        
+        const selectionControlsHtml = `
+            <div id="selection-controls" style="
+                position: fixed;
+                top: 10px;
+                right: 10px;
+                background: rgba(255, 255, 255, 0.95);
+                border: 1px solid #ddd;
+                border-radius: 8px;
+                padding: 10px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                z-index: 1000;
+                display: none;
+                align-items: center;
+                gap: 10px;
+                font-size: 14px;
+            ">
+                <span id="selection-info" style="margin-right: 10px; font-weight: 500; color: #333;"></span>
+                <button id="delete_selected" class="btn btn-sm btn-danger" style="
+                    background-color: #dc3545;
+                    border-color: #dc3545;
+                    color: white;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    border: none;
+                    cursor: pointer;
+                ">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+                <button id="clear_selection" class="btn btn-sm btn-secondary" style="
+                    background-color: #6c757d;
+                    border-color: #6c757d;
+                    color: white;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    border: none;
+                    cursor: pointer;
+                ">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', selectionControlsHtml);
+        console.log('Selection controls created');
+    }
+
+    function highlightSelectedElements(selected) {
+        if (!window.cy) return;
+        
+        // Remove previous highlights
+        window.cy.elements().removeClass('element-selected');
+        
+        // Add highlight class to selected elements
+        selected.addClass('element-selected');
+        
+        console.log(`Highlighted ${selected.length} selected elements`);
+    }
+
+    function clearElementHighlighting() {
+        if (!window.cy) return;
+        
+        window.cy.elements().removeClass('element-selected');
     }
 
     function deleteSelectedElements() {
         if (!window.cy) return;
 
         const selected = window.cy.$(':selected');
+        const tableSelected = window.aopTableManager ? window.aopTableManager.selectedRows.size : 0;
 
-        if (selected.length === 0) {
+        if (selected.length === 0 && tableSelected === 0) {
             console.log("No elements selected for deletion");
             return;
         }
 
+        let confirmMessage = `Are you sure you want to delete ${selected.length} selected network element(s)?`;
+        
+        if (tableSelected > 0) {
+            confirmMessage = `Are you sure you want to delete ${selected.length} network elements? (${tableSelected} table rows selected)`;
+        }
+
         // Confirm deletion
-        if (confirm(`Are you sure you want to delete ${selected.length} selected element(s)?`)) {
+        if (confirm(confirmMessage)) {
             // Store element data for table updates
             const deletedNodes = selected.nodes().map(node => ({
                 id: node.id(),
@@ -526,6 +662,11 @@ document.addEventListener("DOMContentLoaded", function () {
             window.cy.batch(() => {
                 selected.remove();
             });
+
+            // Clear table selection after deletion
+            if (window.aopTableManager) {
+                window.aopTableManager.clearTableSelection();
+            }
 
             // Update tables based on deleted elements
             updateTablesAfterDeletion(deletedNodes, deletedEdges);
@@ -550,6 +691,12 @@ document.addEventListener("DOMContentLoaded", function () {
     function clearSelection() {
         if (window.cy) {
             window.cy.$(':selected').unselect();
+            
+            // Also clear table selection
+            if (window.aopTableManager) {
+                window.aopTableManager.clearTableSelection();
+            }
+            
             updateSelectionControls();
         }
     }

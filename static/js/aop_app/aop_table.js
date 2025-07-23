@@ -12,6 +12,7 @@ class AOPTableManager {
         this.groupedAops = new Set(); // Track grouped AOPs (multiple selection without layout change)
         this.isUpdating = false; // Prevent concurrent updates
         this.updateTimeout = null; // For debouncing
+        this.selectedRows = new Set(); // Track selected table rows
         this.init();
     }
 
@@ -197,6 +198,57 @@ class AOPTableManager {
                 }
             });
         });
+        
+        // Add row selection handlers
+        this.setupRowSelection(table);
+    }
+
+    setupRowSelection(table) {
+        // Remove existing row selection handlers
+        table.removeEventListener('click', this.handleRowClick);
+        
+        // Add row click handler for selection
+        this.handleRowClick = (e) => {
+            const row = e.target.closest('tr');
+            if (!row || !row.dataset.rowIndex) return;
+            
+            // Don't trigger selection if clicking on links or specific elements
+            if (e.target.closest('.aop-link, .aop-title-link, [data-node-id]')) return;
+            
+            const rowIndex = parseInt(row.dataset.rowIndex);
+            const rowData = this.filteredData[rowIndex];
+            if (!rowData) return;
+            
+            e.preventDefault();
+            
+            if (e.ctrlKey || e.metaKey) {
+                // Ctrl+Click: toggle row selection
+                this.toggleRowSelection(row, rowData);
+            } else if (e.shiftKey && this.selectedRows.size > 0) {
+                // Shift+Click: select range
+                this.selectRowRange(row, rowData);
+            } else {
+                // Regular click: select only this row
+                this.selectSingleRow(row, rowData);
+            }
+            
+            // Synchronize with network selection
+            this.syncTableToNetwork();
+        };
+        
+        table.addEventListener('click', this.handleRowClick);
+        
+        // Listen for network selection changes to sync back to table
+        if (window.cy) {
+            window.cy.removeListener('select unselect', this.handleNetworkSelection);
+            this.handleNetworkSelection = () => {
+                // Small delay to avoid conflicts with table selection
+                setTimeout(() => {
+                    this.syncNetworkToTable();
+                }, 50);
+            };
+            window.cy.on('select unselect', this.handleNetworkSelection);
+        }
     }
 
     toggleAopGroup(aopId) {
@@ -367,7 +419,7 @@ class AOPTableManager {
         window.cy.nodes().forEach(node => {
             const nodeData = node.data();
             const nodeAops = nodeData.aop || [];
-            const aopsToCheck = Array.isArray(nodeAops) ? nodeAops : [nodeAops]; // Fixed variable name
+            const aopsToCheck = Array.isArray(nodeAops) ? nodeAops : [nodeAop]; // Fixed variable name
             
             // Check if node belongs to any grouped AOP
             for (const nodeAop of aopsToCheck) {
@@ -826,13 +878,22 @@ class AOPTableManager {
         if (!table) {
             table = document.createElement('table');
             table.className = 'table table-striped table-hover aop-table';
+            
+            // Add instructions before the table
+            const instructions = document.createElement('div');
+            instructions.className = 'aop-table-instructions';
+            instructions.innerHTML = `
+                <strong>Selection:</strong> Click rows to select • Ctrl+Click for multi-select • Shift+Click for range select
+            `;
+            
+            tableContainer.appendChild(instructions);
             tableContainer.appendChild(table);
         }
 
         const html = this.generateTableHTML();
         table.innerHTML = html;
 
-        // Add click handlers for node highlighting
+        // Add click handlers for node highlighting and row selection
         this.addNodeClickHandlers(table);
     }
 
@@ -868,6 +929,24 @@ class AOPTableManager {
                     font-weight: 600;
                 }
                 
+                .aop-table tbody tr {
+                    cursor: pointer;
+                    transition: background-color 0.2s ease;
+                }
+                
+                .aop-table tbody tr:hover {
+                    background-color: #f8f9fa;
+                }
+                
+                .aop-table-selected {
+                    background-color: #e3f2fd !important;
+                    border-left: 4px solid #2196f3 !important;
+                }
+                
+                .aop-table-selected:hover {
+                    background-color: #e1f5fe !important;
+                }
+                
                 .node-type-badge {
                     display: inline-block;
                     padding: 2px 6px;
@@ -885,6 +964,11 @@ class AOPTableManager {
                 .disconnected-row {
                     background-color: #fff3cd;
                     border-left: 4px solid #ffc107;
+                }
+                
+                .disconnected-row.aop-table-selected {
+                    background-color: #e3f2fd !important;
+                    border-left: 4px solid #2196f3 !important;
                 }
                 
                 .missing-label {
@@ -957,6 +1041,17 @@ class AOPTableManager {
                 .aop-grouped {
                     border-width: 4px !important;
                     box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+                }
+                
+                /* Selection instructions */
+                .aop-table-instructions {
+                    font-size: 0.8rem;
+                    color: #6c757d;
+                    margin-bottom: 10px;
+                    padding: 8px;
+                    background-color: #f8f9fa;
+                    border-radius: 4px;
+                    border-left: 3px solid #007bff;
                 }
             `;
             document.head.appendChild(styles);
@@ -1035,39 +1130,196 @@ class AOPTableManager {
         this.renderTable();
     }
 
-    // New method for "Group by AOP" button - highlights all AOPs without layout change
-    groupByAllAops() {
-        console.log('Grouping by all AOPs');
+    toggleRowSelection(row, rowData) {
+        const rowIndex = parseInt(row.dataset.rowIndex);
         
-        // Clear single selection
-        this.selectedAop = null;
+        if (this.selectedRows.has(rowIndex)) {
+            this.selectedRows.delete(rowIndex);
+            row.classList.remove('aop-table-selected');
+        } else {
+            this.selectedRows.add(rowIndex);
+            row.classList.add('aop-table-selected');
+        }
         
-        // Get all unique AOP IDs from current data
-        const allAopIds = new Set();
-        this.currentData.forEach(row => {
-            if (row.aop_list && row.aop_list !== 'N/A') {
-                const aopIds = row.aop_list.split(',').map(id => id.trim());
-                aopIds.forEach(id => allAopIds.add(id));
+        console.log(`Toggled row selection. Selected rows: ${this.selectedRows.size}`);
+    }
+
+    selectSingleRow(row, rowData) {
+        // Clear all previous selections
+        this.clearTableSelection();
+        
+        // Select this row
+        const rowIndex = parseInt(row.dataset.rowIndex);
+        this.selectedRows.add(rowIndex);
+        row.classList.add('aop-table-selected');
+        
+        console.log(`Selected single row: ${rowData.source_label} -> ${rowData.target_label}`);
+    }
+
+    selectRowRange(row, rowData) {
+        const currentRowIndex = parseInt(row.dataset.rowIndex);
+        const selectedIndices = Array.from(this.selectedRows);
+        
+        if (selectedIndices.length === 0) {
+            this.selectSingleRow(row, rowData);
+            return;
+        }
+        
+        // Find the range between last selected and current
+        const lastSelected = Math.max(...selectedIndices);
+        const start = Math.min(lastSelected, currentRowIndex);
+        const end = Math.max(lastSelected, currentRowIndex);
+        
+        // Select all rows in range
+        for (let i = start; i <= end; i++) {
+            this.selectedRows.add(i);
+            const tableRow = document.querySelector(`tr[data-row-index="${i}"]`);
+            if (tableRow) {
+                tableRow.classList.add('aop-table-selected');
+            }
+        }
+        
+        console.log(`Selected row range ${start}-${end}. Total selected: ${this.selectedRows.size}`);
+    }
+
+    clearTableSelection() {
+        // Clear visual selection
+        document.querySelectorAll('.aop-table-selected').forEach(row => {
+            row.classList.remove('aop-table-selected');
+        });
+        
+        // Clear internal tracking
+        this.selectedRows.clear();
+    }
+
+    syncTableToNetwork() {
+        if (!window.cy) return;
+        
+        // Get all network element IDs from selected rows
+        const networkElementIds = new Set();
+        
+        this.selectedRows.forEach(rowIndex => {
+            const rowData = this.filteredData[rowIndex];
+            if (!rowData) return;
+            
+            // Add source and target node IDs
+            if (rowData.source_id && rowData.source_id !== 'N/A') {
+                networkElementIds.add(rowData.source_id);
+            }
+            if (rowData.target_id && rowData.target_id !== 'N/A') {
+                networkElementIds.add(rowData.target_id);
+            }
+            
+            // Try to find the corresponding edge if it exists
+            const sourceNode = window.cy.getElementById(rowData.source_id);
+            const targetNode = window.cy.getElementById(rowData.target_id);
+            
+            if (sourceNode.length && targetNode.length) {
+                // Find edges between these nodes
+                const edges = sourceNode.edgesWith(targetNode);
+                edges.forEach(edge => {
+                    networkElementIds.add(edge.id());
+                });
             }
         });
         
-        // Toggle: if all are already grouped, clear them; otherwise group all
-        const allAlreadyGrouped = Array.from(allAopIds).every(id => this.groupedAops.has(id));
+        console.log(`Syncing table selection to network: ${networkElementIds.size} elements`);
         
-        if (allAlreadyGrouped) {
-            this.groupedAops.clear();
-            this.showAllNetworkNodes();
-        } else {
-            this.groupedAops = new Set(allAopIds);
-            this.applyGroupHighlighting();
+        // Update network selection
+        window.cy.batch(() => {
+            // Clear current network selection
+            window.cy.$(':selected').unselect();
+            
+            // Select corresponding network elements
+            networkElementIds.forEach(elementId => {
+                const element = window.cy.getElementById(elementId);
+                if (element.length) {
+                    element.select();
+                }
+            });
+        });
+        
+        // Update selection info
+        this.updateSelectionInfo();
+    }
+
+    syncNetworkToTable() {
+        if (!window.cy || this.isUpdating) return;
+        
+        const selectedElements = window.cy.$(':selected');
+        const selectedNodeIds = new Set();
+        
+        // Get all selected node IDs
+        selectedElements.nodes().forEach(node => {
+            selectedNodeIds.add(node.id());
+        });
+        
+        // Get all edge node IDs
+        selectedElements.edges().forEach(edge => {
+            selectedNodeIds.add(edge.source().id());
+            selectedNodeIds.add(edge.target().id());
+        });
+        
+        if (selectedNodeIds.size === 0) {
+            this.clearTableSelection();
+            this.updateSelectionInfo();
+            return;
         }
         
-        this.renderTable();
+        // Find rows that contain any of the selected nodes
+        const rowsToSelect = new Set();
         
-        // Update button text
-        const button = document.getElementById('toggle_bounding_boxes');
-        if (button) {
-            button.textContent = this.groupedAops.size > 0 ? 'Clear AOP Groups' : 'Group by AOP';
+        this.filteredData.forEach((rowData, index) => {
+            const hasSelectedNode = 
+                selectedNodeIds.has(rowData.source_id) || 
+                selectedNodeIds.has(rowData.target_id);
+            
+            if (hasSelectedNode) {
+                rowsToSelect.add(index);
+            }
+        });
+        
+        console.log(`Syncing network selection to table: ${rowsToSelect.size} rows`);
+        
+        // Update table selection
+        this.clearTableSelection();
+        rowsToSelect.forEach(rowIndex => {
+            this.selectedRows.add(rowIndex);
+            const tableRow = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+            if (tableRow) {
+                tableRow.classList.add('aop-table-selected');
+            }
+        });
+        
+        this.updateSelectionInfo();
+    }
+
+    updateSelectionInfo() {
+        // Update the existing selection controls with table selection info
+        const selectionInfo = document.getElementById('selection-info');
+        const selectionControls = document.getElementById('selection-controls');
+        
+        if (selectionInfo && selectionControls) {
+            const networkSelected = window.cy ? window.cy.$(':selected').length : 0;
+            const tableSelected = this.selectedRows.size;
+            
+            if (networkSelected > 0 || tableSelected > 0) {
+                selectionControls.style.display = 'flex';
+                selectionControls.style.visibility = 'visible';
+                
+                if (tableSelected > 0) {
+                    selectionInfo.textContent = `${networkSelected} network, ${tableSelected} table rows selected`;
+                } else {
+                    selectionInfo.textContent = `${networkSelected} selected`;
+                }
+            } else {
+                selectionControls.style.display = 'none';
+            }
+        }
+        
+        // Trigger the main selection controls update
+        if (window.updateSelectionControls) {
+            window.updateSelectionControls();
         }
     }
 }
