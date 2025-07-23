@@ -545,7 +545,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 } else {
                     selectionInfo.textContent = `${selected.length} selected`;
                 }
-                
+
                 // Add visual highlighting to selected network elements
                 highlightSelectedElements(selected);
             } else {
@@ -559,10 +559,10 @@ document.addEventListener("DOMContentLoaded", function () {
     function createSelectionControls() {
         // Check if selection controls already exist
         if (document.getElementById('selection-controls')) return;
-        
+
         // Find a suitable container or create one
         let container = document.querySelector('.main-content') || document.querySelector('#cy').parentElement;
-        
+
         const selectionControlsHtml = `
             <div id="selection-controls" style="
                 position: fixed;
@@ -604,26 +604,26 @@ document.addEventListener("DOMContentLoaded", function () {
                 </button>
             </div>
         `;
-        
+
         container.insertAdjacentHTML('beforeend', selectionControlsHtml);
         console.log('Selection controls created');
     }
 
     function highlightSelectedElements(selected) {
         if (!window.cy) return;
-        
+
         // Remove previous highlights
         window.cy.elements().removeClass('element-selected');
-        
+
         // Add highlight class to selected elements
         selected.addClass('element-selected');
-        
+
         console.log(`Highlighted ${selected.length} selected elements`);
     }
 
     function clearElementHighlighting() {
         if (!window.cy) return;
-        
+
         window.cy.elements().removeClass('element-selected');
     }
 
@@ -638,65 +638,56 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
-        let confirmMessage = `Are you sure you want to delete ${selected.length} selected network element(s)?`;
-        
-        if (tableSelected > 0) {
-            confirmMessage = `Are you sure you want to delete ${selected.length} network elements? (${tableSelected} table rows selected)`;
+        // Store element data for table updates
+        const deletedNodes = selected.nodes().map(node => ({
+            id: node.id(),
+            data: node.data(),
+            classes: node.classes()
+        }));
+
+        const deletedEdges = selected.edges().map(edge => ({
+            id: edge.id(),
+            data: edge.data()
+        }));
+
+        // Remove elements from the network
+        window.cy.batch(() => {
+            selected.remove();
+        });
+
+        // Clear table selection after deletion
+        if (window.aopTableManager) {
+            window.aopTableManager.clearTableSelection();
         }
 
-        // Confirm deletion
-        if (confirm(confirmMessage)) {
-            // Store element data for table updates
-            const deletedNodes = selected.nodes().map(node => ({
-                id: node.id(),
-                data: node.data(),
-                classes: node.classes()
-            }));
+        // Update tables based on deleted elements
+        updateTablesAfterDeletion(deletedNodes, deletedEdges);
 
-            const deletedEdges = selected.edges().map(edge => ({
-                id: edge.id(),
-                data: edge.data()
-            }));
+        // Update selection controls
+        updateSelectionControls();
 
-            // Remove elements from the network
-            window.cy.batch(() => {
-                selected.remove();
-            });
+        // Trigger layout update with smooth animation
+        setTimeout(() => {
+            const fontSlider = document.getElementById('font-size-slider');
+            const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
 
-            // Clear table selection after deletion
-            if (window.aopTableManager) {
-                window.aopTableManager.clearTableSelection();
+            if (window.positionNodes) {
+                window.positionNodes(window.cy, fontSizeMultiplier, true);
             }
+        }, 50);
 
-            // Update tables based on deleted elements
-            updateTablesAfterDeletion(deletedNodes, deletedEdges);
-
-            // Update selection controls
-            updateSelectionControls();
-
-            // Trigger layout update with smooth animation
-            setTimeout(() => {
-                const fontSlider = document.getElementById('font-size-slider');
-                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-
-                if (window.positionNodes) {
-                    window.positionNodes(window.cy, fontSizeMultiplier, true);
-                }
-            }, 50);
-
-            console.log(`Deleted ${selected.length} elements from network`);
-        }
+        console.log(`Deleted ${selected.length} elements from network`);
     }
 
     function clearSelection() {
         if (window.cy) {
             window.cy.$(':selected').unselect();
-            
+
             // Also clear table selection
             if (window.aopTableManager) {
                 window.aopTableManager.clearTableSelection();
             }
-            
+
             updateSelectionControls();
         }
     }
@@ -978,7 +969,7 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const keyEventUris = [];
-        
+
         nodes.forEach(node => {
             const nodeData = node.data();
             const nodeId = nodeData.id;
@@ -1006,7 +997,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (action === 'show') {
             // Check if there are selected elements
             const hasSelection = window.cy && window.cy.$(':selected').length > 0;
-            
+
             // Extract Key Event URIs from either selected nodes or all nodes
             const keyEventUris = getKeyEventsFromNetwork(hasSelection);
 
@@ -1059,15 +1050,15 @@ document.addEventListener("DOMContentLoaded", function () {
                             // Only show genes connected to selected nodes
                             const selectedNodes = window.cy.$(':selected').nodes();
                             const geneNodesToShow = window.cy.collection();
-                            
+
                             selectedNodes.forEach(node => {
                                 const connectedGenes = node.connectedEdges().connectedNodes('.uniprot-node, .ensembl-node');
                                 geneNodesToShow.merge(connectedGenes);
                             });
-                            
+
                             geneNodesToShow.show();
                             geneNodesToShow.connectedEdges().show();
-                            
+
                             console.log(`Showed ${geneNodesToShow.length} genes connected to selected nodes`);
                         } else {
                             // Show all genes
@@ -1081,7 +1072,7 @@ document.addEventListener("DOMContentLoaded", function () {
                                     edge.show();
                                 }
                             });
-                            
+
                             console.log(`Showed all gene nodes`);
                         }
                     }
@@ -1110,38 +1101,38 @@ document.addEventListener("DOMContentLoaded", function () {
         } else {
             // HIDE GENES
             const hasSelection = window.cy && window.cy.$(':selected').length > 0;
-            
+
             if (hasSelection) {
                 // Hide only genes connected to selected nodes
                 const selectedNodes = window.cy.$(':selected').nodes();
                 const genesToHide = window.cy.collection();
                 const proteinsToHide = window.cy.collection();
-                
+
                 selectedNodes.forEach(node => {
                     const connectedProts = node.connectedEdges().connectedNodes('.uniprot-node');
-                    connectedGenes= connectedProts.connectedEdges().connectedNodes('.ensembl-node');
+                    connectedGenes = connectedProts.connectedEdges().connectedNodes('.ensembl-node');
                     genesToHide.merge(connectedGenes);
                     proteinsToHide.merge(connectedProts);
                 });
-                
+
                 genesToHide.remove();
                 genesToHide.connectedEdges().remove();
                 proteinsToHide.remove();
                 proteinsToHide.connectedEdges().remove();
-                
+
                 console.log(`Removed ${genesToHide.length} genes and ${proteinsToHide.length} proteins connected to selected nodes`);
             } else {
                 // Hide all genes
                 const allGenes = window.cy.elements(".uniprot-node, .ensembl-node");
                 allGenes.remove();
                 allGenes.connectedEdges().remove();
-                
+
                 console.log(`Removed all gene nodes`);
             }
 
             // Reset layout and update table
             window.resetNetworkLayout();
-            
+
             setTimeout(() => {
                 if (window.populateGeneTable) {
                     window.populateGeneTable();
@@ -1280,14 +1271,14 @@ function updateGeneTable() {
 
             if (response.gene_data && response.gene_data.length > 0) {
                 response.gene_data.forEach(gene => {
-                    const proteinDisplay = gene.protein !== "N/A" ? 
-                        `<a href="https://www.uniprot.org/uniprotkb/${gene.uniprot_id}" target="_blank">${gene.protein}</a>` : 
+                    const proteinDisplay = gene.protein !== "N/A" ?
+                        `<a href="https://www.uniprot.org/uniprotkb/${gene.uniprot_id}" target="_blank">${gene.protein}</a>` :
                         "N/A";
-                    
+
                     const geneDisplay = gene.gene !== "N/A" ?
                         `<a href="https://identifiers.org/ensembl:${gene.gene}" target="_blank">${gene.gene}</a>` :
                         "N/A";
-                    
+
                     tableBody.append(`
                     <tr data-gene="${gene.gene}" 
                         data-uniprot-id="${gene.uniprot_id}" 
@@ -1303,10 +1294,10 @@ function updateGeneTable() {
                     </tr>
                 `);
                 });
-                
+
                 // Add click handlers for individual cells
                 setupGeneCellClickHandlers();
-                
+
                 console.log(`Gene table updated with ${response.gene_data.length} genes.`);
                 window.resetNetworkLayout();
             } else {
@@ -1328,20 +1319,20 @@ function updateGeneTable() {
 function setupGeneCellClickHandlers() {
     // Remove any existing handlers to prevent duplicates
     $(document).off('click', '.gene-cell, .protein-cell');
-    
+
     // Add click handlers for gene and protein cells (but not on links)
-    $(document).on('click', '.gene-cell, .protein-cell', function(e) {
+    $(document).on('click', '.gene-cell, .protein-cell', function (e) {
         // Don't trigger if clicking on a link
         if ($(e.target).is('a') || $(e.target).closest('a').length) {
             return;
         }
-        
+
         e.preventDefault();
         e.stopPropagation();
-        
+
         const nodeId = $(this).data('node-id');
         if (!nodeId || nodeId === 'N/A') return;
-        
+
         // Use the same highlighting function as AOP table
         if (window.aopTableManager && window.aopTableManager.highlightNodeInNetwork) {
             window.aopTableManager.highlightNodeInNetwork(nodeId);
@@ -1349,16 +1340,16 @@ function setupGeneCellClickHandlers() {
             // Fallback implementation
             highlightGeneNodeInNetwork(nodeId);
         }
-        
+
         // Add visual feedback to the clicked cell
         $('.gene-cell, .protein-cell').removeClass('highlighted-cell');
         $(this).addClass('highlighted-cell');
-        
+
         // Remove highlight after a few seconds
         setTimeout(() => {
             $(this).removeClass('highlighted-cell');
         }, 3000);
-        
+
         console.log(`Clicked on gene/protein cell, focusing on node: ${nodeId}`);
     });
 }
