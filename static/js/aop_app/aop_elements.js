@@ -306,7 +306,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     }).hide();
                     window.resetNetworkLayout();
 
-                    $("#see_genes").text("See Genes");
+                    $("#see_genes").text("Get gene sets");
                     window.genesVisible = false;
                     window.resetNetworkLayout();
                     console.log("Gene elements loaded but hidden by default");
@@ -993,7 +993,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function toggleGenes() {
         const action = window.genesVisible ? 'hide' : 'show';
-
         if (action === 'show') {
             // Check if there are selected elements
             const hasSelection = window.cy && window.cy.$(':selected').length > 0;
@@ -1004,7 +1003,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (keyEventUris.length === 0) {
                 const scopeMessage = hasSelection ? "selected elements" : "network";
                 console.log(`No Key Events found in ${scopeMessage} for gene loading`);
-                $("#see_genes").text("Hide Genes");
+                $("#see_genes").text("Remove gene sets");
                 window.genesVisible = true;
                 return;
             }
@@ -1078,7 +1077,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
 
                     // Update button and state - ALWAYS set to hide mode when showing genes
-                    $("#see_genes").text("Hide Genes");
+                    $("#see_genes").text("Remove gene sets");
                     window.genesVisible = true;
 
                     // Update gene table
@@ -1099,7 +1098,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 });
 
         } else {
-            // HIDE GENES
+            // Remove gene sets
             const hasSelection = window.cy && window.cy.$(':selected').length > 0;
 
             if (hasSelection) {
@@ -1110,7 +1109,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 selectedNodes.forEach(node => {
                     const connectedProts = node.connectedEdges().connectedNodes('.uniprot-node');
-                    connectedGenes = connectedProts.connectedEdges().connectedNodes('.ensembl-node');
+                    const connectedGenes = connectedProts.connectedEdges().connectedNodes('.ensembl-node');
                     genesToHide.merge(connectedGenes);
                     proteinsToHide.merge(connectedProts);
                 });
@@ -1132,6 +1131,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
             // Reset layout and update table
             window.resetNetworkLayout();
+            window.genesVisible = false;
+            $("#see_genes").text("Get gene sets");
 
             setTimeout(() => {
                 if (window.populateGeneTable) {
