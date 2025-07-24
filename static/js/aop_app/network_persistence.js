@@ -7,11 +7,11 @@ class NetworkState {
     }
 
     // Auto-save network state every 30 seconds
-    setupAutoSave() {
-        this.autoSaveInterval = setInterval(() => {
-            this.saveNetworkState(true); // true = auto-save
-        }, 30000);
-    }
+    // stop for now setupAutoSave() {
+    // stop for now     this.autoSaveInterval = setInterval(() => {
+    // stop for now         this.saveNetworkState(true); // true = auto-save
+    // stop for now     }, 30000);
+    // stop for now }
 
     // Save current network state
     async saveNetworkState(isAutoSave = false) {

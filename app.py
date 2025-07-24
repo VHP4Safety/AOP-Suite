@@ -1,5 +1,3 @@
-################################################################################
-### Loading the required modules
 from flask import Flask, request, jsonify, render_template, send_file, Blueprint, render_template, abort, g, redirect, url_for
 import requests
 from wikidataintegrator import wdi_core
@@ -10,11 +8,18 @@ from werkzeug.routing import BaseConverter
 from jinja2 import TemplateNotFound
 from SPARQLWrapper import SPARQLWrapper, JSON
 from rdflib import Graph
-################################################################################
+
+from backend.routes.aop_app import aop_app
+
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+app = Flask(__name__)
+app.register_blueprint(aop_app)
+
 
 class RegexConverter(BaseConverter):
     """Converter for regular expression routes.
@@ -31,9 +36,7 @@ class RegexConverter(BaseConverter):
         super(RegexConverter, self).__init__(url_map)
         self.regex = items[0]
 
-app = Flask(__name__)
 
-# Initialize RDF graph for AOP data (you may need to adjust this based on your setup)
 def get_aop_graph():
     """Get or create the AOP RDF graph"""
     if not hasattr(g, 'aop_graph'):
@@ -42,8 +45,6 @@ def get_aop_graph():
         # g.aop_graph.parse("path_to_aop_data.ttl", format="turtle")
     return g.aop_graph
 
-################################################################################
-### The landing page
 @app.route('/')
 def index():
     """Main AOP Network Builder application"""
@@ -76,177 +77,23 @@ def aop_with_ids(qid, qid_wd):
                          qid=qid,
                          qid_wd=qid_wd)
 
-################################################################################
-
-################################################################################
-### Pages under 'Project Information'
-@app.route('/information/mission_and_vision')
-def mission_and_vision():
-    return render_template('information/mission_and_vision.html')
-
-@app.route('/information/research_lines')
-def research_lines():
-    return render_template('information/research_lines.html')
-
-@app.route('/case_studies_and_regulatory_questions')
-def case_studies_and_regulatory_questions():
-    return render_template('information/case_studies_and_regulatory_questions.html')
-
-@app.route('/information/partners_and_consortium')
-def partners_and_consortium():
-    return render_template('information/partners_and_consortium.html')
-
-@app.route('/information/contact')
-def contact():
-    return render_template('information/contact.html')
-
-@app.route('/youp')
-def youp():
-    return render_template('case_studies/thyroid/youp.html')
-
-################################################################################
-
-################################################################################
-### Pages under 'Services'
-
-# Page to list all the services based on the list of services on the cloud repo.
-@app.route('/templates/services/service_list')
-def service_list():
-    # Github API link to receive the list of the services on the cloud repo:
-    url = f'https://api.github.com/repos/VHP4Safety/cloud/contents/docs/service'
-    response = requests.get(url)
-
-    # Checking if the request was successful (status code 200).
-    if response.status_code == 200:
-        # Extracting the list of files.
-        service_content = response.json()
-
-        # Separating .json and .md files.
-        json_files = {file['name']: file for file in service_content if file['type'] == 'file' and file['name'].endswith('.json')}
-        md_files = {file['name']: file for file in service_content if file['type'] == 'file' and file['name'].endswith('.md')}
-        png_files = {file['name']: file for file in service_content if file['type'] == 'file' and file['name'].endswith('.png')}
-
-        # Creating an empty list to store the results. 
-        services = []
-
-        # Fetching the .json files.
-        for json_file_name, json_file in json_files.items():
-            # Skipping the template.json file. 
-            if json_file_name == 'template.json':
-                continue
- 
-            json_url = json_file['download_url']  # Using the download URL from the API response.
-            json_response = requests.get(json_url)
-
-            if json_response.status_code == 200:
-                json_data = json_response.json()
-                
-                # Extracting the 'service' field from the json file.
-                service_name = json_data.get('service')
-                description_string = json_data.get('description') 
-
-                if service_name:
-                    # Replacing the .json extension with the .md to get the corresponding .md file.
-                    md_file_name = json_file_name.replace('.json', '.md')
-                    html_name = json_file_name.replace('.json', '.html')
-                    url = "https://cloud.vhp4safety.nl/service/"+ html_name 
-
-                    if md_file_name in md_files:
-                        md_file_url = f'https://raw.githubusercontent.com/VHP4Safety/cloud/main/docs/service/{md_file_name}'
-                    else:
-                        md_file_url = "md file not found"
-                    png_file_name = md_file_name.replace('.md', '.png')
-
-                    if png_file_name in png_files:
-                        png_file_url = f'https://raw.githubusercontent.com/VHP4Safety/cloud/main/docs/service/{png_file_name}'
-                        services.append({
-                            'service': service_name,
-                            'url': url,
-                            'meta_data': md_file_url,
-                            'description': description_string,
-                            'png': png_file_url
-                        })
-                    else:
-                        services.append({
-                            'service': service_name,
-                            'url': url,
-                            'meta_data': md_file_url,
-                            'description': description_string,
-                            'png': "../../static/images/logo.png"
-                        })
-
-        # Passing the services data to the template after processing all JSON files.
-        return render_template('services/service_list.html', services=services)
-    else:
-        return f"Error fetching files: {response.status_code}"
-
-    # return render_template('services/service_list.html')
-
-@app.route('/templates/services/qsprpred')
-def qsprpred():
-    return render_template('services/qsprpred.html')
-
-################################################################################
-
-################################################################################
-### Pages under 'Case Studies'
-
-@app.route('/templates/case_studies/kidney/kidney')
-def kidney_main():
-    return render_template('case_studies/kidney/kidney.html')
-
-@app.route('/case_studies/parkinson/parkinson')
-def parkinson_main():
-    return render_template('case_studies/parkinson/parkinson.html')
-
 
 @app.route("/services/AOPapp")
 def aop_app():
     return render_template("services/AOPapp.html")
 
 
-@app.route('/case_studies/parkinson/workflows/parkinson_AOP')
-def parkinson_aop():
-    return render_template('case_studies/parkinson/workflows/parkinson_AOP.html')
-
-
-@app.route("/case_studies/thyroid/workflows/thyroid_AOP")
-def thyroid_aop():
-    return render_template("case_studies/thyroid/workflows/thyroid_AOP.html")
-
-
 @app.route('/workflow/<workflow>')
 def show(workflow):
     try:
-        return render_template(f'case_studies/parkinson/workflows/{workflow}_workflow.html')
+        return render_template(
+            f"case_studies/{workflow}/workflows/{workflow}_workflow.html"
+        )
     except TemplateNotFound:
         abort(404)
 
-@app.route('/compound/<cwid>')
-def show_compound(cwid):
-    try:
-        return render_template(f'compound.html', cwid=cwid)
-    except TemplateNotFound:
-        abort(404)
-
-@app.route('/templates/case_studies/thyroid/thyroid')
-def thyroid_main():
-    return render_template('case_studies/thyroid/thyroid.html')
-
-@app.route('/templates/case_studies/thyroid/workflows/thyroid_hackathon_demo_workflow')
-def thyroid_workflow_1():
-    return render_template('case_studies/thyroid/workflows/thyroid_hackathon_demo_workflow.html')
-@app.route('/templates/case_studies/thyroid/workflows/ngra_silymarin')
-def ngra_silymarin():
-    return render_template('case_studies/thyroid/workflows/ngra_silymarin.html')
-
-################################################################################
-
-# Import the new blueprint
-from routes.aop_app import aop_app
 
 # Register the blueprint
-app.register_blueprint(aop_app)
 
 ################################################################################
 @app.route("/aop_standalone")
@@ -259,69 +106,6 @@ def aop_standalone():
                          mie_query="",
                          qid="",
                          qid_wd="")
-
-@app.route('/get_go_processes', methods=['GET'])
-def get_go_processes():
-    """Query AOP wiki for GO processes related to current Key Events"""
-    try:
-        # Get current network elements
-        cy_elements = request.args.get('cy_elements', '[]')
-        if isinstance(cy_elements, str):
-            cy_elements = json.loads(cy_elements)
-        
-        # Extract Key Event IDs from current network
-        ke_ids = []
-        for element in cy_elements:
-            if element.get('data', {}).get('type') == 'key_event':
-                ke_id = element['data']['id']
-                if ke_id.startswith('https://identifiers.org/aop.events/'):
-                    ke_ids.append(ke_id)
-        
-        if not ke_ids:
-            return jsonify({"processes": [], "message": "No Key Events found in current network"})
-        
-        # For now, create some sample process data since we don't have the actual AOP graph setup
-        # You can integrate with your actual AOP data source later
-        sample_processes = [
-            {
-                "id": "go_process_0008150",
-                "uri": "http://purl.obolibrary.org/obo/GO_0008150",
-                "label": "biological_process",
-                "type": "go_process"
-            },
-            {
-                "id": "go_process_0009987",
-                "uri": "http://purl.obolibrary.org/obo/GO_0009987", 
-                "label": "cellular process",
-                "type": "go_process"
-            }
-        ]
-        
-        # Query remote endpoint for process hierarchy
-        include_hierarchy = request.args.get('include_hierarchy', 'false').lower() == 'true'
-        
-        if include_hierarchy:
-            # Return hierarchy with sample edges
-            return jsonify({
-                "processes": {
-                    "nodes": sample_processes,
-                    "edges": [
-                        {
-                            "id": "edge_go_process_0009987_to_go_process_0008150",
-                            "source": "go_process_0009987",
-                            "target": "go_process_0008150", 
-                            "type": "go_hierarchy",
-                            "label": "subClassOf"
-                        }
-                    ]
-                }
-            })
-        else:
-            # Just return the direct processes
-            return jsonify({"processes": sample_processes})
-            
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

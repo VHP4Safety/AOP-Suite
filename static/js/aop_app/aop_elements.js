@@ -1031,9 +1031,10 @@ document.addEventListener("DOMContentLoaded", function () {
                     const fontSlider = document.getElementById('font-size-slider');
                     const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
 
-                    if (data.gene_elements && data.gene_elements.length > 0) {
+                    if (data.gene_elements) {
                         // Add only new gene elements
                         data.gene_elements.forEach(element => {
+                            console.log(element.data);
                             const elementId = element.data?.id;
                             if (elementId && !window.cy.getElementById(elementId).length) {
                                 try {
