@@ -232,12 +232,11 @@ class AOPNetworkService:
         except Exception as e:
             return {"error": str(e)}
 
- 
     # BioDataFuse
-    def add_bgee_data(self, genes: List[str]) -> Dict[str, Any]:
+    def add_bgee_data(self, request_data):
         return
 
-    def add_opentargets_data(self, ot_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def add_opentargets_data(self, request_data):
         return
 
     # Network state management

@@ -3,15 +3,15 @@
 class NetworkState {
     constructor() {
         this.autoSaveInterval = null;
-        this.setupAutoSave();
+    //    this.setupAutoSave();
     }
 
-    // Auto-save network state every 30 seconds
-    // stop for now setupAutoSave() {
-    // stop for now     this.autoSaveInterval = setInterval(() => {
-    // stop for now         this.saveNetworkState(true); // true = auto-save
-    // stop for now     }, 30000);
-    // stop for now }
+    //// Auto-save network state every 30 minutes
+    //setupAutoSave() {
+    //    this.autoSaveInterval = setInterval(() => {
+    //        this.saveNetworkState(true); // true = auto-save
+    //    }, 30000);
+    //}
 
     // Save current network state
     async saveNetworkState(isAutoSave = false) {

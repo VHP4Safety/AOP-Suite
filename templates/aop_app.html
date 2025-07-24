@@ -108,7 +108,7 @@
                                 <i class="fas fa-spinner fa-spin"></i> Loading AOP data...
                             </div>
                             <div id="aop-table-container" class="table-wrapper">
-                                <!-- Filter and table will be dynamically inserted here by aop_table.js -->
+                                <!-- Filter and table will be dynamically inserted here by data_tables.js -->
                             </div>
                         </div>
                     </div>
@@ -1137,17 +1137,13 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css">
 <script src="https://cdn.jsdelivr.net/npm/cytoscape-qtip@2.7.0/cytoscape-qtip.js"></script>
 
-<script src="{{ url_for('static', filename='js/aop_app/aopName.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_name.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_elements.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_styles.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/qsprpred.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/compound.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/gene.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/bdf.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/network_persistence.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/manual_controls.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/custom_tables.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_network_data.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/aop_table.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/data_tables.js') }}"></script>
 
 {% endblock %}

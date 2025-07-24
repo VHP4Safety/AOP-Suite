@@ -284,7 +284,7 @@ def load_and_show_genes(kes):
                 ?object skos:exactMatch ?id .
                 ?id a edam:data_1033; edam:data_1033 ?ensembl .
                 OPTIONAL {     ?object skos:exactMatch ?prot.
-        					   ?prot a edam:data_2291; 
+        					   ?prot a edam:data_2291;
                                        edam:data_2291 ?uniprot.
     						}
                 }
