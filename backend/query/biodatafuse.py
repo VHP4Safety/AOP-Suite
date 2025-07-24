@@ -1,5 +1,5 @@
-from pyBiodataFuse import id_mapper
-from pyBiodataFuse.annotators import opentargets, bgee
+from pyBiodatafuse import id_mapper
+from pyBiodatafuse.annotators import opentargets, bgee
 import pandas as pd
 
 

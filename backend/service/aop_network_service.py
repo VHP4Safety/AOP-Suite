@@ -12,7 +12,10 @@ from backend.model.aop_data_model import (
     EdgeType,
     DataSourceType,
 )
-from backend.query import aopwikirdf
+from backend.query import (
+    aopwikirdf,
+    biodatafuse
+)
 
 import uuid
 from datetime import datetime
@@ -230,11 +233,25 @@ class AOPNetworkService:
             aop_data = aopwikirdf.populate_aop_table(cy_elements)
             return {"aop_data": aop_data}
         except Exception as e:
-            return {"error": str(e)}
+            return jsonify({"error": str(e)}, 500)
 
     # BioDataFuse
-    def add_bgee_data(self, request_data):
-        return
+    def get_bridgedb_xref(self, request_data):
+        data = request_data.get_json(silent=True)
+        identifiers = data.get("identifiers", "")
+        input_species = data.get("input_species", "")
+        input_datasource = data.get("input_datasource", "")
+        bridgedb_df, bridgedb_metadata = biodatafuse.get_bridgedb_xref(
+            identifiers=identifiers,
+            input_species=input_species,
+            input_datasource=input_datasource
+        )
+        return jsonify(
+            {
+            "bridgedb_df": bridgedb_df.fillna("NaN").to_dict(orient="records"),
+            "bridgedb_metadata": bridgedb_metadata
+            }
+        )
 
     def add_opentargets_data(self, request_data):
         return

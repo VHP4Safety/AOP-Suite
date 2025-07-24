@@ -1,9 +1,5 @@
 from flask import Blueprint, request, jsonify, send_file
-from pyBiodatafuse import id_mapper
-from pyBiodatafuse.annotators import opentargets, bgee
-from bioregistry import get_iri
 
-from urllib.parse import quote, unquote
 import requests
 import json
 import pandas as pd

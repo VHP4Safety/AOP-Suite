@@ -1,7 +1,6 @@
 document.addEventListener("DOMContentLoaded", function () {
     // Global variables
     window.cy = null;
-    window.boundingBoxesVisible = false;
     window.genesVisible = false;
     window.compoundsVisible = false;
     window.goProcessesVisible = false;
@@ -15,22 +14,6 @@ document.addEventListener("DOMContentLoaded", function () {
         !document.querySelector("#compound-container").dataset.mies;
 
     console.log("App mode:", isStandaloneMode ? "Standalone" : "Template");
-
-    // Fetch data for the AOP network.
-    function fetchAOPData(mies) {
-        console.debug(`Fetching AOP network data for: ${mies}`);
-        return fetch(`/get_aop_network?mies=${encodeURIComponent(mies)}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                return response.json();
-            })
-            .catch(error => {
-                console.error("Error fetching AOP data:", error);
-                return [];
-            });
-    }
 
     function renderAOPNetwork(elements) {
         console.debug("Rendering AOP network with elements:", elements);
@@ -245,77 +228,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 200);
     }
 
-    function initializeGeneView() {
-        if (!window.cy) {
-            console.warn("Cytoscape not ready for gene initialization");
-            return;
-        }
-
-        // Always populate the gene table, even if empty
-        setTimeout(() => {
-            if (window.populateGeneTable) {
-                window.populateGeneTable();
-            }
-        }, 100);
-
-        // Only try to load genes if we have MIE data
-        const dashboardContainer = document.querySelector("#compound-container");
-        const mies = dashboardContainer?.dataset?.mies;
-
-        if (!mies || isStandaloneMode) {
-            console.log("No MIE data available - skipping gene loading");
-            return;
-        }
-
-        // Load gene elements but keep them hidden initially
-        fetch('/toggle_genes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                action: 'show',
-                cy_elements: window.cy.elements().jsons()
-            })
-        })
-            .then(response => {
-                if (!response.ok) {
-                    console.warn(`Gene initialization failed: ${response.status}`);
-                    return { gene_elements: [] };
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.gene_elements && data.gene_elements.length > 0) {
-                    data.gene_elements.forEach(element => {
-                        const elementId = element.data?.id;
-                        if (elementId && !window.cy.getElementById(elementId).length) {
-                            try {
-                                window.cy.add(element);
-                            } catch (error) {
-                                console.warn("Skipping duplicate element:", elementId);
-                            }
-                        }
-                    });
-
-                    // Keep genes hidden by default
-                    window.cy.elements(".uniprot-node, .ensembl-node").hide();
-                    window.cy.edges().filter(edge => {
-                        const source = edge.source();
-                        const target = edge.target();
-                        return source.hasClass("uniprot-node") || source.hasClass("ensembl-node") ||
-                            target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
-                    }).hide();
-                    window.resetNetworkLayout();
-
-                    $("#see_genes").text("Get gene sets");
-                    window.genesVisible = false;
-                    window.resetNetworkLayout();
-                    console.log("Gene elements loaded but hidden by default");
-                }
-            })
-            .catch(error => {
-                console.warn("Error initializing gene view:", error);
-            });
-    }
 
     function setupEventHandlers() {
         // Initialize selection functionality

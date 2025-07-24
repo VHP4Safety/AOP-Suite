@@ -1,7 +1,7 @@
 // AOP Network Data Addition functionality
 
 // Update API base URL to work from root
-const API_BASE_URL = '';  // Since we're now at root, no prefix needed
+const API_BASE_URL = '';
 
 class AOPNetworkDataManager {
     constructor() {
