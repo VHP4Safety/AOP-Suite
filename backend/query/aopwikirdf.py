@@ -513,3 +513,147 @@ def get_aop_network_data(query_type, values):
         return response_data
     except Exception as e:
         return {"error": f"Unexpected error: {str(e)}"}, 500
+    
+def populate_aop_table(cy_elements):
+    aop_data = []
+    # Create a lookup for node labels and AOP data
+    node_data = {}
+    connected_nodes = set()
+    for element in cy_elements:
+        if (
+            element.get("group") != "edges"
+            and element.get("classes") != "bounding-box"
+        ):
+            element_data = element.get("data", {})
+            node_id = element_data.get("id")
+            if node_id:
+                # Format label with fallback to IRI if missing
+                label = element_data.get("label", "")
+                if not label or label == "NA":
+                    # Extract readable part from IRI
+                    iri_part = (
+                        node_id.split("/")[-1] if "/" in node_id else node_id
+                    )
+                    label = f"{iri_part} (missing label)"
+                node_data[node_id] = {
+                    "label": label,
+                    "type": element_data.get("type", "unknown"),
+                    "is_mie": element_data.get("is_mie", False),
+                    "is_ao": element_data.get("is_ao", False),
+                    "aop": element_data.get("aop", []),
+                    "aop_title": element_data.get("aop_title", []),
+                }
+    # Process edges with KER labels and track connected nodes
+    for element in cy_elements:
+        if element.get("group") == "edges":
+            edge_data = element.get("data", {})
+            source_id = edge_data.get("source", "")
+            target_id = edge_data.get("target", "")
+            # Track connected nodes
+            if source_id:
+                connected_nodes.add(source_id)
+            if target_id:
+                connected_nodes.add(target_id)
+            # Only process edges with KER data
+            if edge_data.get("ker_label") and edge_data.get("curie"):
+                ker_label = edge_data.get("ker_label", "")
+                curie = edge_data.get("curie", "")
+                # Get source and target data
+                source_data = node_data.get(source_id, {})
+                target_data = node_data.get(target_id, {})
+                source_label = source_data.get("label", source_id)
+                target_label = target_data.get("label", target_id)
+                source_type = source_data.get("type", "unknown")
+                target_type = target_data.get("type", "unknown")
+                # Collect all AOPs from both source and target nodes
+                all_aops = set()
+                aop_titles = set()
+                # Add AOPs from source
+                source_aops = source_data.get("aop", [])
+                source_aop_titles = source_data.get("aop_title", [])
+                if not isinstance(source_aops, list):
+                    source_aops = [source_aops] if source_aops else []
+                if not isinstance(source_aop_titles, list):
+                    source_aop_titles = (
+                        [source_aop_titles] if source_aop_titles else []
+                    )
+                for aop in source_aops:
+                    if aop and "aop/" in aop:
+                        aop_id = aop.split("aop/")[-1]
+                        all_aops.add(f"AOP:{aop_id}")
+                for title in source_aop_titles:
+                    if title:
+                        aop_titles.add(title)
+                # Add AOPs from target
+                target_aops = target_data.get("aop", [])
+                target_aop_titles = target_data.get("aop_title", [])
+                if not isinstance(target_aops, list):
+                    target_aops = [target_aops] if target_aops else []
+                if not isinstance(target_aop_titles, list):
+                    target_aop_titles = (
+                        [target_aop_titles] if target_aop_titles else []
+                    )
+                for aop in target_aops:
+                    if aop and "aop/" in aop:
+                        aop_id = aop.split("aop/")[-1]
+                        all_aops.add(f"AOP:{aop_id}")
+                for title in target_aop_titles:
+                    if title:
+                        aop_titles.add(title)
+                # Convert to sorted lists for consistent display
+                aop_list = sorted(list(all_aops))
+                aop_string = ",".join(aop_list) if aop_list else "N/A"
+                aop_titles_string = (
+                    "; ".join(sorted(list(aop_titles))) if aop_titles else "N/A"
+                )
+                aop_data.append(
+                    {
+                        "source_id": source_id,
+                        "source_label": source_label,
+                        "source_type": source_type,
+                        "ker_label": ker_label,
+                        "curie": curie,
+                        "target_id": target_id,
+                        "target_label": target_label,
+                        "target_type": target_type,
+                        "aop_list": aop_string,
+                        "aop_titles": aop_titles_string,
+                        "is_connected": True,
+                    }
+                )
+    # Add disconnected nodes as separate entries
+    for node_id, node_info in node_data.items():
+        if node_id not in connected_nodes:
+            # Get AOP information for disconnected nodes
+            node_aops = node_info.get("aop", [])
+            node_aop_titles = node_info.get("aop_title", [])
+            if not isinstance(node_aops, list):
+                node_aops = [node_aops] if node_aops else []
+            if not isinstance(node_aop_titles, list):
+                node_aop_titles = [node_aop_titles] if node_aop_titles else []
+            aop_ids = []
+            for aop in node_aops:
+                if aop and "aop/" in aop:
+                    aop_id = aop.split("aop/")[-1]
+                    aop_ids.append(f"AOP:{aop_id}")
+            aop_string = ",".join(sorted(aop_ids)) if aop_ids else "N/A"
+            aop_titles_string = (
+                "; ".join(sorted(node_aop_titles)) if node_aop_titles else "N/A"
+            )
+            aop_data.append(
+                {
+                    "source_id": node_id,
+                    "source_label": node_info.get("label", node_id),
+                    "source_type": node_info.get("type", "unknown"),
+                    "ker_label": "N/A (disconnected)",
+                    "curie": "N/A",
+                    "target_id": "N/A",
+                    "target_label": "N/A",
+                    "target_type": "N/A",
+                    "aop_list": aop_string,
+                    "aop_titles": aop_titles_string,
+                    "is_connected": False,
+                }
+            )
+    return aop_data
+
