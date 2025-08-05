@@ -10,7 +10,8 @@ from backend.model.aop_data_model import (
     AOPNetwork,
     AOPKeyEvent,
     NodeType,
-    AOPRelationshipEntry
+    AOPRelationshipEntry,
+    AOPInfo
 )
 
 from datetime import datetime
@@ -261,6 +262,48 @@ class AOPNetworkService:
             
         except Exception as e:
             logger.error(f"Error in load_network_state: {e}")
+            return {"error": str(e)}, 500
+
+    def load_and_show_compounds(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Load compounds for AOPs using the AOP data model"""
+        try:
+            aops = request_data.args.get("aops", "")
+            if not aops:
+                return {"error": "aops parameter is required"}, 400
+
+            logger.info(f"Loading compounds for AOPs: {aops}")
+            
+            # Parse AOP URIs
+            aop_uris = [uri.strip('<>') for uri in aops.split()]
+            logger.info(f"Parsed AOP URIs: {aop_uris}")
+            
+            # Create a temporary network with the provided AOPs
+            temp_network = AOPNetwork()
+            
+            # Add minimal AOP info to the network
+            for aop_uri in aop_uris:
+                aop_id = aop_uri.split("/")[-1] if "/" in aop_uri else aop_uri
+                
+                aop_info = AOPInfo(
+                    aop_id=aop_id,
+                    title=f"AOP {aop_id}",
+                    uri=aop_uri
+                )
+                temp_network.aop_info[aop_uri] = aop_info
+            
+            # Query compounds for this network
+            enriched_network = aop_query_service.query_compounds_for_network(temp_network)
+            
+            # Convert compound associations to Cytoscape elements
+            compound_elements = []
+            for association in enriched_network.compound_associations:
+                compound_elements.extend(association.to_cytoscape_elements())
+
+            logger.info(f"Retrieved {len(compound_elements)} compound elements")
+            return {"compound_elements": compound_elements}, 200
+            
+        except Exception as e:
+            logger.error(f"Error in load_and_show_compounds: {e}")
             return {"error": str(e)}, 500
 
 class AOPTableBuilder:

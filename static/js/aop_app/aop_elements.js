@@ -766,6 +766,15 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
 
+        // Setup compound table button handler
+        $("#get-compounds-table-btn").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.toggleCompounds) {
+                window.toggleCompounds();
+            }
+        });
+
         // Toggle genes
         $("#see_genes").on("click", function (e) {
             e.preventDefault();
@@ -1954,3 +1963,226 @@ function showBgeeStatus(message, type = 'info') {
         }, 5000);
     }
 }
+
+// Helper function to get AOP URIs from network (either selected or all)
+function getAOPsFromNetwork(useSelection = false) {
+    if (!window.cy) {
+        return [];
+    }
+
+    let nodes;
+    if (useSelection) {
+        const selected = window.cy.$(':selected');
+        // Only consider selected nodes, filter out edges
+        nodes = selected.nodes();
+        console.log(`Using ${nodes.length} selected nodes for AOP extraction`);
+    } else {
+        nodes = window.cy.nodes();
+        console.log(`Using all ${nodes.length} nodes for AOP extraction`);
+    }
+
+    const aopUris = new Set();
+
+    nodes.forEach(node => {
+        const nodeData = node.data();
+        
+        // Primary method: Check the 'aop' array property (main source based on your data)
+        if (nodeData.aop && Array.isArray(nodeData.aop)) {
+            nodeData.aop.forEach(aopUri => {
+                if (aopUri && typeof aopUri === 'string') {
+                    aopUris.add(aopUri);
+                }
+            });
+        }
+        
+        // Secondary method: Check if it's an AOP node or has AOP associations
+        if (nodeData.aop_uris) {
+            nodeData.aop_uris.forEach(uri => aopUris.add(uri));
+        }
+        
+        // Tertiary method: Extract from associated AOPs if available
+        if (nodeData.associated_aops) {
+            nodeData.associated_aops.forEach(aop => {
+                if (aop.aop_uri) aopUris.add(aop.aop_uri);
+                if (aop.aop_id) {
+                    // Construct URI from AOP ID
+                    const aopUri = `https://identifiers.org/aop/${aop.aop_id}`;
+                    aopUris.add(aopUri);
+                }
+            });
+        }
+
+        // Quaternary method: Extract from node ID if it looks like an AOP URI
+        if (nodeData.id && nodeData.id.includes('aop/')) {
+            aopUris.add(nodeData.id);
+        }
+
+        // Quintary method: Check for AOP info in other data fields
+        if (nodeData.aop_id) {
+            // Construct URI from AOP ID
+            const aopUri = `https://identifiers.org/aop/${nodeData.aop_id}`;
+            aopUris.add(aopUri);
+        }
+
+        // Debug logging for the first few nodes
+        if (aopUris.size === 0 && nodes.length <= 5) {
+            console.log(`Node ${nodeData.id} data:`, nodeData);
+            console.log(`AOP array:`, nodeData.aop);
+        }
+    });
+
+    const aopUriArray = Array.from(aopUris);
+    console.log(`Extracted ${aopUriArray.length} AOP URIs:`, aopUriArray);
+    
+    return aopUriArray;
+}
+
+function toggleCompounds() {
+    const action = window.compoundsVisible ? 'hide' : 'show';
+    if (action === 'show') {
+        // Check if there are selected elements
+        const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+
+        // Extract AOP URIs from either selected nodes or all nodes
+        const aopUris = getAOPsFromNetwork(hasSelection);
+
+        if (aopUris.length === 0) {
+            const scopeMessage = hasSelection ? "selected elements" : "network";
+            console.log(`No AOPs found in ${scopeMessage} for compound loading`);
+            $("#toggle_compounds").html('<i class="fas fa-flask"></i> Remove compounds');
+            window.compoundsVisible = true;
+            return;
+        }
+
+        const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
+        console.log(`Found ${aopUris.length} AOPs from ${scopeMessage} for compound loading:`, aopUris);
+
+        // Call the load_and_show_compounds endpoint with the extracted AOPs
+        fetch(`/load_and_show_compounds?aops=${encodeURIComponent(aopUris.join(' '))}`, {
+            method: 'GET'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    console.error("Compound loading error:", data.error);
+                    showStatus(`Error loading compounds: ${data.error}`, 'error');
+                    return;
+                }
+
+                const fontSlider = document.getElementById('font-size-slider');
+                const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+
+                if (data.compound_elements) {
+                    // Add only new compound elements
+                    data.compound_elements.forEach(element => {
+                        console.log(element.data);
+                        const elementId = element.data?.id;
+                        if (elementId && !window.cy.getElementById(elementId).length) {
+                            try {
+                                window.cy.add(element);
+                            } catch (error) {
+                                console.warn("Error adding compound element:", elementId, error.message);
+                            }
+                        }
+                    });
+
+                    // Show compounds based on selection
+                    if (hasSelection) {
+                        // Only show compounds connected to selected nodes
+                        const selectedNodes = window.cy.$(':selected').nodes();
+                        const compoundNodesToShow = window.cy.collection();
+
+                        selectedNodes.forEach(node => {
+                            const connectedCompounds = node.connectedEdges().connectedNodes('.chemical-node');
+                            compoundNodesToShow.merge(connectedCompounds);
+                        });
+
+                        compoundNodesToShow.show();
+                        compoundNodesToShow.connectedEdges().show();
+
+                        console.log(`Showed ${compoundNodesToShow.length} compounds connected to selected nodes`);
+                    } else {
+                        // Show all compounds
+                        window.cy.elements(".chemical-node").show();
+                        window.cy.edges().forEach(function (edge) {
+                            const source = edge.source();
+                            const target = edge.target();
+                            const sourceIsCompound = source.hasClass("chemical-node");
+                            const targetIsCompound = target.hasClass("chemical-node");
+                            if (source.visible() && target.visible() && (sourceIsCompound || targetIsCompound)) {
+                                edge.show();
+                            }
+                        });
+
+                        console.log(`Showed all compound nodes`);
+                        window.resetNetworkLayout();
+                    }
+                }
+
+                // Update button and state - ALWAYS set to hide mode when showing compounds
+                $("#toggle_compounds").text("Hide Compounds");
+                window.compoundsVisible = true;
+
+                // Update compound table
+                setTimeout(() => {
+                    updateCompoundTableFromNetwork();
+                }, 100);
+
+                // Layout update
+                setTimeout(() => {
+                    positionNodes(window.cy, fontSizeMultiplier, true);
+                }, 150);
+            })
+            .catch(error => {
+                console.error("Error loading compounds:", error);
+                showStatus(`Error loading compounds: ${error.message}`, 'error');
+            });
+        
+
+    } else {
+        // Remove compound sets
+        const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+
+        if (hasSelection) {
+            // Hide only compounds connected to selected nodes
+            const selectedNodes = window.cy.$(':selected').nodes();
+            const compoundsToHide = window.cy.collection();
+
+            selectedNodes.forEach(node => {
+                const connectedCompounds = node.connectedEdges().connectedNodes('.chemical-node');
+                compoundsToHide.merge(connectedCompounds);
+            });
+
+            compoundsToHide.remove();
+            compoundsToHide.connectedEdges().remove();
+
+            console.log(`Removed ${compoundsToHide.length} compounds connected to selected nodes`);
+        } else {
+            // Hide all compounds
+            const allCompounds = window.cy.elements(".chemical-node");
+            allCompounds.remove();
+            allCompounds.connectedEdges().remove();
+
+            console.log(`Removed all compound nodes`);
+        }
+
+        // Reset layout and update table
+        window.resetNetworkLayout();
+        window.compoundsVisible = false;
+        $("#toggle_compounds").html('<i class="fas fa-flask"></i> Show Compounds');
+
+        setTimeout(() => {
+            updateCompoundTableFromNetwork();
+        }, 100);
+    }
+}
+
+// Make toggleCompounds available globally
+window.toggleCompounds = toggleCompounds;
+
+//# sourceMappingURL=aop_elements.js.map

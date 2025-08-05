@@ -130,6 +130,16 @@
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <tr id="default-compound-row">
+                                            <td style="text-align: center; padding: 20px;">
+                                                <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
+                                                    No compounds in network
+                                                </div>
+                                                <button id="get-compounds-table-btn" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-flask"></i> Get stressor compounds
+                                                </button>
+                                            </td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -197,6 +207,9 @@
                             <div class="aop-network-controls">
                                 <button id="see_genes" class="btn btn-primary mb-3">
                                     <i class="fas fa-dna"></i> Get Gene sets
+                                </button>
+                                <button id="toogle_compounds" class="btn btn-primary mb-3">
+                                    <i class="fas fa-dna"></i> Get chemical stressors
                                 </button>
                                 <div class="form-group">
                                     <label for="query-type">Query Type:</label>
@@ -378,6 +391,22 @@
                                 </div>
                                 <button id="fetch_predictions" type="button" class="btn btn-primary btn-sm w-100">
                                     <i class="fas fa-flask"></i> Fetch Predictions
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Compounds Card -->
+                        <div class="enhance-card" id="compounds-card">
+                            <div class="enhance-card-header">
+                                <i class="fas fa-flask"></i>
+                                <h4 class="enhance-card-title">Chemical stressors</h4>
+                            </div>
+                            <div class="enhance-card-content">
+                                Add chemical compounds from AOP database. Show compound-target relationships and chemical structures.
+                            </div>
+                            <div class="enhance-card-controls">
+                                <button id="toggle_compounds" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-flask"></i> Show Compounds
                                 </button>
                             </div>
                         </div>
@@ -1065,7 +1094,7 @@
         }, 300);
     }
 
-    // Gene table row click handler - add this to your existing script section
+    // Gene table row click handler
     function setupGeneTableHandlers() {
         $(document).off('click', '#gene_table tbody tr').on('click', '#gene_table tbody tr', function() {
             const geneSymbol = $(this).data('gene');
@@ -1107,28 +1136,8 @@
             console.log(`Clicked gene: ${geneSymbol}, UniProt: ${uniprotId}`);
         });
     }
-    
-    // Add to your existing document ready function
-    document.addEventListener('DOMContentLoaded', function () {
-        // ...existing code...
-        setupGeneTableHandlers();
-        // ...existing code...
-    });
-    
-    // Initialize gene table handlers when document is ready
-    document.addEventListener('DOMContentLoaded', function () {
-        // ...existing code...
-        
-        // Setup gene table handlers after a delay to ensure everything is loaded
-        setTimeout(() => {
-            if (window.setupGeneCellClickHandlers) {
-                window.setupGeneCellClickHandlers();
-            }
-        }, 1000);
-        
-        // ...existing code...
-    });
-    
+
+
     // Also reinitialize handlers when gene table is updated
     window.populateGeneTable = function () {
         if (window.updateGeneTable) {

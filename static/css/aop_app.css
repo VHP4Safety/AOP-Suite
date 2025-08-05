@@ -237,19 +237,16 @@
 }
 
 .table-panel {
-    /* ...existing code... */
     cursor: default;
 }
 
 .table-wrapper {
-    /* ...existing code... */
     cursor: default;
 }
 
 /* Ensure table rows maintain pointer cursor for interaction */
 .table tbody tr {
     cursor: pointer;
-    /* ...existing code... */
 }
 
 /* Make sure compound and gene links maintain proper cursor */

@@ -41,12 +41,12 @@ def load_network_state():
     return jsonify(aop_service.load_network_state()), 200
 
 
-# TODO## Get compounds associated with a specific KE
-# @aop_app.route("/load_and_show_compounds", methods=["GET"])
-# def load_and_show_compounds():
-#    return aop_service.load_and_show_compounds(request)
-#
+## Get compounds associated with a specific AOP
+@aop_app.route("/load_and_show_compounds", methods=["GET"])
+def load_and_show_compounds():
+    return aop_service.load_and_show_compounds(request)
+
 ### Populate the compound table
-# @aop_app.route("/populate_compound_table", methods=["POST"])
-# def populate_compound_table():
-#    return jsonify(aop_service.populate_compound_table(request)), 200
+@aop_app.route("/populate_compound_table", methods=["POST"])
+def populate_compound_table():
+    return jsonify(aop_service.populate_compound_table(request)), 200
