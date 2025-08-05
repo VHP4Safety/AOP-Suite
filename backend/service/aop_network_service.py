@@ -1,306 +1,373 @@
-from flask import Blueprint, request, jsonify, send_file
-
 import json
-import requests
-from typing import Dict, List, Optional, Any
+import logging
+from typing import Dict, List, Optional, Any, Tuple
+from dataclasses import dataclass
 
+from backend.query.aopwikirdf import aop_query_service
 from backend.model.aop_data_model import (
+    CytoscapeNetworkParser, 
+    GeneTableBuilder,
     AOPNetwork,
-    AOPNode,
-    AOPEdge,
+    AOPKeyEvent,
     NodeType,
-    EdgeType,
-    DataSourceType,
-)
-from backend.query import (
-    aopwikirdf,
-    biodatafuse
+    AOPRelationshipEntry
 )
 
-import uuid
 from datetime import datetime
 import os
 
-import pandas as pd
-from bioregistry import get_iri
+logger = logging.getLogger(__name__)
 
 NETWORK_STATES_DIR = os.path.join(os.path.dirname(__file__), "../saved_networks")
-AOPWIKISPARQL_ENDPOINT = "https://aopwiki.rdf.bigcat-bioinformatics.org/sparql/"
 
+@dataclass
+class ServiceResponse:
+    """Standardized service response"""
+    success: bool
+    data: Optional[Any] = None
+    error: Optional[str] = None
+    status_code: int = 200
+
+class NetworkStateManager:
+    """Handles network state persistence"""
+    
+    def __init__(self, states_dir: str = NETWORK_STATES_DIR):
+        self.states_dir = states_dir
+        os.makedirs(states_dir, exist_ok=True)
+    
+    def save_state(self, data: Dict[str, Any]) -> ServiceResponse:
+        """Save network state to file"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"network_state_{timestamp}.json"
+            filepath = os.path.join(self.states_dir, filename)
+            
+            with open(filepath, "w") as f:
+                json.dump(data, f, indent=2)
+            
+            logger.info(f"Network state saved to {filename}")
+            return ServiceResponse(
+                success=True, 
+                data={"filename": filename}
+            )
+        except Exception as e:
+            logger.error(f"Failed to save network state: {e}")
+            return ServiceResponse(
+                success=False, 
+                error=f"Failed to save state: {str(e)}",
+                status_code=500
+            )
+    
+    def load_latest_state(self) -> ServiceResponse:
+        """Load the most recent network state"""
+        try:
+            if not os.path.exists(self.states_dir):
+                return ServiceResponse(
+                    success=False, 
+                    error="No saved states found",
+                    status_code=404
+                )
+            
+            files = sorted(
+                [f for f in os.listdir(self.states_dir) 
+                 if f.startswith("network_state_") and f.endswith(".json")],
+                reverse=True
+            )
+            
+            if not files:
+                return ServiceResponse(
+                    success=False, 
+                    error="No saved states found",
+                    status_code=404
+                )
+            
+            filepath = os.path.join(self.states_dir, files[0])
+            with open(filepath, "r") as f:
+                data = json.load(f)
+            
+            logger.info(f"Loaded network state from {files[0]}")
+            return ServiceResponse(success=True, data=data)
+            
+        except Exception as e:
+            logger.error(f"Failed to load network state: {e}")
+            return ServiceResponse(
+                success=False, 
+                error=f"Failed to load state: {str(e)}",
+                status_code=500
+            )
 
 class AOPNetworkService:
-    # Initialization and network management
+    """Main service for AOP network operations using the AOP data model"""
+    
     def __init__(self):
-        self.networks: Dict[str, AOPNetwork] = {}
-        self.current_network_id: Optional[str] = None
-        # Initialize with a default network for the main application
-        self.initialize_default_network()
+        self.state_manager = NetworkStateManager()
+        self.current_network: Optional[AOPNetwork] = None
 
-    def initialize_default_network(self):
-        """Initialize a default network for the main application"""
-        default_id = self.create_network("Main AOP Network", "Primary network for AOP analysis")
-        self.current_network_id = default_id
-        return default_id
-
-    def create_network(self, name: str, description: str = "") -> str:
-        """Create a new AOP network"""
-        network_id = str(uuid.uuid4())
-        network = AOPNetwork(
-            id=network_id,
-            name=name,
-            description=description
-        )
-        self.networks[network_id] = network
-        self.current_network_id = network_id
-        return network_id
-
-    def get_current_network(self) -> Optional[AOPNetwork]:
-        """Get the currently active network"""
-        if self.current_network_id:
-            return self.networks.get(self.current_network_id)
-        return None
-
-    def get_network_cytoscape(self) -> List[Dict[str, Any]]:
-        """Get current network in Cytoscape format using proper data model method"""
-        network = self.get_current_network()
-        if not network:
-            return []
-        return network.to_cytoscape()
-
-    def filter_nodes_by_type(self, node_type: NodeType) -> List[Dict[str, Any]]:
-        """Get nodes of specific type in Cytoscape format"""
-        network = self.get_current_network()
-        if not network:
-            return []
-
-        filtered_nodes = network.get_nodes_by_type(node_type)
-        return [node.to_cytoscape() for node in filtered_nodes]
-
-    def filter_nodes_by_source(self, source: DataSourceType) -> List[Dict[str, Any]]:
-        """Get nodes from specific data source in Cytoscape format"""
-        network = self.get_current_network()
-        if not network:
-            return []
-
-        filtered_nodes = network.get_nodes_by_source(source)
-        return [node.to_cytoscape() for node in filtered_nodes]
-
-    # Querying AOP Wiki RDF
-
-    def get_all_genes(self, request_data):
-        """Get all genes from Cytoscape elements."""
-        try:
-            data = request_data.get_json(silent=True)
-            if not data or "cy_elements" not in data:
-                return {"error": "Cytoscape elements required"}, 400
-
-            cy_elements = data["cy_elements"]
-            genes = []
-
-            for element in cy_elements:
-                element_data = element.get("data", element)
-                element_classes = element.get("classes", "")
-                element_type = element_data.get("type", "")
-                element_id = element_data.get("id", "")
-
-                # Check for Ensembl nodes
-                if (
-                    element_classes == "ensembl-node"
-                    or element_type == "ensembl"
-                    or element_id.startswith("ensembl_")
-                ):
-
-                    gene_label = element_data.get("label", "")
-                    if gene_label:
-                        genes.append(gene_label)
-
-            return {"genes": genes}, 200
-        except Exception as e:
-            return {"error": str(e)}, 500
-
-    def add_aop_network_data(self, request_data):
-        """Add AOP network data based on query type and values."""
+    def add_aop_network_data(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Add AOP network data using the proper data model"""
         try:
             data = request_data.get_json(silent=True)
             if not data:
                 return {"error": "No data provided"}, 400
+
             query_type = data.get("query_type", "")
             values = data.get("values", "")
+            
             if not query_type or not values:
-                return jsonify({"error": "query_type and values are required"}), 400
-            aop_network_data = aopwikirdf.get_aop_network_data(query_type, values)
-            return jsonify(aop_network_data), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+                return {"error": "query_type and values are required"}, 400
 
-    def load_and_show_genes(self, request_data):
+            logger.info(f"Building AOP network: {query_type}, {len(values.split())} values")
+            
+            # Use the AOP data model via the query service
+            network = aop_query_service.query_aop_network(query_type, values)
+            self.current_network = network
+            
+            # Get summary and elements
+            summary = network.get_summary()
+            elements = network.to_cytoscape_elements()
+            
+            response_data = {
+                "success": True,
+                "elements": elements,
+                "elements_count": len(elements),
+                "report": summary,
+            }
+            
+            # Generate warnings if incomplete
+            warnings = []
+            if summary.get("mie_count", 0) == 0:
+                warnings.append("No Molecular Initiating Events (MIEs) found")
+            if summary.get("ao_count", 0) == 0:
+                warnings.append("No Adverse Outcomes (AOs) found")
+            if summary.get("ker_count", 0) == 0:
+                if summary.get("mie_count", 0) > 0 or summary.get("ao_count", 0) > 0:
+                    warnings.append("No Key Event Relationships (KERs) found")
+            
+            if warnings:
+                response_data["warning"] = {
+                    "type": "incomplete_aop_data",
+                    "message": f"Warnings: {'; '.join(warnings)}",
+                    "details": f"Found: {summary.get('mie_count', 0)} MIEs, {summary.get('ao_count', 0)} AOs, {summary.get('ke_count', 0)} intermediate KEs, {summary.get('ker_count', 0)} KERs",
+                    "specific_issues": warnings,
+                }
+            
+            logger.info(f"Successfully built AOP network with {len(elements)} elements")
+            return response_data, 200
+            
+        except Exception as e:
+            logger.error(f"Error in add_aop_network_data: {e}")
+            return {"error": str(e)}, 500
+
+    def load_and_show_genes(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Load genes for KEs using the AOP data model"""
         try:
             kes = request_data.args.get("kes", "")
             if not kes:
-                return jsonify({"error": "kes parameter is required"}), 400
-            else:
-                cytoscape_elements = aopwikirdf.load_and_show_genes(kes)
-                return jsonify({"gene_elements": cytoscape_elements}), 200
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+                return {"error": "kes parameter is required"}, 400
 
-    def populate_gene_table(self, request_data):
-        """Populate gene table from Cytoscape elements."""
+            logger.info(f"Loading genes for KEs using AOP data model")
+            
+            # Create a temporary network with the provided KEs
+            temp_network = AOPNetwork()
+            
+            # Parse KE URIs and add them as key events
+            ke_uris = [uri.strip('<>') for uri in kes.split()]
+            for ke_uri in ke_uris:
+                ke_id = ke_uri.split("/")[-1] if "/" in ke_uri else ke_uri
+                key_event = AOPKeyEvent(
+                    ke_id=ke_id,
+                    uri=ke_uri,
+                    title="Temporary KE",
+                    ke_type=NodeType.KE
+                )
+                temp_network.add_key_event(key_event)
+            
+            # Query genes for this network
+            enriched_network = aop_query_service.query_genes_for_network(temp_network)
+            
+            # Convert gene associations to Cytoscape elements
+            gene_elements = []
+            for association in enriched_network.gene_associations:
+                gene_elements.extend(association.to_cytoscape_elements())
+
+            logger.info(f"Retrieved {len(gene_elements)} gene elements using data model")
+            return {"gene_elements": gene_elements}, 200
+            
+        except Exception as e:
+            logger.error(f"Error in load_and_show_genes: {e}")
+            return {"error": str(e)}, 500
+
+    def populate_gene_table(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Populate gene table from Cytoscape elements using clean OOP approach"""
         try:
             data = request_data.get_json(silent=True)
             if not data or "cy_elements" not in data:
                 return {"error": "Cytoscape elements required"}, 400
 
-            cy_elements = data["cy_elements"]
-            gene_data = []
+            logger.info(f"Populating gene table from {len(data['cy_elements'])} elements using data model")
 
-            for element in cy_elements:
-                element_data = element.get("data", element)
-                element_classes = element.get("classes", "")
-                element_type = element_data.get("type", "")
-                element_id = element_data.get("id", "")
-
-                # Check for Ensembl nodes
-                if (
-                    element_classes == "ensembl-node"
-                    or element_type == "ensembl"
-                    or element_id.startswith("ensembl_")
-                ):
-                    gene_label = element_data.get("label", "")
-
-                    # Find corresponding UniProt node
-                    uniprot_protein = "N/A"
-                    uniprot_id = "N/A"
-                    uniprot_node_id = "N/A"
-
-                    # Look for connected UniProt nodes
-                    for other_element in cy_elements:
-                        other_data = other_element.get("data", {})
-                        other_classes = other_element.get("classes", "")
-                        other_type = other_data.get("type", "")
-
-                        if other_classes == "uniprot-node" or other_type == "uniprot":
-                            # Check if there's an edge connecting this Ensembl to UniProt
-                            for edge_element in cy_elements:
-                                if edge_element.get("group") == "edges":
-                                    edge_data = edge_element.get("data", {})
-                                    source = edge_data.get("source", "")
-                                    target = edge_data.get("target", "")
-
-                                    if (
-                                        source == element_id
-                                        and target == other_data.get("id", "")
-                                    ) or (
-                                        target == element_id
-                                        and source == other_data.get("id", "")
-                                    ):
-                                        uniprot_protein = other_data.get("label", "N/A")
-                                        uniprot_id = other_data.get(
-                                            "uniprot_id",
-                                            other_data.get("id", "").replace(
-                                                "uniprot_", ""
-                                            ),
-                                        )
-                                        uniprot_node_id = other_data.get("id", "N/A")
-                                        break
-
-                            if uniprot_protein != "N/A":
-                                break
-
-                    if gene_label and gene_label not in [g["gene"] for g in gene_data]:
-                        gene_data.append(
-                            {
-                                "gene": gene_label,
-                                "protein": uniprot_protein,
-                                "uniprot_id": uniprot_id,
-                                "ensembl_id": element_id,
-                                "uniprot_node_id": uniprot_node_id,
-                            }
-                        )
-
-            return jsonify({"gene_data": gene_data}), 200
+            # Use the clean OOP approach with proper data model
+            parser = CytoscapeNetworkParser(data["cy_elements"])
+            builder = GeneTableBuilder(parser)
+            gene_data = builder.build_gene_table()
+            
+            logger.info(f"Extracted {len(gene_data)} gene entries using data model")
+            return {"gene_data": gene_data}, 200
+            
         except Exception as e:
-            return jsonify({"error": str(e)}), 500
+            logger.error(f"Error in populate_gene_table: {e}")
+            return {"error": str(e)}, 500
 
-    # Populate app tables
-    def populate_aop_table(self, request_data):
-        """Populate AOP table from Cytoscape elements with enhanced data."""
+    def populate_aop_table(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Populate AOP table using the AOP data model"""
         try:
             data = request_data.get_json(silent=True)
             if not data or "cy_elements" not in data:
-                raise ValueError("Cytoscape elements required")
-            cy_elements = data["cy_elements"]
-            aop_data = aopwikirdf.populate_aop_table(cy_elements)
-            return {"aop_data": aop_data}
+                return {"error": "Cytoscape elements required"}, 400
+
+            logger.info(f"Populating AOP table from {len(data['cy_elements'])} elements using data model")
+            
+            # Parse Cytoscape elements into AOP network structure
+            aop_table_builder = AOPTableBuilder(data["cy_elements"])
+            aop_data = aop_table_builder.build_aop_table()
+            
+            logger.info(f"Generated {len(aop_data)} AOP table entries using data model")
+            return {"aop_data": aop_data}, 200
+            
         except Exception as e:
-            return jsonify({"error": str(e)}, 500)
+            logger.error(f"Error in populate_aop_table: {e}")
+            return {"error": str(e)}, 500
 
-    # BioDataFuse
-    def get_bridgedb_xref(self, request_data):
-        data = request_data.get_json(silent=True)
-        identifiers = data.get("identifiers", "")
-        input_species = data.get("input_species", "")
-        input_datasource = data.get("input_datasource", "")
-        bridgedb_df, bridgedb_metadata = biodatafuse.get_bridgedb_xref(
-            identifiers=identifiers,
-            input_species=input_species,
-            input_datasource=input_datasource
-        )
-        return jsonify(
-            {
-            "bridgedb_df": bridgedb_df.fillna("NaN").to_dict(orient="records"),
-            "bridgedb_metadata": bridgedb_metadata
-            }
-        )
-
-    def add_opentargets_data(self, request_data):
-        return
-
-    # Network state management
-    def save_network_state(self, request_data):
-        """Save current network state to persistent storage."""
+    def save_network_state(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Save current network state to persistent storage"""
         try:
             data = request_data.get_json(silent=True)
             if not data:
                 return {"error": "No data provided"}, 400
 
-            # Create directory if it doesn't exist
-            os.makedirs(NETWORK_STATES_DIR, exist_ok=True)
-
-            # Save with timestamp
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"network_state_{timestamp}.json"
-            filepath = os.path.join(NETWORK_STATES_DIR, filename)
-
-            with open(filepath, "w") as f:
-                json.dump(data, f, indent=2)
-
-            return {"success": True, "filename": filename}, 200
+            response = self.state_manager.save_state(data)
+            return ({"success": True, "filename": response.data["filename"]} 
+                   if response.success else {"error": response.error}), response.status_code
+                   
         except Exception as e:
+            logger.error(f"Error in save_network_state: {e}")
             return {"error": str(e)}, 500
 
-    def load_network_state(self):
-        """Load the most recent network state."""
+    def load_network_state(self) -> Tuple[Dict[str, Any], int]:
+        """Load the most recent network state"""
         try:
-            if not os.path.exists(NETWORK_STATES_DIR):
-                return {"error": "No saved states found"}, 404
-
-            # Find most recent file
-            files = [
-                f
-                for f in os.listdir(NETWORK_STATES_DIR)
-                if f.startswith("network_state_") and f.endswith(".json")
-            ]
-            if not files:
-                return {"error": "No saved states found"}, 404
-
-            files.sort(reverse=True)  # Most recent first
-            latest_file = files[0]
-            filepath = os.path.join(NETWORK_STATES_DIR, latest_file)
-
-            with open(filepath, "r") as f:
-                data = json.load(f)
-
-            return data, 200
+            response = self.state_manager.load_latest_state()
+            return (response.data if response.success else {"error": response.error}), response.status_code
+            
         except Exception as e:
+            logger.error(f"Error in load_network_state: {e}")
             return {"error": str(e)}, 500
+
+class AOPTableBuilder:
+    """Builds AOP table data"""
+    
+    def __init__(self, cy_elements: List[Dict[str, Any]]):
+        self.parser = CytoscapeNetworkParser(cy_elements)
+        self.aop_relationships = self._extract_aop_relationships()
+        self.disconnected_nodes = self._extract_disconnected_nodes()
+    
+    def build_aop_table(self) -> List[Dict[str, str]]:
+        """Build AOP table with proper data model structure"""
+        table_entries = []
+        
+        # Process KER relationships
+        for relationship in self.aop_relationships:
+            table_entries.append(relationship.to_table_entry())
+        
+        # Process disconnected nodes
+        for node_entry in self.disconnected_nodes:
+            table_entries.append(node_entry)
+        
+        logger.info(f"Built AOP table with {len(table_entries)} entries using data model")
+        return table_entries
+    
+    def _extract_aop_relationships(self) -> List['AOPRelationshipEntry']:
+        """Extract AOP relationships from parsed network"""
+        relationships = []
+        
+        for edge in self.parser.edges:
+            # Only process edges with KER data
+            if (edge.properties.get("ker_label") and 
+                edge.properties.get("curie")):
+                
+                source_node = self._find_node_by_id(edge.source)
+                target_node = self._find_node_by_id(edge.target)
+                
+                if source_node and target_node:
+                    relationship = AOPRelationshipEntry(
+                        source_node=source_node,
+                        target_node=target_node,
+                        edge=edge
+                    )
+                    relationships.append(relationship)
+        
+        return relationships
+    
+    def _extract_disconnected_nodes(self) -> List[Dict[str, str]]:
+        """Extract disconnected nodes"""
+        connected_node_ids = set()
+        
+        # Get all connected node IDs
+        for edge in self.parser.edges:
+            connected_node_ids.add(edge.source)
+            connected_node_ids.add(edge.target)
+        
+        disconnected_entries = []
+        for node in self.parser.nodes:
+            if node.id not in connected_node_ids:
+                # Extract AOP information
+                aop_info = self._extract_aop_info_from_node(node)
+                
+                entry = {
+                    "source_id": node.id,
+                    "source_label": node.label or node.id,
+                    "source_type": node.node_type or "unknown",
+                    "ker_label": "N/A (disconnected)",
+                    "curie": "N/A",
+                    "target_id": "N/A",
+                    "target_label": "N/A",
+                    "target_type": "N/A",
+                    "aop_list": aop_info["aop_string"],
+                    "aop_titles": aop_info["aop_titles_string"],
+                    "is_connected": False,
+                }
+                disconnected_entries.append(entry)
+        
+        return disconnected_entries
+    
+    def _find_node_by_id(self, node_id: str) -> Optional['CytoscapeNode']:
+        """Find node by ID"""
+        for node in self.parser.nodes:
+            if node.id == node_id:
+                return node
+        return None
+    
+    def _extract_aop_info_from_node(self, node) -> Dict[str, str]:
+        """Extract AOP information from node properties"""
+        aop_uris = node.properties.get("aop", [])
+        aop_titles = node.properties.get("aop_title", [])
+        
+        if not isinstance(aop_uris, list):
+            aop_uris = [aop_uris] if aop_uris else []
+        if not isinstance(aop_titles, list):
+            aop_titles = [aop_titles] if aop_titles else []
+        
+        # Convert URIs to AOP IDs
+        aop_ids = []
+        for aop_uri in aop_uris:
+            if aop_uri and "aop/" in aop_uri:
+                aop_id = aop_uri.split("aop/")[-1]
+                aop_ids.append(f"AOP:{aop_id}")
+        
+        aop_string = ",".join(sorted(aop_ids)) if aop_ids else "N/A"
+        aop_titles_string = "; ".join(sorted(aop_titles)) if aop_titles else "N/A"
+        
+        return {
+            "aop_string": aop_string,
+            "aop_titles_string": aop_titles_string
+        }
