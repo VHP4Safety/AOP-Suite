@@ -200,9 +200,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function initializeModules() {
         setTimeout(() => {
-            // Initialize gene view (safe to call without data)
-            initializeGeneView();
-
             // Initialize manual controls
             if (window.initializeManualControls) {
                 window.initializeManualControls();
@@ -217,6 +214,15 @@ document.addEventListener("DOMContentLoaded", function () {
             if (window.setupNetworkChangeTracking) {
                 window.setupNetworkChangeTracking();
             }
+
+            // Setup default gene table button handler
+            $("#get-genes-table-btn").on("click", function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.toggleGenes) {
+                    window.toggleGenes();
+                }
+            });
 
             // Trigger immediate AOP table population after modules are initialized
             setTimeout(() => {
@@ -738,7 +744,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
 
-        // Group by AOP - now uses table functionality
+        // Group by AOP
         $("#toggle_bounding_boxes").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -762,6 +768,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Toggle genes
         $("#see_genes").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleGenes();
+        });
+
+        $('#get-genes-table-btn').on('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
             toggleGenes();
@@ -1215,13 +1227,28 @@ function updateGeneTable() {
                 console.log(`Gene table updated with ${response.gene_data.length} genes.`);
                 window.resetNetworkLayout();
             } else {
+                // Show the default "Get gene sets" button when no genes are found
                 tableBody.append(`
-                <tr>
-                    <td colspan="2" style="text-align: center; color: #6c757d; font-style: italic;">
-                        No genes in network
-                    </td>
-                </tr>
-            `);
+                    <tr id="default-gene-row">
+                        <td colspan="2" style="text-align: center; padding: 20px;">
+                            <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
+                                No genes in network
+                            </div>
+                            <button id="get-genes-table-btn" class="btn btn-primary btn-sm">
+                                <i class="fas fa-dna"></i> Get gene sets
+                            </button>
+                        </td>
+                    </tr>
+                `);
+                
+                // Add click handler for the table button
+                $("#get-genes-table-btn").on("click", function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.toggleGenes) {
+                        window.toggleGenes();
+                    }
+                });
             }
         })
         .catch(error => {
