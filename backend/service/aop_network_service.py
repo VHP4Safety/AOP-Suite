@@ -10,8 +10,9 @@ from backend.model.aop_data_model import (
     AOPNetwork,
     AOPKeyEvent,
     NodeType,
-    AOPRelationshipEntry,
-    AOPInfo
+    AOPTableBuilder,
+    AOPInfo,
+    CompoundTableBuilder
 )
 
 from datetime import datetime
@@ -21,81 +22,6 @@ logger = logging.getLogger(__name__)
 
 NETWORK_STATES_DIR = os.path.join(os.path.dirname(__file__), "../saved_networks")
 
-@dataclass
-class ServiceResponse:
-    """Standardized service response"""
-    success: bool
-    data: Optional[Any] = None
-    error: Optional[str] = None
-    status_code: int = 200
-
-class NetworkStateManager:
-    """Handles network state persistence"""
-    
-    def __init__(self, states_dir: str = NETWORK_STATES_DIR):
-        self.states_dir = states_dir
-        os.makedirs(states_dir, exist_ok=True)
-    
-    def save_state(self, data: Dict[str, Any]) -> ServiceResponse:
-        """Save network state to file"""
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"network_state_{timestamp}.json"
-            filepath = os.path.join(self.states_dir, filename)
-            
-            with open(filepath, "w") as f:
-                json.dump(data, f, indent=2)
-            
-            logger.info(f"Network state saved to {filename}")
-            return ServiceResponse(
-                success=True, 
-                data={"filename": filename}
-            )
-        except Exception as e:
-            logger.error(f"Failed to save network state: {e}")
-            return ServiceResponse(
-                success=False, 
-                error=f"Failed to save state: {str(e)}",
-                status_code=500
-            )
-    
-    def load_latest_state(self) -> ServiceResponse:
-        """Load the most recent network state"""
-        try:
-            if not os.path.exists(self.states_dir):
-                return ServiceResponse(
-                    success=False, 
-                    error="No saved states found",
-                    status_code=404
-                )
-            
-            files = sorted(
-                [f for f in os.listdir(self.states_dir) 
-                 if f.startswith("network_state_") and f.endswith(".json")],
-                reverse=True
-            )
-            
-            if not files:
-                return ServiceResponse(
-                    success=False, 
-                    error="No saved states found",
-                    status_code=404
-                )
-            
-            filepath = os.path.join(self.states_dir, files[0])
-            with open(filepath, "r") as f:
-                data = json.load(f)
-            
-            logger.info(f"Loaded network state from {files[0]}")
-            return ServiceResponse(success=True, data=data)
-            
-        except Exception as e:
-            logger.error(f"Failed to load network state: {e}")
-            return ServiceResponse(
-                success=False, 
-                error=f"Failed to load state: {str(e)}",
-                status_code=500
-            )
 
 class AOPNetworkService:
     """Main service for AOP network operations using the AOP data model"""
@@ -166,7 +92,7 @@ class AOPNetworkService:
             if not kes:
                 return {"error": "kes parameter is required"}, 400
 
-            logger.info(f"Loading genes for KEs using AOP data model")
+            logger.info(f"Loading genes for KEs")
             
             # Create a temporary network with the provided KEs
             temp_network = AOPNetwork()
@@ -199,7 +125,7 @@ class AOPNetworkService:
             return {"error": str(e)}, 500
 
     def populate_gene_table(self, request_data) -> Tuple[Dict[str, Any], int]:
-        """Populate gene table from Cytoscape elements using clean OOP approach"""
+        """Populate gene table from Cytoscape elements"""
         try:
             data = request_data.get_json(silent=True)
             if not data or "cy_elements" not in data:
@@ -207,7 +133,6 @@ class AOPNetworkService:
 
             logger.info(f"Populating gene table from {len(data['cy_elements'])} elements using data model")
 
-            # Use the clean OOP approach with proper data model
             parser = CytoscapeNetworkParser(data["cy_elements"])
             builder = GeneTableBuilder(parser)
             gene_data = builder.build_gene_table()
@@ -306,111 +231,94 @@ class AOPNetworkService:
             logger.error(f"Error in load_and_show_compounds: {e}")
             return {"error": str(e)}, 500
 
-class AOPTableBuilder:
-    """Builds AOP table data"""
-    
-    def __init__(self, cy_elements: List[Dict[str, Any]]):
-        self.parser = CytoscapeNetworkParser(cy_elements)
-        self.aop_relationships = self._extract_aop_relationships()
-        self.disconnected_nodes = self._extract_disconnected_nodes()
-    
-    def build_aop_table(self) -> List[Dict[str, str]]:
-        """Build AOP table with proper data model structure"""
-        table_entries = []
-        
-        # Process KER relationships
-        for relationship in self.aop_relationships:
-            table_entries.append(relationship.to_table_entry())
-        
-        # Process disconnected nodes
-        for node_entry in self.disconnected_nodes:
-            table_entries.append(node_entry)
-        
-        logger.info(f"Built AOP table with {len(table_entries)} entries using data model")
-        return table_entries
-    
-    def _extract_aop_relationships(self) -> List['AOPRelationshipEntry']:
-        """Extract AOP relationships from parsed network"""
-        relationships = []
-        
-        for edge in self.parser.edges:
-            # Only process edges with KER data
-            if (edge.properties.get("ker_label") and 
-                edge.properties.get("curie")):
-                
-                source_node = self._find_node_by_id(edge.source)
-                target_node = self._find_node_by_id(edge.target)
-                
-                if source_node and target_node:
-                    relationship = AOPRelationshipEntry(
-                        source_node=source_node,
-                        target_node=target_node,
-                        edge=edge
-                    )
-                    relationships.append(relationship)
-        
-        return relationships
-    
-    def _extract_disconnected_nodes(self) -> List[Dict[str, str]]:
-        """Extract disconnected nodes"""
-        connected_node_ids = set()
-        
-        # Get all connected node IDs
-        for edge in self.parser.edges:
-            connected_node_ids.add(edge.source)
-            connected_node_ids.add(edge.target)
-        
-        disconnected_entries = []
-        for node in self.parser.nodes:
-            if node.id not in connected_node_ids:
-                # Extract AOP information
-                aop_info = self._extract_aop_info_from_node(node)
-                
-                entry = {
-                    "source_id": node.id,
-                    "source_label": node.label or node.id,
-                    "source_type": node.node_type or "unknown",
-                    "ker_label": "N/A (disconnected)",
-                    "curie": "N/A",
-                    "target_id": "N/A",
-                    "target_label": "N/A",
-                    "target_type": "N/A",
-                    "aop_list": aop_info["aop_string"],
-                    "aop_titles": aop_info["aop_titles_string"],
-                    "is_connected": False,
-                }
-                disconnected_entries.append(entry)
-        
-        return disconnected_entries
-    
-    def _find_node_by_id(self, node_id: str) -> Optional['CytoscapeNode']:
-        """Find node by ID"""
-        for node in self.parser.nodes:
-            if node.id == node_id:
-                return node
-        return None
-    
-    def _extract_aop_info_from_node(self, node) -> Dict[str, str]:
-        """Extract AOP information from node properties"""
-        aop_uris = node.properties.get("aop", [])
-        aop_titles = node.properties.get("aop_title", [])
-        
-        if not isinstance(aop_uris, list):
-            aop_uris = [aop_uris] if aop_uris else []
-        if not isinstance(aop_titles, list):
-            aop_titles = [aop_titles] if aop_titles else []
-        
-        # Convert URIs to AOP IDs
-        aop_ids = []
-        for aop_uri in aop_uris:
-            if aop_uri and "aop/" in aop_uri:
-                aop_id = aop_uri.split("aop/")[-1]
-                aop_ids.append(f"AOP:{aop_id}")
-        
-        aop_string = ",".join(sorted(aop_ids)) if aop_ids else "N/A"
-        aop_titles_string = "; ".join(sorted(aop_titles)) if aop_titles else "N/A"
-        
-        return {
-            "aop_string": aop_string,
-            "aop_titles_string": aop_titles_string
-        }
+    def populate_compound_table(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Populate compound table using the compound data model"""
+        try:
+            data = request_data.get_json(silent=True)
+            if not data or "cy_elements" not in data:
+                return {"error": "Cytoscape elements required"}, 400
+
+            logger.info(f"Populating compound table from {len(data['cy_elements'])} elements using data model")
+            
+            # Parse Cytoscape elements into compound table structure
+            parser = CytoscapeNetworkParser(data["cy_elements"])
+            compound_table_builder = CompoundTableBuilder(parser)
+            compound_data = compound_table_builder.build_compound_table()
+            
+            logger.info(f"Generated {len(compound_data)} compound table entries using data model")
+            return {"compound_data": compound_data}, 200
+            
+        except Exception as e:
+            logger.error(f"Error in populate_compound_table: {e}")
+            return {"error": f"Failed to populate compound table: {str(e)}"}, 500
+
+
+@dataclass
+class ServiceResponse:
+    """Standardized service response"""
+
+    success: bool
+    data: Optional[Any] = None
+    error: Optional[str] = None
+    status_code: int = 200
+
+
+class NetworkStateManager:
+    """Handles network state persistence"""
+
+    def __init__(self, states_dir: str = NETWORK_STATES_DIR):
+        self.states_dir = states_dir
+        os.makedirs(states_dir, exist_ok=True)
+
+    def save_state(self, data: Dict[str, Any]) -> ServiceResponse:
+        """Save network state to file"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"network_state_{timestamp}.json"
+            filepath = os.path.join(self.states_dir, filename)
+
+            with open(filepath, "w") as f:
+                json.dump(data, f, indent=2)
+
+            logger.info(f"Network state saved to {filename}")
+            return ServiceResponse(success=True, data={"filename": filename})
+        except Exception as e:
+            logger.error(f"Failed to save network state: {e}")
+            return ServiceResponse(
+                success=False, error=f"Failed to save state: {str(e)}", status_code=500
+            )
+
+    def load_latest_state(self) -> ServiceResponse:
+        """Load the most recent network state"""
+        try:
+            if not os.path.exists(self.states_dir):
+                return ServiceResponse(
+                    success=False, error="No saved states found", status_code=404
+                )
+
+            files = sorted(
+                [
+                    f
+                    for f in os.listdir(self.states_dir)
+                    if f.startswith("network_state_") and f.endswith(".json")
+                ],
+                reverse=True,
+            )
+
+            if not files:
+                return ServiceResponse(
+                    success=False, error="No saved states found", status_code=404
+                )
+
+            filepath = os.path.join(self.states_dir, files[0])
+            with open(filepath, "r") as f:
+                data = json.load(f)
+
+            logger.info(f"Loaded network state from {files[0]}")
+            return ServiceResponse(success=True, data=data)
+
+        except Exception as e:
+            logger.error(f"Failed to load network state: {e}")
+            return ServiceResponse(
+                success=False, error=f"Failed to load state: {str(e)}", status_code=500
+            )

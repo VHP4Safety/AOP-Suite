@@ -241,6 +241,30 @@ class CompoundAssociation:
 
         return elements
 
+    def to_table_entry(self) -> Dict[str, str]:
+        """Convert to compound table entry format"""
+        # Extract PubChem ID from compound URI
+        pubchem_id = (
+            self.pubchem_compound.split("/")[-1]
+            if "/" in self.pubchem_compound
+            else self.pubchem_compound
+        )
+        
+        # Extract AOP ID from URI
+        aop_id = self.aop_uri.split("/")[-1] if "/" in self.aop_uri else self.aop_uri
+        
+        return {
+            "compound_name": self.compound_name or self.chemical_label,
+            "chemical_label": self.chemical_label,
+            "pubchem_id": pubchem_id,
+            "pubchem_compound": self.pubchem_compound,
+            "cas_id": self.cas_id if self.cas_id else "N/A",
+            "aop_id": f"AOP:{aop_id}",
+            "aop_uri": self.aop_uri,
+            "mie_uri": self.mie_uri,
+            "chemical_uri": self.chemical_uri,
+        }
+
 
 class AOPNetwork:
     """Main AOP Network model representing a complete AOP query result"""
@@ -650,6 +674,111 @@ class CytoscapeNetworkParser:
         return [edge for edge in self.edges if edge.is_gene_relationship()]
 
 
+class AOPTableBuilder:
+    """Builds AOP table data"""
+
+    def __init__(self, cy_elements: List[Dict[str, Any]]):
+        self.parser = CytoscapeNetworkParser(cy_elements)
+        self.aop_relationships = self._extract_aop_relationships()
+        self.disconnected_nodes = self._extract_disconnected_nodes()
+
+    def build_aop_table(self) -> List[Dict[str, str]]:
+        """Build AOP table with proper data model structure"""
+        table_entries = []
+
+        # Process KER relationships
+        for relationship in self.aop_relationships:
+            table_entries.append(relationship.to_table_entry())
+
+        # Process disconnected nodes
+        for node_entry in self.disconnected_nodes:
+            table_entries.append(node_entry)
+
+        logger.info(f"Built AOP table with {len(table_entries)} entries using data model")
+        return table_entries
+
+    def _extract_aop_relationships(self) -> List['AOPRelationshipEntry']:
+        """Extract AOP relationships from parsed network"""
+        relationships = []
+
+        for edge in self.parser.edges:
+            # Only process edges with KER data
+            if (edge.properties.get("ker_label") and 
+                edge.properties.get("curie")):
+
+                source_node = self._find_node_by_id(edge.source)
+                target_node = self._find_node_by_id(edge.target)
+
+                if source_node and target_node:
+                    relationship = AOPRelationshipEntry(
+                        source_node=source_node,
+                        target_node=target_node,
+                        edge=edge
+                    )
+                    relationships.append(relationship)
+
+        return relationships
+
+    def _extract_disconnected_nodes(self) -> List[Dict[str, str]]:
+        """Extract disconnected nodes"""
+        connected_node_ids = set()
+
+        # Get all connected node IDs
+        for edge in self.parser.edges:
+            connected_node_ids.add(edge.source)
+            connected_node_ids.add(edge.target)
+
+        disconnected_entries = []
+        for node in self.parser.nodes:
+            if node.id not in connected_node_ids:
+                # Extract AOP information
+                aop_info = self._extract_aop_info_from_node(node)
+
+                entry = {
+                    "source_id": node.id,
+                    "source_label": node.label or node.id,
+                    "source_type": node.node_type or "unknown",
+                    "aop_list": aop_info["aop_string"],
+                    "aop_titles": aop_info["aop_titles_string"],
+                    "is_connected": False,
+                }
+                disconnected_entries.append(entry)
+
+        return disconnected_entries
+
+    def _find_node_by_id(self, node_id: str) -> Optional['CytoscapeNode']:
+        """Find node by ID"""
+        for node in self.parser.nodes:
+            if node.id == node_id:
+                return node
+        return None
+
+    def _extract_aop_info_from_node(self, node) -> Dict[str, str]:
+        """Extract AOP information from node properties"""
+        aop_uris = node.properties.get("aop", [])
+        aop_titles = node.properties.get("aop_title", [])
+
+        if not isinstance(aop_uris, list):
+            aop_uris = [aop_uris] if aop_uris else []
+        if not isinstance(aop_titles, list):
+            aop_titles = [aop_titles] if aop_titles else []
+
+        # Convert URIs to AOP IDs
+        aop_ids = []
+        for aop_uri in aop_uris:
+            if aop_uri and "aop/" in aop_uri:
+                aop_id = aop_uri.split("aop/")[-1]
+                aop_ids.append(f"AOP:{aop_id}")
+
+        aop_string = ",".join(sorted(aop_ids)) if aop_ids else "N/A"
+        aop_titles_string = "; ".join(sorted(aop_titles)) if aop_titles else "N/A"
+
+        return {
+            "aop_string": aop_string,
+            "aop_titles_string": aop_titles_string
+        }
+    
+
 class GeneTableBuilder:
     """Builds gene table data from Cytoscape network"""
 
@@ -870,3 +999,56 @@ class AOPRelationshipEntry:
                 aop_ids.append(f"AOP:{aop_id}")
 
         return {"aop_ids": aop_ids, "aop_titles": aop_titles}
+
+
+class CompoundTableBuilder:
+    """Builds compound table data from Cytoscape network"""
+
+    def __init__(self, parser: CytoscapeNetworkParser):
+        self.parser = parser
+        self.chemical_nodes = {node.id: node for node in self._get_chemical_nodes()}
+
+    def _get_chemical_nodes(self) -> List[CytoscapeNode]:
+        """Get all chemical nodes from the network"""
+        return [
+            node for node in self.parser.nodes
+            if (node.classes == "chemical-node" or 
+                node.node_type == "chemical" or
+                node.id.startswith("chemical_"))
+        ]
+
+    def build_compound_table(self) -> List[Dict[str, str]]:
+        """Build compound table from network chemical nodes"""
+        table_entries = []
+        seen_compounds = set()
+
+        for node in self.chemical_nodes.values():
+            # Extract compound information from node properties
+            compound_name = (
+                node.properties.get("compound_name") or 
+                node.properties.get("chemical_label") or 
+                node.label
+            )
+            
+            pubchem_id = node.properties.get("pubchem_id", "")
+            pubchem_compound = node.properties.get("pubchem_compound", "")
+            cas_id = node.properties.get("cas_id", "N/A")
+            
+            # Create unique identifier to avoid duplicates
+            compound_key = f"{compound_name}_{pubchem_id}"
+            if compound_key not in seen_compounds:
+                entry = {
+                    "compound_name": compound_name,
+                    "chemical_label": node.properties.get("chemical_label", compound_name),
+                    "pubchem_id": pubchem_id,
+                    "pubchem_compound": pubchem_compound,
+                    "cas_id": cas_id,
+                    "chemical_uri": node.properties.get("chemical_uri", ""),
+                    "smiles": node.properties.get("smiles", ""),
+                    "node_id": node.id,
+                }
+                table_entries.append(entry)
+                seen_compounds.add(compound_key)
+
+        logger.info(f"Built compound table with {len(table_entries)} entries")
+        return table_entries
