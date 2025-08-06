@@ -323,38 +323,31 @@ class AOPNetworkDataManager {
             validNodes.add(node.id());
         });
 
-        // Second pass: handle edges - be more permissive for incomplete AOP structures
+        // Second pass: handle edges
         elements.forEach((element, index) => {
             const elementId = element.data?.id;
             
             if (!elementId || existingIds.has(elementId)) {
-                return; // Skip duplicates and invalid elements
+                return;
             }
 
-            // If it's an edge (has source and target) or has group 'edges'
             if ((element.data?.source && element.data?.target) || element.group === 'edges') {
                 const source = element.data?.source;
                 const target = element.data?.target;
                 
-                // Basic validation - ensure we have source and target
                 if (!source || !target) {
                     console.warn(`Edge ${elementId} has missing source or target:`, { source, target });
                     skippedEdges.push({ id: elementId, reason: 'Missing source or target' });
                     return;
                 }
                 
-                // For incomplete AOP structures, we'll be more lenient
-                // Check if both source and target nodes exist, but don't skip if they don't
                 const sourceExists = validNodes.has(source);
                 const targetExists = validNodes.has(target);
                 
                 if (!sourceExists || !targetExists) {
                     console.warn(`Edge ${elementId} references potentially missing nodes: source=${source} (exists: ${sourceExists}), target=${target} (exists: ${targetExists})`);
-                    // Still add the edge - Cytoscape will handle missing nodes gracefully
-                    // This allows us to preserve the graph structure even with incomplete data
                 }
                 
-                // Add the edge regardless - let Cytoscape handle it
                 newElements.push(element);
                 if (index < 5) {
                     console.log(`New edge element ${index}:`, element);
@@ -369,7 +362,6 @@ class AOPNetworkDataManager {
 
         if (newElements.length > 0) {
             try {
-                // Add all elements in a single batch operation
                 window.cy.batch(() => {
                     newElements.forEach(element => {
                         window.cy.add(element);
@@ -378,11 +370,19 @@ class AOPNetworkDataManager {
 
                 console.log(`Added ${newElements.length} new elements to network`);
 
-                // Update layout after adding elements using the global reset function
+                // Preserve any existing AOP grouping after adding new elements
+                if (window.aopTableManager && window.aopTableManager.groupedAops.size > 0) {
+                    console.log('Preserving AOP grouping after adding new elements');
+                    setTimeout(() => {
+                        window.aopTableManager.applyGroupHighlighting();
+                    }, 100);
+                }
+
+                // Update layout after adding elements
                 if (window.resetNetworkLayout) {
                     setTimeout(() => {
                         window.resetNetworkLayout();
-                    }, 100);
+                    }, 200);
                 }
 
                 // Hide loading overlay if network has elements
@@ -395,8 +395,8 @@ class AOPNetworkDataManager {
                 if (window.populateAopTable) {
                     console.log('Triggering immediate AOP table update after bulk network addition');
                     setTimeout(() => {
-                        window.populateAopTable(true); // true = immediate update
-                    }, 500); // Shorter delay for bulk operations
+                        window.populateAopTable(true);
+                    }, 500);
                 }
 
                 console.log(`Successfully processed ${newElements.length} new elements to the network`);

@@ -25,117 +25,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // ===== TABLE MANAGEMENT FUNCTIONS =====
     
-    // New compound table implementation following AOP table pattern
+    // Simplified compound table function - delegates to CompoundTableManager
     function updateCompoundTableFromNetwork() {
-        if (!window.cy) {
-            console.warn("Cytoscape not available for compound table update");
+        if (window.compoundTableManager) {
+            return window.compoundTableManager.performTableUpdate();
+        } else {
+            console.warn("Compound Table Manager not available");
             return Promise.resolve();
         }
-
-        return fetch('/populate_compound_table', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
-        })
-            .then(response => response.json())
-            .then(response => {
-                // Handle the case where response is an array [data, status_code]
-                const data = Array.isArray(response) ? response[0] : response;
-                const tableBody = $("#compound_table tbody");
-                console.log("Received compound table data:", data);
-
-                // Clear the entire table body first
-                tableBody.empty();
-
-                if (data.compound_data && data.compound_data.length > 0) {
-                    data.compound_data.forEach(row => {
-                        console.log("Processing compound row:", row);
-                        const cas_id = row.cas_id || "";
-                        const chemical_label = row.chemical_label || "";
-                        const chemical_uri = row.chemical_uri || "";
-                        const compound_name = row.compound_name || "Unknown Compound";
-                        const node_id = row.node_id || "";
-                        const pubchem_compound = row.pubchem_compound || "";
-                        const pubchem_id = row.pubchem_id || "";
-                        const smiles = row.smiles || "";
-                        
-                        // Generate SMILES image URL if SMILES data is available
-                        const encodedSMILES = smiles ? encodeURIComponent(smiles) : "";
-                        const imgUrl = smiles ? 
-                            `https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi=${encodedSMILES}` 
-                            : '';
-
-                        // Create compound link with external URL if PubChem ID available
-                        const compoundLink = pubchem_id && pubchem_id !== "" ?
-                            `<a href="${pubchem_compound || `https://pubchem.ncbi.nlm.nih.gov/compound/${pubchem_id}`}" target="_blank" class="compound-link" style="position: relative; z-index: 10; pointer-events: auto;">${compound_name}</a>` :
-                            `<span class="compound-link" style="position: relative; z-index: 10; pointer-events: auto; cursor: pointer;">${compound_name}</span>`;
-
-                        // Add new row for compound
-                        console.log('new compound');
-                        //TODO reimplement smiles
-                        tableBody.append(`
-                            <tr data-compound-id="${node_id}" 
-                                data-smiles="${smiles}" 
-                                data-chemical_label="${chemical_label}" 
-                                data-chemical_uri="${chemical_uri}" 
-                                data-compound_name="${compound_name}" 
-                                data-pubchem_compound="${pubchem_compound}" 
-                                data-compound-source="AOP-Wiki RDF" 
-                                class="network-compound"
-                                style="cursor: pointer;">
-                                <td>
-                                    ${imgUrl ? `<img src="${imgUrl}" alt="${smiles}" style="max-width: 100px; height: auto;" />` : ''}
-                                    <p>${compoundLink}</p>
-                                    ${cas_id && cas_id !== "" ? `<p><small>CAS: ${cas_id}</small></p>` : ''}
-                                </td>
-                            </tr>
-                        `);
-
-                        console.log(`Added network compound to table: ${compound_name}`);
-                    });
-
-                    // Setup click handlers for compound rows
-                    setupCompoundCellClickHandlers();
-
-                    console.log(`Compound table updated with ${data.compound_data.length} compounds from network.`);
-                } else {
-                    // Show the default "Get compounds" button when no compounds are found
-                    tableBody.append(`
-                        <tr id="default-compound-row">
-                            <td style="text-align: center; padding: 20px;">
-                                <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                                    No compounds in network
-                                </div>
-                                <button id="get-compounds-table-btn" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-flask"></i> Get compounds
-                                </button>
-                            </td>
-                        </tr>
-                    `);
-
-                    // Add click handler for the table button
-                    $("#get-compounds-table-btn").on("click", function (e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (window.toggleCompounds) {
-                            window.toggleCompounds();
-                        }
-                    });
-                }
-            })
-            .catch(error => {
-                console.error("Error updating compound table:", error);
-                // Show error message in table
-                const tableBody = $("#compound_table tbody");
-                tableBody.empty();
-                tableBody.append(`
-                    <tr>
-                        <td style="text-align: center; padding: 20px; color: #dc3545;">
-                            <i class="fas fa-exclamation-triangle"></i> Error loading compound data
-                        </td>
-                    </tr>
-                `);
-            });
     }
 
     // Setup click handlers for compound table cells
@@ -171,82 +68,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
             console.log(`Compound clicked: ${compoundId}`);
         });
-    }
-
-    function updateGeneTable() {
-        if (!window.cy) {
-            console.warn("Cytoscape not available for gene table update");
-            return Promise.resolve();
-        }
-
-        return fetch('/populate_gene_table', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
-        })
-            .then(response => response.json())
-            .then(response => {
-                const tableBody = $("#gene_table tbody").empty();
-
-                if (response.gene_data && response.gene_data.length > 0) {
-                    response.gene_data.forEach(gene => {
-                        const proteinDisplay = gene.protein !== "N/A" ?
-                            `<a href="https://www.uniprot.org/uniprotkb/${gene.uniprot_id}" target="_blank">${gene.protein}</a>` :
-                            "N/A";
-
-                        const geneDisplay = gene.gene !== "N/A" ?
-                            `<a href="https://identifiers.org/ensembl:${gene.gene}" target="_blank">${gene.gene}</a>` :
-                            "N/A";
-
-                        tableBody.append(`
-                        <tr data-gene="${gene.gene}" 
-                            data-uniprot-id="${gene.uniprot_id}" 
-                            data-ensembl-id="${gene.ensembl_id}"
-                            data-uniprot-node-id="${gene.uniprot_node_id}"
-                            style="cursor: pointer;">
-                            <td class="gene-cell clickable-cell" data-node-id="${gene.ensembl_id}" style="cursor: pointer;">
-                                ${geneDisplay}
-                            </td>
-                            <td class="protein-cell clickable-cell" data-node-id="${gene.uniprot_node_id}" style="cursor: pointer;">
-                                ${proteinDisplay}
-                            </td>
-                        </tr>
-                    `);
-                    });
-
-                    // Add click handlers for individual cells
-                    setupGeneCellClickHandlers();
-
-                    console.log(`Gene table updated with ${response.gene_data.length} genes.`);
-                    window.resetNetworkLayout();
-                } else {
-                    // Show the default "Get gene sets" button when no genes are found
-                    tableBody.append(`
-                        <tr id="default-gene-row">
-                            <td colspan="2" style="text-align: center; padding: 20px;">
-                                <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                                    No genes in network
-                                </div>
-                                <button id="get-genes-table-btn" class="btn btn-primary btn-sm">
-                                    <i class="fas fa-dna"></i> Get gene sets
-                                </button>
-                            </td>
-                        </tr>
-                    `);
-                    
-                    // Add click handler for the table button
-                    $("#get-genes-table-btn").on("click", function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (window.toggleGenes) {
-                            window.toggleGenes();
-                        }
-                    });
-                }
-            })
-            .catch(error => {
-                console.error("Error updating gene table:", error);
-            });
     }
 
     // Setup click handlers for gene table cells
@@ -532,6 +353,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     setTimeout(() => {
                         positionNodes(window.cy, fontSizeMultiplier, true);
                     }, 150);
+                    window.resetNetworkLayout();
                 })
                 .catch(error => {
                     console.error("Error loading genes:", error);
@@ -595,7 +417,7 @@ document.addEventListener("DOMContentLoaded", function () {
             if (aopUris.length === 0) {
                 const scopeMessage = hasSelection ? "selected elements" : "network";
                 console.log(`No AOPs found in ${scopeMessage} for compound loading`);
-                $("#toggle_compounds").html('<i class="fas fa-flask"></i> Remove compounds');
+                $("#toggle_compounds").html('<i class="fas fa-flask"></i>  Remove chemical stressors');
                 window.compoundsVisible = true;
                 return;
             }
@@ -671,8 +493,8 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
 
                     // Update both buttons when showing compounds
-                    $("#toggle_compounds").text("Remove Compounds");
-                    $("#sidebar_toggle_compounds").text("Remove Compounds");
+                    $("#toggle_compounds").text(" Remove chemical stressors");
+                    $("#sidebar_toggle_compounds").text(" Remove chemical stressors");
                     window.compoundsVisible = true;
 
                     // Update compound table
@@ -721,8 +543,8 @@ document.addEventListener("DOMContentLoaded", function () {
             // Reset layout and update table
             window.resetNetworkLayout();
             window.compoundsVisible = false;
-            $("#toggle_compounds").html('<i class="fas fa-flask"></i> Show Compounds');
-            $("#sidebar_toggle_compounds").html('<i class="fas fa-flask"></i> Show Compounds');
+            $("#toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
+            $("#sidebar_toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
 
             setTimeout(() => {
                 updateCompoundTableFromNetwork();
@@ -1470,6 +1292,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
             if (window.aopTableManager) {
                 window.aopTableManager.groupByAllAops();
+                
+                // Ensure network layout is updated after grouping
+                setTimeout(() => {
+                    const fontSlider = document.getElementById('font-size-slider');
+                    const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                    
+                    if (window.positionNodes) {
+                        window.positionNodes(window.cy, fontSizeMultiplier, true);
+                    }
+                }, 100);
             } else {
                 console.error('AOP Table Manager not available');
             }

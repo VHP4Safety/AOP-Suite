@@ -1,63 +1,320 @@
 /**
- * AOP Table functionality with filtering and network integration
- * Merged functionality from table_aop.js and aop_table_enhancements.js
+ * Base Data Table Manager - provides common functionality for all table types
  */
-
-class AOPTableManager {
-    constructor() {
+class DataTableManager {
+    constructor(tableId, containerSelector) {
+        this.tableId = tableId;
+        this.containerSelector = containerSelector;
         this.currentData = [];
         this.filteredData = [];
         this.filterText = '';
-        this.selectedAop = null; // Track currently selected AOP (single selection with layout)
-        this.groupedAops = new Set(); // Track grouped AOPs (multiple selection without layout change)
-        this.isUpdating = false; // Prevent concurrent updates
-        this.updateTimeout = null; // For debouncing
-        this.selectedRows = new Set(); // Track selected table rows
-        this.init();
+        this.isUpdating = false;
+        this.updateTimeout = null;
+        this.selectedRows = new Set();
+        this.originalStyles = new Map(); // Store original network element styles
     }
 
+    // Common initialization
     init() {
         this.setupFilterInput();
         this.setupTableStyles();
-        this.setupNetworkListeners();
+        this.setupBaseEventHandlers();
     }
 
+    // Setup filter input - can be overridden by subclasses
     setupFilterInput() {
-        // Add filter input if it doesn't exist
-        const tableContainer = document.querySelector('#aop-table-container, .aop-table-container');
-        if (tableContainer && !document.querySelector('#aop-table-filter')) {
+        const tableContainer = document.querySelector(this.containerSelector);
+        if (tableContainer && !document.querySelector(`#${this.tableId}-filter`)) {
             const filterContainer = document.createElement('div');
-            filterContainer.className = 'aop-table-filter-container mb-3';
+            filterContainer.className = 'table-filter-container mb-3';
             filterContainer.innerHTML = `
                 <div class="input-group">
                     <div class="input-group-prepend">
                         <span class="input-group-text"><i class="fas fa-search"></i></span>
                     </div>
-                    <input type="text" id="aop-table-filter" class="form-control" 
-                           placeholder="Filter AOP table and network (search nodes, relationships, AOPs...)">
+                    <input type="text" id="${this.tableId}-filter" class="form-control" 
+                           placeholder="Filter ${this.getTableDisplayName()} table...">
                     <div class="input-group-append">
-                        <button class="btn btn-outline-secondary" id="clear-aop-filter" type="button">
+                        <button class="btn btn-outline-secondary" id="clear-${this.tableId}-filter" type="button">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
                 </div>
                 <small class="form-text text-muted">
-                    Filter affects both table display and network visibility. Use keywords like "MIE", "AO", specific node names, or AOP numbers.
+                    ${this.getFilterHelpText()}
                 </small>
             `;
             
             tableContainer.insertBefore(filterContainer, tableContainer.firstChild);
             
             // Add event listeners
-            document.getElementById('aop-table-filter').addEventListener('input', (e) => {
+            document.getElementById(`${this.tableId}-filter`).addEventListener('input', (e) => {
                 this.handleFilter(e.target.value);
             });
             
-            document.getElementById('clear-aop-filter').addEventListener('click', () => {
-                document.getElementById('aop-table-filter').value = '';
+            document.getElementById(`clear-${this.tableId}-filter`).addEventListener('click', () => {
+                document.getElementById(`${this.tableId}-filter`).value = '';
                 this.handleFilter('');
             });
         }
+    }
+
+    // Abstract methods to be implemented by subclasses
+    getTableDisplayName() {
+        return 'data';
+    }
+
+    getFilterHelpText() {
+        return 'Enter keywords to filter table rows.';
+    }
+
+    // Common filter handling
+    handleFilter(filterText) {
+        this.filterText = filterText.toLowerCase().trim();
+        
+        if (!this.filterText) {
+            this.filteredData = [...this.currentData];
+            this.showAllNetworkNodes();
+        } else {
+            this.filteredData = this.currentData.filter(row => this.matchesFilter(row));
+            this.filterNetworkNodes();
+        }
+        
+        this.renderTable();
+    }
+
+    // Default filter matching - can be overridden
+    matchesFilter(row) {
+        return JSON.stringify(row).toLowerCase().includes(this.filterText);
+    }
+
+    // Common network highlighting
+    highlightNodeInNetwork(nodeId) {
+        if (window.cy && nodeId) {
+            // Clear previous highlights
+            window.cy.elements().removeClass('highlighted');
+            
+            // Highlight the selected node
+            const node = window.cy.getElementById(nodeId);
+            if (node.length > 0) {
+                node.addClass('highlighted');
+                
+                // Center on the node with animation
+                window.cy.animate({
+                    center: { eles: node },
+                    zoom: Math.max(window.cy.zoom(), 1.5)
+                }, {
+                    duration: 500
+                });
+                
+                // Remove highlight after a few seconds
+                setTimeout(() => {
+                    node.removeClass('highlighted');
+                }, 3000);
+            }
+        }
+    }
+
+    // Common network filtering
+    filterNetworkNodes() {
+        if (!window.cy) return;
+
+        this.saveOriginalStyles();
+
+        const visibleNodeIds = this.getVisibleNodeIds();
+
+        window.cy.batch(() => {
+            window.cy.nodes().forEach(node => {
+                if (visibleNodeIds.has(node.id())) {
+                    node.removeClass('filtered-out').style('opacity', 1);
+                } else {
+                    node.addClass('filtered-out').style('opacity', 0.1);
+                }
+            });
+            
+            window.cy.edges().forEach(edge => {
+                const sourceVisible = visibleNodeIds.has(edge.source().id());
+                const targetVisible = visibleNodeIds.has(edge.target().id());
+                
+                if (sourceVisible && targetVisible) {
+                    edge.removeClass('filtered-out').style('opacity', 1);
+                } else {
+                    edge.addClass('filtered-out').style('opacity', 0.1);
+                }
+            });
+        });
+    }
+
+    // Get visible node IDs from filtered data - to be implemented by subclasses
+    getVisibleNodeIds() {
+        return new Set();
+    }
+
+    // Common method to show all network nodes
+    showAllNetworkNodes() {
+        if (!window.cy) return;
+
+        window.cy.batch(() => {
+            window.cy.nodes().forEach(node => {
+                node.removeClass('filtered-out')
+                    .style('opacity', node.data('original-opacity') || 1);
+            });
+            
+            window.cy.edges().forEach(edge => {
+                edge.removeClass('filtered-out')
+                    .style('opacity', edge.data('original-opacity') || 1);
+            });
+        });
+    }
+
+    // Save original network element styles
+    saveOriginalStyles() {
+        if (!window.cy) return;
+        
+        window.cy.nodes().forEach(node => {
+            const currentStyle = node.style();
+            if (!node.data('original-opacity')) {
+                node.data('original-opacity', currentStyle['opacity'] || 1);
+            }
+        });
+        
+        window.cy.edges().forEach(edge => {
+            const currentStyle = edge.style();
+            if (!edge.data('original-opacity')) {
+                edge.data('original-opacity', currentStyle['opacity'] || 1);
+            }
+        });
+    }
+
+    // Common row selection methods
+    toggleRowSelection(row, rowData) {
+        const rowIndex = parseInt(row.dataset.rowIndex);
+        
+        if (this.selectedRows.has(rowIndex)) {
+            this.selectedRows.delete(rowIndex);
+            row.classList.remove('table-selected');
+        } else {
+            this.selectedRows.add(rowIndex);
+            row.classList.add('table-selected');
+        }
+    }
+
+    clearTableSelection() {
+        document.querySelectorAll('.table-selected').forEach(row => {
+            row.classList.remove('table-selected');
+        });
+        this.selectedRows.clear();
+    }
+
+    // Base table styles
+    setupTableStyles() {
+        if (!document.querySelector('#base-table-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'base-table-styles';
+            styles.textContent = `
+                .table-filter-container {
+                    margin-bottom: 1rem;
+                }
+                
+                .table-selected {
+                    background-color: #e3f2fd !important;
+                    border-left: 4px solid #2196f3 !important;
+                }
+                
+                .table-selected:hover {
+                    background-color: #e1f5fe !important;
+                }
+                
+                .filtered-out {
+                    display: none !important;
+                }
+                
+                .highlight-match {
+                    background-color: #fff3cd;
+                    font-weight: bold;
+                }
+                
+                .highlighted-cell {
+                    background-color: #fff3cd !important;
+                    border: 2px solid #ffc107 !important;
+                    font-weight: bold;
+                    box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+    }
+
+    // Base event handlers
+    setupBaseEventHandlers() {
+        // Common event handling can go here
+    }
+
+    // Highlight text matches in table content
+    highlightMatch(text) {
+        if (!this.filterText || !text || text === 'N/A') return text;
+        
+        const regex = new RegExp(`(${this.filterText})`, 'gi');
+        return text.replace(regex, '<span class="highlight-match">$1</span>');
+    }
+
+    // Abstract methods to be implemented by subclasses
+    renderTable() {
+        throw new Error('renderTable must be implemented by subclass');
+    }
+
+    updateTable(data) {
+        this.currentData = data;
+        this.filteredData = [...data];
+        this.renderTable();
+    }
+
+    async performTableUpdate() {
+        throw new Error('performTableUpdate must be implemented by subclass');
+    }
+}
+
+/**
+ * AOP Table Manager - extends base functionality for AOP-specific features
+ */
+class AOPTableManager extends DataTableManager {
+    constructor() {
+        super('aop-table', '#aop-table-container, .aop-table-container');
+        this.selectedAop = null;
+        this.groupedAops = new Set();
+        this.init();
+        this.setupNetworkListeners();
+    }
+
+    getTableDisplayName() {
+        return 'AOP';
+    }
+
+    getFilterHelpText() {
+        return 'Filter affects both table display and network visibility. Use keywords like "MIE", "AO", specific node names, or AOP numbers.';
+    }
+
+    getVisibleNodeIds() {
+        const visibleNodeIds = new Set();
+        this.filteredData.forEach(row => {
+            if (row.source_id !== 'N/A') visibleNodeIds.add(row.source_id);
+            if (row.target_id !== 'N/A') visibleNodeIds.add(row.target_id);
+        });
+        return visibleNodeIds;
+    }
+
+    matchesFilter(row) {
+        const searchFields = [
+            row.source_label,
+            row.target_label,
+            row.ker_label,
+            row.aop_list,
+            row.aop_titles,
+            row.source_type,
+            row.target_type
+        ].join(' ').toLowerCase();
+        
+        return searchFields.includes(this.filterText);
     }
 
     generateTableHTML() {
@@ -148,12 +405,11 @@ class AOPTableManager {
     generateClickableAopTitles(aopTitles, aopList) {
         if (!aopTitles || aopTitles === 'N/A') return aopTitles;
         
-        // Split titles and corresponding IDs
         const titles = aopTitles.split(';').map(title => title.trim());
         const aopIds = aopList && aopList !== 'N/A' ? aopList.split(',').map(id => id.trim()) : [];
         
         return titles.map((title, index) => {
-            const correspondingAopId = aopIds[index] || aopIds[0] || ''; // Fallback to first ID
+            const correspondingAopId = aopIds[index] || aopIds[0] || '';
             const isSelected = this.selectedAop === correspondingAopId;
             const isGrouped = this.groupedAops.has(correspondingAopId);
             let className = 'aop-title-link';
@@ -164,15 +420,76 @@ class AOPTableManager {
         }).join('; ');
     }
 
-    highlightMatch(text) {
-        if (!this.filterText || !text || text === 'N/A') return text;
+    renderTable() {
+        const tableContainer = document.querySelector(this.containerSelector);
+        if (!tableContainer) return;
+
+        let table = tableContainer.querySelector('.aop-table');
+        if (!table) {
+            table = document.createElement('table');
+            table.className = 'table table-striped table-hover aop-table';
+            tableContainer.appendChild(table);
+        }
+
+        const html = this.generateTableHTML();
+        table.innerHTML = html;
+        this.addNodeClickHandlers(table);
+    }
+
+    setupTableStyles() {
+        super.setupTableStyles();
         
-        const regex = new RegExp(`(${this.filterText})`, 'gi');
-        return text.replace(regex, '<span class="highlight-match">$1</span>');
+        if (!document.querySelector('#aop-table-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'aop-table-styles';
+            styles.textContent = `
+                .aop-table-container {
+                    max-height: 600px;
+                    overflow-y: auto;
+                }
+                
+                .node-type-badge {
+                    display: inline-block;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 0.8em;
+                    font-weight: 500;
+                    margin-right: 4px;
+                }
+                
+                .node-type-mie { background-color: #ccffcc; color:rgb(139, 192, 155); }
+                .node-type-ao { background-color: #ffe6e6; color: #c62828; }
+                .node-type-key_event { background-color: #ffff99; color:rgb(180, 180, 56); }
+                .node-type-unknown { background-color: #f5f5f5; color: #666; }
+                
+                .aop-link, .aop-title-link {
+                    cursor: pointer;
+                    color: #007bff;
+                    text-decoration: none;
+                    padding: 2px 4px;
+                    border-radius: 3px;
+                    transition: all 0.2s ease;
+                    display: inline-block;
+                    margin: 1px;
+                }
+                
+                .aop-link.selected-aop, .aop-title-link.selected-aop {
+                    background-color: #ff6b35;
+                    color: white;
+                    font-weight: bold;
+                }
+                
+                .aop-link.grouped-aop, .aop-title-link.grouped-aop {
+                    background-color: #4CAF50;
+                    color: white;
+                    font-weight: bold;
+                }
+            `;
+            document.head.appendChild(styles);
+        }
     }
 
     addNodeClickHandlers(table) {
-        // Add click handlers to highlight nodes in network
         table.querySelectorAll('[data-node-id]').forEach(element => {
             element.style.cursor = 'pointer';
             element.addEventListener('click', (e) => {
@@ -181,7 +498,6 @@ class AOPTableManager {
             });
         });
 
-        // Add click handlers for AOP filtering
         table.querySelectorAll('.aop-link, .aop-title-link').forEach(element => {
             element.style.cursor = 'pointer';
             element.addEventListener('click', (e) => {
@@ -190,65 +506,14 @@ class AOPTableManager {
                 const aopId = e.target.getAttribute('data-aop-id');
                 
                 if (e.ctrlKey || e.metaKey) {
-                    // Ctrl+Click for grouping (multiple selection without layout change)
                     this.toggleAopGroup(aopId);
                 } else {
-                    // Normal click for filtering (single selection with layout change)
                     this.toggleAopFilter(aopId);
                 }
             });
         });
         
-        // Add row selection handlers
         this.setupRowSelection(table);
-    }
-
-    setupRowSelection(table) {
-        // Remove existing row selection handlers
-        table.removeEventListener('click', this.handleRowClick);
-        
-        // Add row click handler for selection
-        this.handleRowClick = (e) => {
-            const row = e.target.closest('tr');
-            if (!row || !row.dataset.rowIndex) return;
-            
-            // Don't trigger selection if clicking on links or specific elements
-            if (e.target.closest('.aop-link, .aop-title-link, [data-node-id]')) return;
-            
-            const rowIndex = parseInt(row.dataset.rowIndex);
-            const rowData = this.filteredData[rowIndex];
-            if (!rowData) return;
-            
-            e.preventDefault();
-            
-            if (e.ctrlKey || e.metaKey) {
-                // Ctrl+Click: toggle row selection
-                this.toggleRowSelection(row, rowData);
-            } else if (e.shiftKey && this.selectedRows.size > 0) {
-                // Shift+Click: select range
-                this.selectRowRange(row, rowData);
-            } else {
-                // Regular click: select only this row
-                this.selectSingleRow(row, rowData);
-            }
-            
-            // Synchronize with network selection
-            this.syncTableToNetwork();
-        };
-        
-        table.addEventListener('click', this.handleRowClick);
-        
-        // Listen for network selection changes to sync back to table
-        if (window.cy) {
-            window.cy.removeListener('select unselect', this.handleNetworkSelection);
-            this.handleNetworkSelection = () => {
-                // Small delay to avoid conflicts with table selection
-                setTimeout(() => {
-                    this.syncNetworkToTable();
-                }, 50);
-            };
-            window.cy.on('select unselect', this.handleNetworkSelection);
-        }
     }
 
     toggleAopGroup(aopId) {
@@ -260,7 +525,6 @@ class AOPTableManager {
             this.groupedAops.add(aopId);
         }
         
-        // Clear single selection when grouping
         if (this.selectedAop) {
             this.selectedAop = null;
         }
@@ -272,16 +536,13 @@ class AOPTableManager {
     toggleAopFilter(aopId) {
         console.log('Toggling AOP filter for:', aopId);
         
-        // Clear grouped selections when doing single filter
         this.groupedAops.clear();
         
-        // If clicking the same AOP, clear the filter
         if (this.selectedAop === aopId) {
             this.clearAopFilter();
             return;
         }
         
-        // Set new AOP filter
         this.selectedAop = aopId;
         this.filterByAop(aopId);
         this.renderTable();
@@ -294,115 +555,14 @@ class AOPTableManager {
         this.renderTable();
     }
 
-    clearAllAopSelections() {
-        console.log('Clearing all AOP selections');
-        this.selectedAop = null;
-        this.groupedAops.clear();
-        this.showAllNetworkNodes();
-        this.renderTable();
-    }
-
-    // New method for "Group by AOP" button - highlights all AOPs without layout change
-    groupByAllAops() {
-        console.log('Grouping by all AOPs');
-        
-        // Clear single selection
-        this.selectedAop = null;
-        
-        // Get all unique AOP IDs from current data
-        const allAopIds = new Set();
-        this.currentData.forEach(row => {
-            if (row.aop_list && row.aop_list !== 'N/A') {
-                const aopIds = row.aop_list.split(',').map(id => id.trim());
-                aopIds.forEach(id => allAopIds.add(id));
-            }
-        });
-        
-        // Toggle: if all are already grouped, clear them; otherwise group all
-        const allAlreadyGrouped = Array.from(allAopIds).every(id => this.groupedAops.has(id));
-        
-        if (allAlreadyGrouped) {
-            this.groupedAops.clear();
-            this.showAllNetworkNodes();
-        } else {
-            this.groupedAops = new Set(allAopIds);
-            this.applyGroupHighlighting();
-        }
-        
-        this.renderTable();
-        
-        // Update button text
-        const button = document.getElementById('toggle_bounding_boxes');
-        if (button) {
-            button.textContent = this.groupedAops.size > 0 ? 'Clear AOP Groups' : 'Group by AOP';
-        }
-    }
-
-    handleFilter(filterText) {
-        this.filterText = filterText.toLowerCase().trim();
-        
-        if (!this.filterText) {
-            this.filteredData = [...this.currentData];
-            this.showAllNetworkNodes();
-        } else {
-            this.filteredData = this.currentData.filter(row => this.matchesFilter(row));
-            this.filterNetworkNodes();
-        }
-        
-        this.renderTable();
-    }
-
-    matchesFilter(row) {
-        const searchText = this.filterText;
-        
-        // Search in all relevant fields
-        const searchFields = [
-            row.source_label,
-            row.target_label,
-            row.ker_label,
-            row.aop_list,
-            row.aop_titles,
-            row.source_type,
-            row.target_type
-        ].join(' ').toLowerCase();
-        
-        return searchFields.includes(searchText);
-    }
-
-    relayoutVisibleNodes(visibleNodeIds) {
-        if (!window.cy || visibleNodeIds.size === 0) return;
-
-        // Use the global resetNetworkLayout function for consistency
-        if (window.resetNetworkLayout) {
-            setTimeout(() => {
-                window.resetNetworkLayout();
-            }, 100);
-        }
-    }
-
-    relayoutAllNodes() {
-        if (!window.cy) return;
-        
-        // Use the global resetNetworkLayout function
-        if (window.resetNetworkLayout) {
-            setTimeout(() => {
-                window.resetNetworkLayout();
-            }, 100);
-        }
-    }
-
     applyGroupHighlighting() {
         if (!window.cy || this.groupedAops.size === 0) {
             this.showAllNetworkNodes();
             return;
         }
         
-        console.log('Applying group highlighting for AOPs:', Array.from(this.groupedAops));
-        
-        // Save original styles before modifying them
         this.saveOriginalStyles();
         
-        // Create color palette for different AOPs
         const colors = [
             '#ff6b35', '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', 
             '#795548', '#607D8B', '#E91E63', '#00BCD4', '#8BC34A'
@@ -413,15 +573,13 @@ class AOPTableManager {
             aopColorMap.set(aopId, colors[index % colors.length]);
         });
         
-        // Find all nodes belonging to grouped AOPs
         const nodeColorMap = new Map();
         
         window.cy.nodes().forEach(node => {
             const nodeData = node.data();
             const nodeAops = nodeData.aop || [];
-            const aopsToCheck = Array.isArray(nodeAops) ? nodeAops : [nodeAop]; // Fixed variable name
+            const aopsToCheck = Array.isArray(nodeAops) ? nodeAops : [nodeAops];
             
-            // Check if node belongs to any grouped AOP
             for (const nodeAop of aopsToCheck) {
                 if (!nodeAop) continue;
                 
@@ -436,14 +594,11 @@ class AOPTableManager {
                 
                 if (this.groupedAops.has(nodeAopId)) {
                     nodeColorMap.set(node.id(), aopColorMap.get(nodeAopId));
-                    break; // Use first matching AOP color
+                    break;
                 }
             }
         });
         
-        console.log(`Found ${nodeColorMap.size} nodes for grouped AOPs`);
-        
-        // Apply visual highlighting without layout change
         window.cy.batch(() => {
             window.cy.nodes().forEach(node => {
                 const nodeColor = nodeColorMap.get(node.id());
@@ -461,13 +616,11 @@ class AOPTableManager {
                 }
             });
             
-            // Handle edges - highlight edges between grouped nodes
             window.cy.edges().forEach(edge => {
                 const sourceColor = nodeColorMap.get(edge.source().id());
                 const targetColor = nodeColorMap.get(edge.target().id());
                 
                 if (sourceColor && targetColor) {
-                    // Use source node color for edge
                     edge.style('opacity', 1)
                         .style('line-color', sourceColor)
                         .style('target-arrow-color', sourceColor)
@@ -480,9 +633,6 @@ class AOPTableManager {
                 }
             });
         });
-        
-        // Show status message
-        this.showFilterStatus(`Grouped ${this.groupedAops.size} AOPs with ${nodeColorMap.size} nodes`, 'info');
     }
 
     filterByAop(aopId) {
@@ -490,25 +640,17 @@ class AOPTableManager {
         
         console.log('Filtering network by AOP:', aopId);
         
-        // Find all nodes that belong to this AOP
         const aopNodes = new Set();
-        
-        // Save original styles before modifying them
         this.saveOriginalStyles();
         
-        // Check all nodes for the AOP data
         window.cy.nodes().forEach(node => {
             const nodeData = node.data();
             const nodeAops = nodeData.aop || [];
-            
-            // Handle both array and single value cases
             const aopsToCheck = Array.isArray(nodeAops) ? nodeAops : [nodeAops];
             
-            // Check if any of the node's AOPs match our target AOP
             const hasMatchingAop = aopsToCheck.some(nodeAop => {
                 if (!nodeAop) return false;
                 
-                // Extract AOP ID from various formats
                 let nodeAopId = '';
                 if (nodeAop.includes('aop/')) {
                     nodeAopId = `AOP:${nodeAop.split('aop/').pop()}`;
@@ -533,9 +675,7 @@ class AOPTableManager {
             return;
         }
         
-        // Apply visual filtering with animation
         window.cy.batch(() => {
-            // Fade out non-matching nodes
             window.cy.nodes().forEach(node => {
                 if (aopNodes.has(node.id())) {
                     node.removeClass('filtered-out aop-filtered')
@@ -551,7 +691,6 @@ class AOPTableManager {
                 }
             });
             
-            // Handle edges - only show edges between highlighted nodes
             window.cy.edges().forEach(edge => {
                 const sourceId = edge.source().id();
                 const targetId = edge.target().id();
@@ -569,7 +708,6 @@ class AOPTableManager {
             });
         });
         
-        // Center and zoom to the filtered nodes
         if (aopNodes.size > 0) {
             const nodesToFit = window.cy.nodes().filter(node => aopNodes.has(node.id()));
             
@@ -579,72 +717,35 @@ class AOPTableManager {
                 easing: 'ease-out'
             });
         }
-        
-        // Show status message
-        this.showFilterStatus(`Network filtered to show ${aopNodes.size} nodes from ${aopId}`, 'info');
     }
 
-    // Update legacy table format with smooth transitions (from table_aop.js)
-    updateLegacyTable(aopData, tableBody) {
-        if (!tableBody || tableBody.length === 0) return;
+    setupRowSelection(table) {
+        table.removeEventListener('click', this.handleRowClick);
         
-        // Clear existing table content with smooth transition
-        tableBody.fadeOut(200, function() {
-            tableBody.empty();
+        this.handleRowClick = (e) => {
+            const row = e.target.closest('tr');
+            if (!row || !row.dataset.rowIndex) return;
             
-            // Populate table with new data
-            aopData.forEach(row => {
-                const tr = $("<tr></tr>");
-                
-                // Source column
-                tr.append(`<td title="${row.source_id}">${row.source_label}</td>`);
-                
-                // Relationship column with CURIE link
-                const relationshipCell = $("<td></td>");
-                if (row.curie) {
-                    const curieLink = `<a href="#" class="curie-link" data-curie="${row.curie}" title="${row.curie}">${row.curie.split(':')[1] || row.curie}</a>`;
-                    relationshipCell.html(curieLink);
-                } else {
-                    relationshipCell.text('N/A');
-                }
-                tr.append(relationshipCell);
-                
-                // Target column
-                tr.append(`<td title="${row.target_id}">${row.target_label}</td>`);
-                
-                tableBody.append(tr);
-            });
+            if (e.target.closest('.aop-link, .aop-title-link, [data-node-id]')) return;
             
-            // Fade in the updated table content
-            tableBody.fadeIn(300);
-            console.log(`Populated legacy AOP table with ${aopData.length} relationships`);
-        });
-    }
-
-    // Show empty table state with smooth transition (from table_aop.js)
-    showEmptyAopTable() {
-        const tableBody = $("#aop_table tbody");
-        if (tableBody.length > 0) {
-            tableBody.fadeOut(200, function() {
-                tableBody.empty();
-                tableBody.append(`
-                    <tr>
-                        <td colspan="3" style="text-align: center; color: #6c757d; font-style: italic;">
-                            No relationships in current network
-                        </td>
-                    </tr>
-                `);
-                tableBody.fadeIn(300);
-            });
-        }
+            const rowIndex = parseInt(row.dataset.rowIndex);
+            const rowData = this.filteredData[rowIndex];
+            if (!rowData) return;
+            
+            e.preventDefault();
+            
+            if (e.ctrlKey || e.metaKey) {
+                this.toggleRowSelection(row, rowData);
+            } else {
+                this.clearTableSelection();
+                this.selectedRows.add(rowIndex);
+                row.classList.add('table-selected');
+            }
+        };
         
-        // Also clear table
-        this.currentData = [];
-        this.filteredData = [];
-        this.renderTable();
+        table.addEventListener('click', this.handleRowClick);
     }
 
-    // Setup network listeners with debounced smooth updates (from table_aop.js)
     setupNetworkListeners() {
         if (!window.cy) {
             console.log('Cytoscape not ready, will setup AOP table listeners later');
@@ -653,13 +754,10 @@ class AOPTableManager {
         
         console.log('Setting up AOP table network listeners');
         
-        // Listen for network changes with smooth transitions
         window.cy.on('add remove', (event) => {
             console.log('Network changed, updating AOP table with smooth transition');
-            // Debounce rapid changes and add smooth transition
             clearTimeout(window.aopTableUpdateTimeout);
             window.aopTableUpdateTimeout = setTimeout(() => {
-                // Add a subtle loading indicator during updates
                 const tableBody = $("#aop_table tbody");
                 if (tableBody.length > 0) {
                     tableBody.addClass('updating');
@@ -675,8 +773,40 @@ class AOPTableManager {
             }, 500);
         });
     }
+    groupByAllAops() {
+        console.log('Grouping by all AOPs');
 
-    // debouncedUpdateTable with legacy support
+        // Clear single selection
+        this.selectedAop = null;
+
+        // Get all unique AOP IDs from current data
+        const allAopIds = new Set();
+        this.currentData.forEach(row => {
+            if (row.aop_list && row.aop_list !== 'N/A') {
+                const aopIds = row.aop_list.split(',').map(id => id.trim());
+                aopIds.forEach(id => allAopIds.add(id));
+            }
+        });
+
+        // Toggle: if all are already grouped, clear them; otherwise group all
+        const allAlreadyGrouped = Array.from(allAopIds).every(id => this.groupedAops.has(id));
+
+        if (allAlreadyGrouped) {
+            this.groupedAops.clear();
+            this.showAllNetworkNodes();
+        } else {
+            this.groupedAops = new Set(allAopIds);
+            this.applyGroupHighlighting();
+        }
+
+        this.renderTable();
+
+        // Update button text
+        const button = document.getElementById('toggle_bounding_boxes');
+        if (button) {
+            button.textContent = this.groupedAops.size > 0 ? 'Clear AOP Groups' : 'Group by AOP';
+        }
+    }
     debouncedUpdateTable(delay = 500) {
         // Clear any existing timeout
         if (this.updateTimeout) {
@@ -705,14 +835,6 @@ class AOPTableManager {
         this.isUpdating = true;
         console.log('Starting AOP table update...');
 
-        const tableBody = $("#aop_table tbody");
-        const loadingDiv = $("#loading_aop_table");
-        
-        // Show loading indicator if elements exist
-        if (loadingDiv.length > 0) {
-            loadingDiv.show();
-        }
-
         try {
             const cyElements = window.cy.elements().jsons();
             
@@ -728,632 +850,608 @@ class AOPTableManager {
 
             const data = await response.json();
             
-            // Hide loading indicator
-            if (loadingDiv.length > 0) {
-                loadingDiv.hide();
-            }
-            
             if (data.error) {
                 console.error("Error populating AOP table:", data.error);
-                this.showEmptyAopTable();
+                this.currentData = [];
+                this.filteredData = [];
+                this.renderTable();
                 return;
             }
             
-            console.log('Received AOP table data:', data.aop_data);
-            
             if (data.aop_data && data.aop_data.length > 0) {
-                // Update table
                 this.updateTable(data.aop_data);
-                
-                // Also update legacy table if it exists
-                this.updateLegacyTable(data.aop_data, tableBody);
-                
                 console.log(`AOP table updated with ${data.aop_data.length} entries`);
             } else {
-                this.showEmptyAopTable();
+                this.currentData = [];
+                this.filteredData = [];
+                this.renderTable();
             }
             
         } catch (error) {
             console.error("Error updating AOP table:", error);
-            if (loadingDiv.length > 0) {
-                loadingDiv.hide();
-            }
-            this.showEmptyAopTable();
+            this.currentData = [];
+            this.filteredData = [];
+            this.renderTable();
         } finally {
             this.isUpdating = false;
         }
     }
+}
 
-    // New method to save original element styles before applying filters
-    saveOriginalStyles() {
-        if (!window.cy) return;
-        
-        // Save original node styles
-        window.cy.nodes().forEach(node => {
-            const currentStyle = node.style();
-            if (!node.data('original-border-color')) {
-                node.data('original-border-color', currentStyle['border-color'] || '#666');
-            }
-            if (!node.data('original-border-width')) {
-                node.data('original-border-width', currentStyle['border-width'] || '2px');
-            }
-            if (!node.data('original-opacity')) {
-                node.data('original-opacity', currentStyle['opacity'] || 1);
-            }
-        });
-        
-        // Save original edge styles
-        window.cy.edges().forEach(edge => {
-            const currentStyle = edge.style();
-            if (!edge.data('original-line-color')) {
-                edge.data('original-line-color', currentStyle['line-color'] || '#666');
-            }
-            if (!edge.data('original-target-arrow-color')) {
-                edge.data('original-target-arrow-color', currentStyle['target-arrow-color'] || '#666');
-            }
-            if (!edge.data('original-width')) {
-                edge.data('original-width', currentStyle['width'] || '2px');
-            }
-            if (!edge.data('original-opacity')) {
-                edge.data('original-opacity', currentStyle['opacity'] || 1);
-            }
-        });
+/**
+ * Gene Table Manager - extends base functionality for gene-specific features
+ */
+class GeneTableManager extends DataTableManager {
+    constructor() {
+        super('gene-table', '#gene-table-container');
+        this.init();
     }
 
-    showAllNetworkNodes() {
-        if (!window.cy) return;
-
-        console.log('Showing all network nodes');
-
-        window.cy.batch(() => {
-            // Reset all nodes to their original styles
-            window.cy.nodes().forEach(node => {
-                node.removeClass('filtered-out aop-filtered aop-highlighted aop-grouped')
-                    .style('opacity', node.data('original-opacity') || 1)
-                    .style('border-width', node.data('original-border-width') || '2px')
-                    .style('border-color', node.data('original-border-color') || '#666');
-            });
-            
-            // Reset all edges to their original styles
-            window.cy.edges().forEach(edge => {
-                edge.removeClass('filtered-out')
-                    .style('opacity', edge.data('original-opacity') || 1)
-                    .style('line-color', edge.data('original-line-color') || '#666')
-                    .style('target-arrow-color', edge.data('original-target-arrow-color') || '#666')
-                    .style('width', edge.data('original-width') || '2px');
-            });
-        });
-
-        // Use the global resetNetworkLayout function
-        if (window.resetNetworkLayout) {
-            setTimeout(() => {
-                window.resetNetworkLayout();
-            }, 100);
-        }
-        
-        // Clear status message
-        this.showFilterStatus('', 'info');
+    getTableDisplayName() {
+        return 'Gene';
     }
 
-    showFilterStatus(message, type = 'info') {
-        // Create or update status element
-        let statusElement = document.querySelector('#aop-filter-status');
-        if (!statusElement) {
-            statusElement = document.createElement('div');
-            statusElement.id = 'aop-filter-status';
-            statusElement.className = 'mt-2 small';
-            
-            const tableContainer = document.querySelector('#aop-table-container');
-            if (tableContainer) {
-                tableContainer.appendChild(statusElement);
-            }
-        }
+    getFilterHelpText() {
+        return 'Filter by gene symbols, protein names, UniProt IDs, or Ensembl IDs.';
+    }
+
+    getVisibleNodeIds() {
+        const visibleNodeIds = new Set();
+        this.filteredData.forEach(row => {
+            if (row.ensembl_id && row.ensembl_id !== 'N/A') visibleNodeIds.add(row.ensembl_id);
+            if (row.uniprot_node_id && row.uniprot_node_id !== 'N/A') visibleNodeIds.add(row.uniprot_node_id);
+        });
+        return visibleNodeIds;
+    }
+
+    matchesFilter(row) {
+        const searchFields = [
+            row.gene,
+            row.protein,
+            row.uniprot_id,
+            row.ensembl_id,
+            row.uniprot_node_id
+        ].join(' ').toLowerCase();
         
-        if (message) {
-            const alertClass = {
-                'info': 'alert-info',
-                'success': 'alert-success',
-                'warning': 'alert-warning',
-                'error': 'alert-danger'
-            }[type] || 'alert-info';
-            
-            statusElement.innerHTML = `
-                <div class="alert ${alertClass} py-1 px-2 mb-1">
-                    <small>${message}</small>
-                    <button type="button" class="btn btn-sm btn-outline-secondary ml-2" onclick="window.aopTableManager.clearAopFilter()">
-                        Clear Filter
-                    </button>
-                </div>
-            `;
-        } else {
-            statusElement.innerHTML = '';
-        }
+        return searchFields.includes(this.filterText);
     }
 
     renderTable() {
-        const tableContainer = document.querySelector('#aop-table-container, .aop-table-container');
+        const tableContainer = document.querySelector('#gene_table').closest('.table-responsive') || 
+                              document.querySelector('#gene_table')?.parentElement;
         if (!tableContainer) return;
 
-        let table = tableContainer.querySelector('.aop-table');
-        if (!table) {
-            table = document.createElement('table');
-            table.className = 'table table-striped table-hover aop-table';
-            
-            // Add instructions before the table
-            const instructions = document.createElement('div');
-            instructions.className = 'aop-table-instructions';
-            instructions.innerHTML = `
-                <strong>Selection:</strong> Click rows to select • Ctrl+Click for multi-select • Shift+Click for range select
-            `;
-            
-            tableContainer.appendChild(instructions);
-            tableContainer.appendChild(table);
+        const table = document.querySelector('#gene_table');
+        if (!table) return;
+
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = '';
+
+        if (this.filteredData.length === 0) {
+            this.showEmptyTable();
+            return;
         }
 
-        const html = this.generateTableHTML();
-        table.innerHTML = html;
+        this.filteredData.forEach((gene, index) => {
+            const proteinDisplay = gene.protein !== "N/A" ?
+                `<a href="https://www.uniprot.org/uniprotkb/${gene.uniprot_id}" target="_blank">${this.highlightMatch(gene.protein)}</a>` :
+                "N/A";
 
-        // Add click handlers for node highlighting and row selection
-        this.addNodeClickHandlers(table);
+            const geneDisplay = gene.gene !== "N/A" ?
+                `<a href="https://identifiers.org/ensembl:${gene.gene}" target="_blank">${this.highlightMatch(gene.gene)}</a>` :
+                "N/A";
+
+            tbody.innerHTML += `
+                <tr data-gene="${gene.gene}" 
+                    data-uniprot-id="${gene.uniprot_id}" 
+                    data-ensembl-id="${gene.ensembl_id}"
+                    data-uniprot-node-id="${gene.uniprot_node_id}"
+                    data-row-index="${index}"
+                    style="cursor: pointer;">
+                    <td class="gene-cell clickable-cell" data-node-id="${gene.ensembl_id}" style="cursor: pointer;">
+                        ${geneDisplay}
+                    </td>
+                    <td class="protein-cell clickable-cell" data-node-id="${gene.uniprot_node_id}" style="cursor: pointer;">
+                        ${proteinDisplay}
+                    </td>
+                </tr>
+            `;
+        });
+
+        // Add summary if filtered
+        if (this.filterText) {
+            const tfoot = table.querySelector('tfoot') || table.createTFoot();
+            tfoot.innerHTML = `
+                <tr>
+                    <td colspan="2" class="text-muted small">
+                        Showing ${this.filteredData.length} of ${this.currentData.length} genes
+                        ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
+                    </td>
+                </tr>
+            `;
+        } else {
+            const tfoot = table.querySelector('tfoot');
+            if (tfoot) tfoot.remove();
+        }
+
+        this.setupGeneTableEventHandlers();
     }
 
     setupTableStyles() {
-        // Add custom CSS for better table display
-        if (!document.querySelector('#aop-table-styles')) {
+        super.setupTableStyles();
+        
+        if (!document.querySelector('#gene-table-styles')) {
             const styles = document.createElement('style');
-            styles.id = 'aop-table-styles';
+            styles.id = 'gene-table-styles';
             styles.textContent = `
-                .aop-table-container {
-                    max-height: 600px;
-                    overflow-y: auto;
-                }
-                
-                .aop-table {
-                    font-size: 0.9em;
-                }
-                
-                .aop-table td {
-                    vertical-align: top;
-                    padding: 12px 8px;
-                    line-height: 1.4;
-                    word-wrap: break-word;
-                    max-width: 200px;
-                }
-                
-                .aop-table th {
-                    position: sticky;
-                    top: 0;
-                    background-color: #f8f9fa;
-                    z-index: 10;
-                    border-bottom: 2px solid #dee2e6;
-                    font-weight: 600;
-                }
-                
-                .aop-table tbody tr {
+                #gene_table tbody tr {
                     cursor: pointer;
                     transition: background-color 0.2s ease;
                 }
-                
-                .aop-table tbody tr:hover {
-                    background-color: #f8f9fa;
-                }
-                
-                .aop-table-selected {
-                    background-color: #e3f2fd !important;
-                    border-left: 4px solid #2196f3 !important;
-                }
-                
-                .aop-table-selected:hover {
-                    background-color: #e1f5fe !important;
-                }
-                
-                .node-type-badge {
-                    display: inline-block;
-                    padding: 2px 6px;
-                    border-radius: 4px;
-                    font-size: 0.8em;
-                    font-weight: 500;
-                    margin-right: 4px;
-                }
-                
-                .node-type-mie { background-color: #ccffcc; color:rgb(139, 192, 155); }
-                .node-type-ao { background-color: #ffe6e6; color: #c62828; }
-                .node-type-key_event { background-color: #ffff99; color:rgb(180, 180, 56); }
-                .node-type-unknown { background-color: #f5f5f5; color: #666; }
-                
-                .disconnected-row {
-                    background-color: #fff3cd;
-                    border-left: 4px solid #ffc107;
-                }
-                
-                .disconnected-row.aop-table-selected {
-                    background-color: #e3f2fd !important;
-                    border-left: 4px solid #2196f3 !important;
-                }
-                
-                .missing-label {
-                    font-style: italic;
-                    color: #6c757d;
-                }
-                
-                .aop-titles-cell {
-                    font-size: 0.85em;
-                    color: #495057;
-                }
-                
-                .ker-label-cell {
-                    font-family: 'Monaco', 'Menlo', monospace;
-                    font-size: 0.9em;
-                    background-color: #f8f9fa;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                }
-                
-                .filtered-out {
-                    display: none !important;
-                }
-                
-                .highlight-match {
-                    background-color: #fff3cd;
-                    font-weight: bold;
-                }
-                
-                .aop-link, .aop-title-link {
+
+                #gene_table tbody tr:hover {
+                    background-color: #f8f9fa !important;
                     cursor: pointer;
-                    color: #007bff;
-                    text-decoration: none;
-                    padding: 2px 4px;
-                    border-radius: 3px;
+                }
+
+                .gene-cell, .protein-cell {
                     transition: all 0.2s ease;
-                    display: inline-block;
-                    margin: 1px;
-                }
-                
-                .aop-link:hover, .aop-title-link:hover {
-                    background-color: #e7f3ff;
-                    text-decoration: underline;
-                }
-                
-                .aop-link.selected-aop, .aop-title-link.selected-aop {
-                    background-color: #ff6b35;
-                    color: white;
-                    font-weight: bold;
-                    box-shadow: 0 2px 4px rgba(255, 107, 53, 0.3);
-                }
-                
-                .aop-link.grouped-aop, .aop-title-link.grouped-aop {
-                    background-color: #4CAF50;
-                    color: white;
-                    font-weight: bold;
-                    box-shadow: 0 2px 4px rgba(76, 175, 80, 0.3);
-                }
-                
-                .aop-link.selected-aop.grouped-aop, .aop-title-link.selected-aop.grouped-aop {
-                    background: linear-gradient(45deg, #ff6b35, #4CAF50);
-                }
-                
-                .aop-highlighted {
-                    border-color: #ff6b35 !important;
-                    border-width: 4px !important;
-                    box-shadow: 0 0 10px rgba(255, 107, 53, 0.5);
-                }
-                
-                .aop-grouped {
-                    border-width: 4px !important;
-                    box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
-                }
-                
-                /* Selection instructions */
-                .aop-table-instructions {
-                    font-size: 0.8rem;
-                    color: #6c757d;
-                    margin-bottom: 10px;
-                    padding: 8px;
-                    background-color: #f8f9fa;
+                    padding: 8px 12px;
                     border-radius: 4px;
-                    border-left: 3px solid #007bff;
+                }
+
+                .gene-cell:hover, .protein-cell:hover {
+                    background-color: #e7f3ff !important;
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
                 }
             `;
             document.head.appendChild(styles);
         }
     }
 
-    filterNetworkNodes() {
-        if (!window.cy) return;
+    setupGeneTableEventHandlers() {
+        const table = document.querySelector('#gene_table');
+        if (!table) return;
 
-        // Save original styles before filtering
-        this.saveOriginalStyles();
+        // Remove existing listeners
+        const tbody = table.querySelector('tbody');
+        const newTbody = tbody.cloneNode(true);
+        tbody.parentNode.replaceChild(newTbody, tbody);
 
-        // Get visible node IDs from filtered data
-        const visibleNodeIds = new Set();
-        this.filteredData.forEach(row => {
-            if (row.source_id !== 'N/A') visibleNodeIds.add(row.source_id);
-            if (row.target_id !== 'N/A') visibleNodeIds.add(row.target_id);
-        });
-
-        // Animate network filtering
-        window.cy.batch(() => {
-            window.cy.nodes().forEach(node => {
-                if (visibleNodeIds.has(node.id())) {
-                    node.removeClass('filtered-out').style('opacity', 1);
-                } else {
-                    node.addClass('filtered-out').style('opacity', 0.1);
-                }
-            });
-            
-            // Also handle edges
-            window.cy.edges().forEach(edge => {
-                const sourceVisible = visibleNodeIds.has(edge.source().id());
-                const targetVisible = visibleNodeIds.has(edge.target().id());
+        // Gene/protein cell click handlers
+        newTbody.querySelectorAll('.gene-cell, .protein-cell').forEach(cell => {
+            cell.addEventListener('click', (e) => {
+                if (e.target.closest('a')) return;
                 
-                if (sourceVisible && targetVisible) {
-                    edge.removeClass('filtered-out').style('opacity', 1);
-                } else {
-                    edge.addClass('filtered-out').style('opacity', 0.1);
-                }
-            });
-        });
+                e.preventDefault();
+                e.stopPropagation();
 
-        // Re-layout visible nodes with animation
-        this.relayoutVisibleNodes(visibleNodeIds);
-    }
+                const nodeId = cell.getAttribute('data-node-id');
+                if (!nodeId || nodeId === 'N/A') return;
 
-    highlightNodeInNetwork(nodeId) {
-        if (window.cy && nodeId) {
-            // Clear previous highlights
-            window.cy.elements().removeClass('highlighted');
-            
-            // Highlight the selected node
-            const node = window.cy.getElementById(nodeId);
-            if (node.length > 0) {
-                node.addClass('highlighted');
-                
-                // Center on the node with animation
-                window.cy.animate({
-                    center: { eles: node },
-                    zoom: Math.max(window.cy.zoom(), 1.5)
-                }, {
-                    duration: 500
-                });
-                
-                // Remove highlight after a few seconds
+                this.highlightNodeInNetwork(nodeId);
+
+                // Visual feedback
+                document.querySelectorAll('.gene-cell, .protein-cell').forEach(c => 
+                    c.classList.remove('highlighted-cell'));
+                cell.classList.add('highlighted-cell');
+
                 setTimeout(() => {
-                    node.removeClass('highlighted');
+                    cell.classList.remove('highlighted-cell');
                 }, 3000);
-            }
-        }
-    }
-
-    updateTable(aopData) {
-        this.currentData = aopData;
-        this.filteredData = [...aopData];
-        this.renderTable();
-    }
-
-    toggleRowSelection(row, rowData) {
-        const rowIndex = parseInt(row.dataset.rowIndex);
-        
-        if (this.selectedRows.has(rowIndex)) {
-            this.selectedRows.delete(rowIndex);
-            row.classList.remove('aop-table-selected');
-        } else {
-            this.selectedRows.add(rowIndex);
-            row.classList.add('aop-table-selected');
-        }
-        
-        console.log(`Toggled row selection. Selected rows: ${this.selectedRows.size}`);
-    }
-
-    selectSingleRow(row, rowData) {
-        // Clear all previous selections
-        this.clearTableSelection();
-        
-        // Select this row
-        const rowIndex = parseInt(row.dataset.rowIndex);
-        this.selectedRows.add(rowIndex);
-        row.classList.add('aop-table-selected');
-        
-        console.log(`Selected single row: ${rowData.source_label} -> ${rowData.target_label}`);
-    }
-
-    selectRowRange(row, rowData) {
-        const currentRowIndex = parseInt(row.dataset.rowIndex);
-        const selectedIndices = Array.from(this.selectedRows);
-        
-        if (selectedIndices.length === 0) {
-            this.selectSingleRow(row, rowData);
-            return;
-        }
-        
-        // Find the range between last selected and current
-        const lastSelected = Math.max(...selectedIndices);
-        const start = Math.min(lastSelected, currentRowIndex);
-        const end = Math.max(lastSelected, currentRowIndex);
-        
-        // Select all rows in range
-        for (let i = start; i <= end; i++) {
-            this.selectedRows.add(i);
-            const tableRow = document.querySelector(`tr[data-row-index="${i}"]`);
-            if (tableRow) {
-                tableRow.classList.add('aop-table-selected');
-            }
-        }
-        
-        console.log(`Selected row range ${start}-${end}. Total selected: ${this.selectedRows.size}`);
-    }
-
-    clearTableSelection() {
-        // Clear visual selection
-        document.querySelectorAll('.aop-table-selected').forEach(row => {
-            row.classList.remove('aop-table-selected');
+            });
         });
-        
-        // Clear internal tracking
-        this.selectedRows.clear();
-    }
 
-    syncTableToNetwork() {
-        if (!window.cy) return;
-        
-        // Get all network element IDs from selected rows
-        const networkElementIds = new Set();
-        
-        this.selectedRows.forEach(rowIndex => {
-            const rowData = this.filteredData[rowIndex];
-            if (!rowData) return;
-            
-            // Add source and target node IDs
-            if (rowData.source_id && rowData.source_id !== 'N/A') {
-                networkElementIds.add(rowData.source_id);
-            }
-            if (rowData.target_id && rowData.target_id !== 'N/A') {
-                networkElementIds.add(rowData.target_id);
-            }
-            
-            // Try to find the corresponding edge if it exists
-            const sourceNode = window.cy.getElementById(rowData.source_id);
-            const targetNode = window.cy.getElementById(rowData.target_id);
-            
-            if (sourceNode.length && targetNode.length) {
-                // Find edges between these nodes
-                const edges = sourceNode.edgesWith(targetNode);
-                edges.forEach(edge => {
-                    networkElementIds.add(edge.id());
-                });
-            }
-        });
-        
-        console.log(`Syncing table selection to network: ${networkElementIds.size} elements`);
-        
-        // Update network selection
-        window.cy.batch(() => {
-            // Clear current network selection
-            window.cy.$(':selected').unselect();
-            
-            // Select corresponding network elements
-            networkElementIds.forEach(elementId => {
-                const element = window.cy.getElementById(elementId);
-                if (element.length) {
-                    element.select();
+        // Row click handlers
+        newTbody.querySelectorAll('tr').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('a') || e.target.closest('.gene-cell, .protein-cell')) return;
+
+                const geneSymbol = row.dataset.gene;
+                const uniprotId = row.dataset.uniprotId;
+                const ensemblId = row.dataset.ensemblId;
+                
+                if (!geneSymbol) return;
+                
+                // Selection handling
+                if (e.ctrlKey || e.metaKey) {
+                    this.toggleRowSelection(row, { gene: geneSymbol });
+                } else {
+                    this.clearTableSelection();
+                    row.classList.add('table-selected');
+                    this.selectedRows.add(parseInt(row.dataset.rowIndex));
+                }
+                
+                // Network highlighting
+                if (window.cy) {
+                    window.cy.elements().removeClass('highlighted');
+                    
+                    const ensemblNode = window.cy.getElementById(ensemblId);
+                    const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
+                    
+                    if (ensemblNode.length > 0) {
+                        ensemblNode.addClass('highlighted');
+                        window.cy.center(ensemblNode);
+                    }
+                    
+                    if (uniprotNode.length > 0) {
+                        uniprotNode.addClass('highlighted');
+                    }
                 }
             });
         });
-        
-        // Update selection info
-        this.updateSelectionInfo();
     }
 
-    syncNetworkToTable() {
-        if (!window.cy || this.isUpdating) return;
-        
-        const selectedElements = window.cy.$(':selected');
-        const selectedNodeIds = new Set();
-        
-        // Get all selected node IDs
-        selectedElements.nodes().forEach(node => {
-            selectedNodeIds.add(node.id());
-        });
-        
-        // Get all edge node IDs
-        selectedElements.edges().forEach(edge => {
-            selectedNodeIds.add(edge.source().id());
-            selectedNodeIds.add(edge.target().id());
-        });
-        
-        if (selectedNodeIds.size === 0) {
-            this.clearTableSelection();
-            this.updateSelectionInfo();
+    async performTableUpdate() {
+        if (this.isUpdating) {
+            console.log('Gene table update already in progress, skipping');
             return;
         }
-        
-        // Find rows that contain any of the selected nodes
-        const rowsToSelect = new Set();
-        
-        this.filteredData.forEach((rowData, index) => {
-            const hasSelectedNode = 
-                selectedNodeIds.has(rowData.source_id) || 
-                selectedNodeIds.has(rowData.target_id);
-            
-            if (hasSelectedNode) {
-                rowsToSelect.add(index);
+
+        if (!window.cy) {
+            console.warn("Cytoscape not available for gene table update");
+            return;
+        }
+
+        this.isUpdating = true;
+
+        try {
+            const response = await fetch('/populate_gene_table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
+            });
+
+            const data = await response.json();
+
+            if (data.gene_data && data.gene_data.length > 0) {
+                this.updateTable(data.gene_data);
+                console.log(`Gene table updated with ${data.gene_data.length} genes.`);
+            } else {
+                this.currentData = [];
+                this.filteredData = [];
+                this.showEmptyTable();
             }
-        });
-        
-        console.log(`Syncing network selection to table: ${rowsToSelect.size} rows`);
-        
-        // Update table selection
-        this.clearTableSelection();
-        rowsToSelect.forEach(rowIndex => {
-            this.selectedRows.add(rowIndex);
-            const tableRow = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
-            if (tableRow) {
-                tableRow.classList.add('aop-table-selected');
-            }
-        });
-        
-        this.updateSelectionInfo();
+        } catch (error) {
+            console.error("Error updating gene table:", error);
+            this.showEmptyTable();
+        } finally {
+            this.isUpdating = false;
+        }
     }
 
-    updateSelectionInfo() {
-        // Update the existing selection controls with table selection info
-        const selectionInfo = document.getElementById('selection-info');
-        const selectionControls = document.getElementById('selection-controls');
+    showEmptyTable() {
+        const tableBody = document.querySelector("#gene_table tbody");
+        if (!tableBody) return;
+
+        tableBody.innerHTML = `
+            <tr id="default-gene-row">
+                <td colspan="2" style="text-align: center; padding: 20px;">
+                    <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
+                        No genes in network. You can query the AOP-Wiki RDF for gene sets associated with Key Events or draw your own Ensembl identifiers.
+                    </div>
+                    <button id="get-genes-table-btn" class="btn btn-primary btn-sm">
+                        <i class="fas fa-dna"></i> Get gene sets
+                    </button>
+                </td>
+            </tr>
+        `;
         
-        if (selectionInfo && selectionControls) {
-            const networkSelected = window.cy ? window.cy.$(':selected').length : 0;
-            const tableSelected = this.selectedRows.size;
-            
-            if (networkSelected > 0 || tableSelected > 0) {
-                selectionControls.style.display = 'flex';
-                selectionControls.style.visibility = 'visible';
-                
-                if (tableSelected > 0) {
-                    selectionInfo.textContent = `${networkSelected} network, ${tableSelected} table rows selected`;
-                } else {
-                    selectionInfo.textContent = `${networkSelected} selected`;
-                }
-            } else {
-                selectionControls.style.display = 'none';
+        document.getElementById("get-genes-table-btn")?.addEventListener("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.toggleGenes) {
+                window.toggleGenes();
             }
-        }
-        
-        // Trigger the main selection controls update
-        if (window.updateSelectionControls) {
-            window.updateSelectionControls();
-        }
+        });
     }
 }
 
-// Initialize the AOP Table Manager immediately
-console.log('Initializing AOP Table Manager...');
+/**
+ * Compound Table Manager - extends base functionality for compound-specific features
+ */
+class CompoundTableManager extends DataTableManager {
+    constructor() {
+        super('compound-table', '#compound-table-container');
+        this.init();
+    }
+
+    getTableDisplayName() {
+        return 'Compound';
+    }
+
+    getFilterHelpText() {
+        return 'Filter by compound names, CAS IDs, PubChem IDs, or chemical labels.';
+    }
+
+    getVisibleNodeIds() {
+        const visibleNodeIds = new Set();
+        this.filteredData.forEach(row => {
+            if (row.node_id && row.node_id !== 'N/A') visibleNodeIds.add(row.node_id);
+        });
+        return visibleNodeIds;
+    }
+
+    matchesFilter(row) {
+        const searchFields = [
+            row.compound_name,
+            row.cas_id,
+            row.chemical_label,
+            row.pubchem_id,
+            row.smiles
+        ].join(' ').toLowerCase();
+        
+        return searchFields.includes(this.filterText);
+    }
+
+    generateCompoundRowHTML(row, index) {
+        const cas_id = row.cas_id || "";
+        const chemical_label = row.chemical_label || "";
+        const chemical_uri = row.chemical_uri || "";
+        const compound_name = row.compound_name || "Unknown Compound";
+        const node_id = row.node_id || "";
+        const pubchem_compound = row.pubchem_compound || "";
+        const pubchem_id = row.pubchem_id || "";
+        const smiles = row.smiles || "";
+        
+        // Generate SMILES image URL if SMILES data is available
+        const encodedSMILES = smiles ? encodeURIComponent(smiles) : "";
+        const imgUrl = smiles ? 
+            `https://cdkdepict.cloud.vhp4safety.nl/depict/bot/svg?w=-1&h=-1&abbr=off&hdisp=bridgehead&showtitle=false&zoom=0.5&annotate=cip&r=0&smi=${encodedSMILES}` 
+            : '';
+
+        // Create compound link with external URL if PubChem ID available
+        const compoundLink = pubchem_id && pubchem_id !== "" ?
+            `<a href="${pubchem_compound || `https://pubchem.ncbi.nlm.nih.gov/compound/${pubchem_id}`}" target="_blank" class="compound-link">${this.highlightMatch(compound_name)}</a>` :
+            `<span class="compound-link">${this.highlightMatch(compound_name)}</span>`;
+
+        return `
+            <tr data-compound-id="${node_id}" 
+                data-node-id="${node_id}"
+                data-row-index="${index}"
+                data-smiles="${smiles}" 
+                data-chemical_label="${chemical_label}" 
+                data-chemical_uri="${chemical_uri}" 
+                data-compound_name="${compound_name}" 
+                data-pubchem_compound="${pubchem_compound}" 
+                data-compound-source="AOP-Wiki RDF" 
+                class="network-compound"
+                style="cursor: pointer;">
+                <td>
+                    ${imgUrl ? `<img src="${imgUrl}" alt="${smiles}" style="max-width: 100px; height: auto;" />` : ''}
+                    <p>${compoundLink}</p>
+                    ${cas_id && cas_id !== "" ? `<p><small>CAS: ${this.highlightMatch(cas_id)}</small></p>` : ''}
+                </td>
+            </tr>
+        `;
+    }
+
+    renderTable() {
+        const tableBody = $("#compound_table tbody");
+        if (!tableBody.length) {
+            console.warn("Compound table body not found");
+            return;
+        }
+
+        // Clear the entire table body first
+        tableBody.empty();
+
+        if (this.filteredData.length === 0) {
+            this.showEmptyTable();
+            return;
+        }
+
+        this.filteredData.forEach((row, index) => {
+            const rowHTML = this.generateCompoundRowHTML(row, index);
+            tableBody.append(rowHTML);
+        });
+
+        // Add summary if filtered
+        if (this.filterText) {
+            const table = document.querySelector('#compound_table');
+            if (table) {
+                const tfoot = table.querySelector('tfoot') || table.createTFoot();
+                tfoot.innerHTML = `
+                    <tr>
+                        <td class="text-muted small">
+                            Showing ${this.filteredData.length} of ${this.currentData.length} compounds
+                            ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
+                        </td>
+                    </tr>
+                `;
+            }
+        } else {
+            const table = document.querySelector('#compound_table');
+            const tfoot = table?.querySelector('tfoot');
+            if (tfoot) tfoot.remove();
+        }
+
+        this.setupCompoundTableEventHandlers();
+        console.log(`Compound table updated with ${this.filteredData.length} compounds from network.`);
+    }
+
+    setupTableStyles() {
+        super.setupTableStyles();
+        
+        if (!document.querySelector('#compound-table-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'compound-table-styles';
+            styles.textContent = `
+                .network-compound {
+                    border-left: 3px solid #28a745 !important;
+                    background-color: #f8fff9 !important;
+                }
+
+                .compound-link {
+                    color: #155724 !important;
+                    font-weight: bold;
+                    position: relative;
+                    z-index: 10;
+                    pointer-events: auto;
+                }
+
+                #compound_table tbody tr {
+                    cursor: pointer;
+                    transition: background-color 0.2s ease;
+                }
+
+                #compound_table tbody tr:hover {
+                    background-color: #f8f9fa !important;
+                }
+
+                #compound_table img {
+                    max-width: 100px;
+                    height: auto;
+                    border-radius: 4px;
+                    border: 1px solid #ddd;
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+    }
+
+    setupCompoundTableEventHandlers() {
+        const tableBody = $("#compound_table tbody");
+        if (!tableBody.length) return;
+
+        // Remove existing event handlers to prevent duplicates
+        tableBody.off("click", "tr");
+
+        // Add click handler for compound rows
+        tableBody.on("click", "tr", (e) => {
+            // Don't trigger if clicking on a link
+            if ($(e.target).is('a') || $(e.target).closest('a').length) {
+                return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const row = $(e.currentTarget);
+            const compoundId = row.data("compound-id");
+            const nodeId = row.data("node-id");
+            const rowIndex = row.data("row-index");
+
+            // Selection handling
+            if (e.ctrlKey || e.metaKey) {
+                this.toggleRowSelection(row[0], { compound: compoundId });
+            } else {
+                this.clearTableSelection();
+                row.addClass('table-selected');
+                this.selectedRows.add(parseInt(rowIndex));
+            }
+
+            // Network highlighting
+            if (nodeId && window.cy) {
+                this.highlightNodeInNetwork(nodeId);
+            }
+
+            console.log(`Compound clicked: ${compoundId}`);
+        });
+    }
+
+    async performTableUpdate() {
+        if (this.isUpdating) {
+            console.log('Compound table update already in progress, skipping');
+            return;
+        }
+
+        if (!window.cy) {
+            console.warn("Cytoscape not available for compound table update");
+            return;
+        }
+
+        this.isUpdating = true;
+
+        try {
+            const response = await fetch('/populate_compound_table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
+            });
+
+            const responseData = await response.json();
+            
+            // Handle the case where response is an array [data, status_code]
+            const data = Array.isArray(responseData) ? responseData[0] : responseData;
+            console.log("Received compound table data:", data);
+
+            if (data.compound_data && data.compound_data.length > 0) {
+                this.updateTable(data.compound_data);
+                console.log(`Compound table updated with ${data.compound_data.length} compounds from network.`);
+            } else {
+                this.currentData = [];
+                this.filteredData = [];
+                this.showEmptyTable();
+            }
+        } catch (error) {
+            console.error("Error updating compound table:", error);
+            this.showErrorTable();
+        } finally {
+            this.isUpdating = false;
+        }
+    }
+
+    showEmptyTable() {
+        const tableBody = $("#compound_table tbody");
+        if (!tableBody.length) return;
+
+        tableBody.empty();
+        tableBody.append(`
+            <tr id="default-compound-row">
+                <td style="text-align: center; padding: 20px;">
+                    <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
+                        No compounds in network. You can query the AOP-Wiki RDF for compounds associated with Key Events or draw your own PubChem nodes.
+                    </div>
+                    <button id="get-compounds-table-btn" class="btn btn-primary btn-sm">
+                        <i class="fas fa-flask"></i> Get compounds
+                    </button>
+                </td>
+            </tr>
+        `);
+
+        // Add click handler for the table button
+        $("#get-compounds-table-btn").off("click").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.toggleCompounds) {
+                window.toggleCompounds();
+            }
+        });
+    }
+
+    showErrorTable() {
+        const tableBody = $("#compound_table tbody");
+        if (!tableBody.length) return;
+
+        tableBody.empty();
+        tableBody.append(`
+            <tr>
+                <td style="text-align: center; padding: 20px; color: #dc3545;">
+                    <i class="fas fa-exclamation-triangle"></i> Error loading compound data
+                </td>
+            </tr>
+        `);
+    }
+}
+
+// Initialize the managers
+console.log('Initializing Data Table Managers...');
 window.aopTableManager = new AOPTableManager();
+window.geneTableManager = new GeneTableManager();
+window.compoundTableManager = new CompoundTableManager();
 
-// global functions
-window.populateAopTable = function(immediate = false) {
-    if (!window.aopTableManager) {
-        console.warn("AOP Table Manager not initialized");
-        return Promise.resolve();
-    }
-
-    if (immediate) {
-        // For immediate updates (like manual triggers)
-        return window.aopTableManager.performTableUpdate();
-    } else {
-        // For network change events, use debounced version
-        window.aopTableManager.debouncedUpdateTable();
-        return Promise.resolve();
-    }
-};
-
-window.initializeAopTable = function() {
+// Global functions
+window.initializeAopTable = function () {
     console.log('Initializing AOP table functionality');
-    
-    // Set up listeners if Cytoscape is ready
+
     if (window.cy) {
         window.aopTableManager.setupNetworkListeners();
-        window.aopTableManager.performTableUpdate(); // Initial population
+        window.aopTableManager.performTableUpdate();
     } else {
-        // Wait for Cytoscape to be ready
         const checkCytoscape = setInterval(() => {
             if (window.cy) {
                 clearInterval(checkCytoscape);
@@ -1361,41 +1459,55 @@ window.initializeAopTable = function() {
                 window.aopTableManager.performTableUpdate();
             }
         }, 500);
-        
-        // Clear interval after 10 seconds to avoid infinite checking
+
         setTimeout(() => {
             clearInterval(checkCytoscape);
         }, 10000);
     }
 };
 
-window.setupAopTableListeners = function() {
-    if (window.aopTableManager) {
-        window.aopTableManager.setupNetworkListeners();
+window.populateAopTable = function(immediate = false) {
+    if (!window.aopTableManager) {
+        console.warn("AOP Table Manager not initialized");
+        return Promise.resolve();
+    }
+
+    if (immediate) {
+        return window.aopTableManager.performTableUpdate();
+    } else {
+        // Ensure debouncedUpdateTable exists before calling
+        if (typeof window.aopTableManager.debouncedUpdateTable === 'function') {
+            window.aopTableManager.debouncedUpdateTable();
+        } else {
+            console.warn("debouncedUpdateTable method not found, falling back to immediate update");
+            return window.aopTableManager.performTableUpdate();
+        }
+        return Promise.resolve();
     }
 };
 
-// Handle CURIE link clicks (from table_aop.js)
-$(document).on('click', '.curie-link', function(e) {
-    e.preventDefault();
-    const curie = $(this).data('curie');
-    console.log('CURIE clicked:', curie);
-    
-    // Navigate to AOP Wiki or other actions
-    if (curie && curie.includes('aop.relationships:')) {
-        const kerId = curie.split(':')[1];
-        const aopWikiUrl = `https://aopwiki.org/relationships/${kerId}`;
-        window.open(aopWikiUrl, '_blank');
+window.populateGeneTable = function () {
+    if (window.geneTableManager) {
+        return window.geneTableManager.performTableUpdate();
     }
-});
+    return Promise.resolve();
+};
 
-// Initialize when DOM is ready
+window.populateCompoundTable = function () {
+    if (window.compoundTableManager) {
+        return window.compoundTableManager.performTableUpdate();
+    }
+    return Promise.resolve();
+};
+
+// Legacy compatibility functions
+window.updateGeneTable = window.populateGeneTable;
+window.updateCompoundTableFromNetwork = window.populateCompoundTable;
+
 $(document).ready(function() {
-    // Ensure table manager is available
     if (!window.aopTableManager) {
         window.aopTableManager = new AOPTableManager();
     }
     
-    // Initialize with legacy support
     window.initializeAopTable();
 });
