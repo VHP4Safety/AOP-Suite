@@ -177,6 +177,8 @@ cython_debug/
 static/data/network_states/*
 
 
+backend/saved_networks/*
+
 Notes.md
 
 saved_networks/*

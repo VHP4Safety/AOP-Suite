@@ -53,9 +53,6 @@
                             </div>
                         </div>
                         <div class="network-controls">
-                            <button id="see_genes" class="btn btn-sm btn-secondary">
-                                <i class="fas fa-dna"></i> See Genes
-                            </button>
                             <button id="toggle_bounding_boxes" class="btn btn-sm btn-secondary">
                                 <i class="fas fa-layer-group"></i> Group by AOP
                             </button>
@@ -111,7 +108,7 @@
                                 <i class="fas fa-spinner fa-spin"></i> Loading AOP data...
                             </div>
                             <div id="aop-table-container" class="table-wrapper">
-                                <!-- Filter and table will be dynamically inserted here by aop_table_enhancements.js -->
+                                <!-- Filter and table will be dynamically inserted here by data_tables.js -->
                             </div>
                         </div>
                     </div>
@@ -133,6 +130,17 @@
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <tr id="default-compound-row">
+                                            <td style="text-align: center; padding: 20px;">
+                                                <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
+                                                    No compounds in network. You can query the AOP-Wiki RDF for compounds associated with Key Events or draw your own
+                                                    PubChem nodes.
+                                                </div>
+                                                <button id="toggle_compounds" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-flask"></i>  Get chemical stressors for the network
+                                                </button>
+                                            </td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -147,10 +155,21 @@
                                     <thead>
                                         <tr>
                                             <th>Gene</th>
-                                            <th>Expression</th>
+                                            <th>Protein</th>
                                         </tr>
                                     </thead>
                                     <tbody>
+                                        <tr id="default-gene-row">
+                                            <td colspan="2" style="text-align: center; padding: 20px;">
+                                                <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
+                                                    No genes in network. You can query the AOP-Wiki RDF for gene sets associated with Key Events or draw your own Ensembl
+                                                    identifiers.
+                                                </div>
+                                                <button id="get-genes-table-btn" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-dna"></i> Get gene sets
+                                                </button>
+                                            </td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -163,17 +182,13 @@
         <!-- Workspace Sidebar -->
         <aside class="workspace-sidebar" id="workspace-sidebar">
             <div class="workspace-header">
-                <h3 class="workspace-title"><i class="fas fa-briefcase"></i> Workspace</h3>
                 <div class="workspace-controls">
                     <button class="workspace-mode-btn active" data-mode="query">
-                        <i class="fas fa-search"></i> Query
+                        <i class="fas fa-search"></i> Populate network
                     </button>
                     <button class="workspace-mode-btn" data-mode="enhance">
-                        <i class="fas fa-magic"></i> Enhance
-                    </button>
-                    <button class="sidebar-close" data-target="workspace-sidebar">
-                        <i class="fas fa-times"></i>
-                    </button>
+                        <i class="fas fa-magic"></i> Enrich network
+
                 </div>
             </div>
 
@@ -187,11 +202,12 @@
                     <!-- Query AOP WIKI Section -->
                     <div class="collapsible-section">
                         <div class="collapsible-header" data-target="aop-network-content">
-                            <h4><i class="fas fa-plus-circle"></i> Query AOP WIKI RDF</h4>
+                            <h4><i class="fas fa-plus-circle"></i> Query AOP-WIKI RDF</h4>
                             <i class="fas fa-chevron-down collapse-icon"></i>
                         </div>
                         <div class="collapsible-content" id="aop-network-content">
                             <div class="aop-network-controls">
+                                <!-- Get by AOP, KE, MIE name or identifier -->
                                 <div class="form-group">
                                     <label for="query-type">Query Type:</label>
                                     <select id="query-type" class="form-control">
@@ -205,12 +221,21 @@
                                     <label for="query-values">AOP Identifiers or Names:</label>
                                     <textarea id="query-values" class="form-control" rows="4"
                                         placeholder="Search by AOP name or enter identifiers (one per line)&#10;Examples:&#10;liver fibrosis&#10;1&#10;aop:2&#10;https://identifiers.org/aop/3"></textarea>
-                                </div>
-                                <button id="add-aop-data" class="btn btn-primary">
+                                <button id="add-aop-data" class="btn btn-primary" type="button">
                                     <i class="fas fa-plus"></i> Add to Network
                                 </button>
                                 <div id="aop-data-status" class="mt-2"></div>
-                            </div>
+                                </div>
+                                <!-- Genes  and compound cards -->
+                                <div class="querygc-card" id="genes-compound-card">   
+                                    <h4 class="enhance-card-title"> Genes and Compounds</h4>                           
+                                    <button id="see_genes" class="btn btn-primary btn-sm w-100" type="button">
+                                        <i class="fas fa-dna"></i> Get gene sets for Key Events
+                                    </button>
+                                    <button id="sidebar_toggle_compounds" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-flask"></i>  Get chemical stressors for the network
+                                    </button>
+                                </div>
                         </div>
                     </div>
 
@@ -296,7 +321,7 @@
                         </div>
                     </div>
                 </div>
-
+            </div>
                 <!-- Enhance Mode -->
                 <div class="workspace-mode enhance-mode" id="enhance-mode">
                     <div class="mode-status info">
@@ -651,6 +676,8 @@
 
     // Workspace mode switching (fixed to properly hide/show)
     function switchWorkspaceMode(mode) {
+        console.log('Switching to mode:', mode); // Debug log
+        
         // Update button states
         document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
             btn.classList.remove('active');
@@ -662,14 +689,17 @@
         // Hide all workspace modes first
         document.querySelectorAll('.workspace-mode').forEach(modeDiv => {
             modeDiv.classList.remove('active');
-            modeDiv.style.display = 'none';
+            modeDiv.style.display = 'none'; // Explicitly hide all modes
         });
         
         // Show the selected mode
         const selectedMode = document.getElementById(mode + '-mode');
         if (selectedMode) {
+            console.log('Showing mode element:', selectedMode.id); // Debug log
+            selectedMode.style.display = 'block'; // Explicitly show selected mode
             selectedMode.classList.add('active');
-            selectedMode.style.display = 'block';
+        } else {
+            console.error('Mode element not found:', mode + '-mode'); // Debug log
         }
     }
 
@@ -836,7 +866,7 @@
             const headerHeight = bottomPanelHeader.offsetHeight;
             // Use the actual pixel height of the bottom panel
             const totalHeight = bottomPanel.offsetHeight;
-            // Remove the -20px padding to allow full use of the panel
+            // Remove padding to allow full use of the panel
             const availableHeight = Math.max(50, totalHeight - headerHeight);
 
             // Update all table panel heights
@@ -850,7 +880,7 @@
                     // Update table wrapper heights
                     const tableWrapper = panelContent.querySelector('.table-wrapper');
                     if (tableWrapper) {
-                        // Get height of other elements in panel content
+                        // Get height of other elements in panel content (hints, controls, etc.)
                         const otherElements = Array.from(panelContent.children).filter(
                             el => !el.classList.contains('table-wrapper')
                         );
@@ -862,11 +892,22 @@
                             otherElementsHeight += el.offsetHeight + marginTop + marginBottom;
                         });
 
-                        // Use all available space for the table
-                        const tableHeight = Math.max(50, availableHeight - otherElementsHeight);
+                        // Use ALL available space for the table wrapper - no buffer needed
+                        const tableHeight = Math.max(100, availableHeight - otherElementsHeight);
                         tableWrapper.style.height = tableHeight + 'px';
                         tableWrapper.style.overflowY = 'auto';
                         tableWrapper.style.overflowX = 'auto';
+                        
+                        // Ensure the wrapper expands to use full height
+                        tableWrapper.style.minHeight = tableHeight + 'px';
+                        tableWrapper.style.maxHeight = tableHeight + 'px';
+                        
+                        // Make sure the table inside uses full wrapper height
+                        const actualTable = tableWrapper.querySelector('table');
+                        if (actualTable) {
+                            actualTable.style.height = '100%';
+                            actualTable.style.minHeight = '100%';
+                        }
 
                         // Force immediate layout recalculation
                         tableWrapper.offsetHeight; // Trigger reflow
@@ -874,8 +915,6 @@
                 }
             });
 
-            // Optionally remove debug log
-            // console.log('Updated table heights, available:', availableHeight);
         }
     }
 
@@ -895,9 +934,6 @@
             });
         }
         
-        // Also trigger custom table redraw events if they exist
-        const customEvent = new CustomEvent('tableResize');
-        document.dispatchEvent(customEvent);
     }
 
     // Table panel controls
@@ -910,9 +946,6 @@
         document.getElementById('toggle-gene-table')?.addEventListener('click', function() {
             toggleTablePanel('gene-table-panel');
         });
-
-        // Horizontal resizing for table panels
-        initializeTableResizing();
         
         // Initial table height setup
         setTimeout(updateTableContainerHeights, 100);
@@ -936,12 +969,6 @@
                 window.cy.resize();
             }
         }, 300);
-    }
-
-    function initializeTableResizing() {
-        // Add horizontal resizing for compound and gene tables
-        // Similar implementation to workspace resizing but for table panels
-        // This would handle the horizontal resize functionality for the side table panels
     }
 
     // Sidebar collapse functionality
@@ -971,6 +998,7 @@
         document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 const mode = this.getAttribute('data-mode');
+                console.log('Button clicked for mode:', mode); // Debug log
                 switchWorkspaceMode(mode);
             });
         });
@@ -1009,6 +1037,11 @@
         document.querySelectorAll('.collapsible-content').forEach(content => {
             content.style.display = 'none';
         });
+
+        // Initialize default workspace mode (query mode should be visible by default)
+        setTimeout(() => {
+            switchWorkspaceMode('query');
+        }, 100);
 
         // Initialize network stats update
         if (window.cy) {
@@ -1061,6 +1094,62 @@
             redrawDataTables();
         }, 300);
     }
+
+    // Gene table row click handler
+    function setupGeneTableHandlers() {
+        $(document).off('click', '#gene_table tbody tr').on('click', '#gene_table tbody tr', function() {
+            const geneSymbol = $(this).data('gene');
+            const uniprotId = $(this).data('uniprot-id');
+            const ensemblId = $(this).data('ensembl-id');
+            
+            if (!geneSymbol) return;
+            
+            // Remove previous highlights
+            $('#gene_table tbody tr').removeClass('table-success');
+            
+            // Highlight clicked row
+            $(this).addClass('table-success');
+            
+            // Highlight corresponding nodes in the network
+            if (window.cy) {
+                // Remove previous highlights
+                window.cy.elements().removeClass('highlighted');
+                
+                // Find and highlight gene nodes
+                const ensemblNode = window.cy.getElementById(ensemblId);
+                const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
+                
+                if (ensemblNode.length > 0) {
+                    ensemblNode.addClass('highlighted');
+                    // Center on the node
+                    window.cy.center(ensemblNode);
+                }
+                
+                if (uniprotNode.length > 0) {
+                    uniprotNode.addClass('highlighted');
+                }
+                
+                // Also highlight connecting edges
+                const connectedEdges = ensemblNode.connectedEdges().union(uniprotNode.connectedEdges());
+                connectedEdges.addClass('highlighted');
+            }
+            
+            console.log(`Clicked gene: ${geneSymbol}, UniProt: ${uniprotId}`);
+        });
+    }
+
+
+    // Also reinitialize handlers when gene table is updated
+    window.populateGeneTable = function () {
+        if (window.updateGeneTable) {
+            return window.updateGeneTable().then(() => {
+                // Ensure handlers are set up after table update
+                if (window.setupGeneCellClickHandlers) {
+                    window.setupGeneCellClickHandlers();
+                }
+            });
+        }
+    };
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
@@ -1068,18 +1157,13 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css">
 <script src="https://cdn.jsdelivr.net/npm/cytoscape-qtip@2.7.0/cytoscape-qtip.js"></script>
 
-<script src="{{ url_for('static', filename='js/aop_app/aopName.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_name.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_elements.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_styles.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/qsprpred.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/compound.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/gene.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/bdf.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/network_persistence.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/manual_controls.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/custom_tables.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/table_aop.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_network_data.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/aop_table_enhancements.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/data_tables.js') }}"></script>
 
 {% endblock %}
