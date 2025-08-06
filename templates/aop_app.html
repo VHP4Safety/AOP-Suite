@@ -133,7 +133,8 @@
                                         <tr id="default-compound-row">
                                             <td style="text-align: center; padding: 20px;">
                                                 <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                                                    No compounds in network
+                                                    No compounds in network. You can query the AOP-Wiki RDF for compounds associated with Key Events or draw your own
+                                                    PubChem nodes.
                                                 </div>
                                                 <button id="toggle_compounds" class="btn btn-primary btn-sm">
                                                     <i class="fas fa-flask"></i>  Get chemical stressors for the network
@@ -161,7 +162,8 @@
                                         <tr id="default-gene-row">
                                             <td colspan="2" style="text-align: center; padding: 20px;">
                                                 <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                                                    No genes in network
+                                                    No genes in network. You can query the AOP-Wiki RDF for gene sets associated with Key Events or draw your own Ensembl
+                                                    identifiers.
                                                 </div>
                                                 <button id="get-genes-table-btn" class="btn btn-primary btn-sm">
                                                     <i class="fas fa-dna"></i> Get gene sets
@@ -319,7 +321,7 @@
                         </div>
                     </div>
                 </div>
-
+            </div>
                 <!-- Enhance Mode -->
                 <div class="workspace-mode enhance-mode" id="enhance-mode">
                     <div class="mode-status info">
@@ -674,6 +676,8 @@
 
     // Workspace mode switching (fixed to properly hide/show)
     function switchWorkspaceMode(mode) {
+        console.log('Switching to mode:', mode); // Debug log
+        
         // Update button states
         document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
             btn.classList.remove('active');
@@ -685,14 +689,17 @@
         // Hide all workspace modes first
         document.querySelectorAll('.workspace-mode').forEach(modeDiv => {
             modeDiv.classList.remove('active');
-            modeDiv.style.display = 'none';
+            modeDiv.style.display = 'none'; // Explicitly hide all modes
         });
         
         // Show the selected mode
         const selectedMode = document.getElementById(mode + '-mode');
         if (selectedMode) {
+            console.log('Showing mode element:', selectedMode.id); // Debug log
+            selectedMode.style.display = 'block'; // Explicitly show selected mode
             selectedMode.classList.add('active');
-            selectedMode.style.display = 'block';
+        } else {
+            console.error('Mode element not found:', mode + '-mode'); // Debug log
         }
     }
 
@@ -991,6 +998,7 @@
         document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
             btn.addEventListener('click', function() {
                 const mode = this.getAttribute('data-mode');
+                console.log('Button clicked for mode:', mode); // Debug log
                 switchWorkspaceMode(mode);
             });
         });
@@ -1029,6 +1037,11 @@
         document.querySelectorAll('.collapsible-content').forEach(content => {
             content.style.display = 'none';
         });
+
+        // Initialize default workspace mode (query mode should be visible by default)
+        setTimeout(() => {
+            switchWorkspaceMode('query');
+        }, 100);
 
         // Initialize network stats update
         if (window.cy) {

@@ -156,13 +156,18 @@ class DataTableManager {
 
         window.cy.batch(() => {
             window.cy.nodes().forEach(node => {
-                node.removeClass('filtered-out')
-                    .style('opacity', node.data('original-opacity') || 1);
+                node.removeClass('filtered-out aop-filtered aop-grouped aop-faded aop-highlighted')
+                    .style('opacity', node.data('original-opacity') || 1)
+                    .style('border-width', node.data('original-border-width') || '2px')
+                    .style('border-color', node.data('original-border-color') || '#000');
             });
             
             window.cy.edges().forEach(edge => {
-                edge.removeClass('filtered-out')
-                    .style('opacity', edge.data('original-opacity') || 1);
+                edge.removeClass('filtered-out aop-edge-highlighted aop-edge-faded')
+                    .style('opacity', edge.data('original-opacity') || 1)
+                    .style('line-color', edge.data('original-line-color') || '#93d5f6')
+                    .style('target-arrow-color', edge.data('original-target-arrow-color') || '#93d5f6')
+                    .style('width', edge.data('original-width') || '2px');
             });
         });
     }
@@ -173,15 +178,34 @@ class DataTableManager {
         
         window.cy.nodes().forEach(node => {
             const currentStyle = node.style();
+            
+            // Save all relevant style properties if not already saved
             if (!node.data('original-opacity')) {
                 node.data('original-opacity', currentStyle['opacity'] || 1);
+            }
+            if (!node.data('original-border-width')) {
+                node.data('original-border-width', currentStyle['border-width'] || '2px');
+            }
+            if (!node.data('original-border-color')) {
+                node.data('original-border-color', currentStyle['border-color'] || '#000');
             }
         });
         
         window.cy.edges().forEach(edge => {
             const currentStyle = edge.style();
+            
+            // Save all relevant style properties if not already saved
             if (!edge.data('original-opacity')) {
                 edge.data('original-opacity', currentStyle['opacity'] || 1);
+            }
+            if (!edge.data('original-line-color')) {
+                edge.data('original-line-color', currentStyle['line-color'] || '#93d5f6');
+            }
+            if (!edge.data('original-target-arrow-color')) {
+                edge.data('original-target-arrow-color', currentStyle['target-arrow-color'] || '#93d5f6');
+            }
+            if (!edge.data('original-width')) {
+                edge.data('original-width', currentStyle['width'] || '2px');
             }
         });
     }
@@ -282,6 +306,7 @@ class AOPTableManager extends DataTableManager {
         super('aop-table', '#aop-table-container, .aop-table-container');
         this.selectedAop = null;
         this.groupedAops = new Set();
+        this.aopColorMap = new Map(); // Add color mapping storage
         this.init();
         this.setupNetworkListeners();
     }
@@ -395,10 +420,20 @@ class AOPTableManager extends DataTableManager {
             const isSelected = this.selectedAop === aopId;
             const isGrouped = this.groupedAops.has(aopId);
             let className = 'aop-link';
-            if (isSelected) className += ' selected-aop';
-            if (isGrouped) className += ' grouped-aop';
+            let style = '';
             
-            return `<span class="${className}" data-aop-id="${aopId}" title="Click to filter network by this AOP (Ctrl+Click to group)">${this.highlightMatch(aopId)}</span>`;
+            if (isSelected) {
+                className += ' selected-aop';
+            } else if (isGrouped) {
+                className += ' grouped-aop';
+                // Use the same color as in the network
+                const color = this.aopColorMap.get(aopId);
+                if (color) {
+                    style = `background-color: ${color}; color: white; font-weight: bold;`;
+                }
+            }
+            
+            return `<span class="${className}" data-aop-id="${aopId}" title="Click to filter network by this AOP (Ctrl+Click to group)" ${style ? `style="${style}"` : ''}>${this.highlightMatch(aopId)}</span>`;
         }).join(', ');
     }
 
@@ -413,10 +448,20 @@ class AOPTableManager extends DataTableManager {
             const isSelected = this.selectedAop === correspondingAopId;
             const isGrouped = this.groupedAops.has(correspondingAopId);
             let className = 'aop-title-link';
-            if (isSelected) className += ' selected-aop';
-            if (isGrouped) className += ' grouped-aop';
+            let style = '';
             
-            return `<span class="${className}" data-aop-id="${correspondingAopId}" title="Click to filter network by this AOP (Ctrl+Click to group): ${correspondingAopId}">${this.highlightMatch(title)}</span>`;
+            if (isSelected) {
+                className += ' selected-aop';
+            } else if (isGrouped) {
+                className += ' grouped-aop';
+                // Use the same color as in the network
+                const color = this.aopColorMap.get(correspondingAopId);
+                if (color) {
+                    style = `background-color: ${color}; color: white; font-weight: bold;`;
+                }
+            }
+            
+            return `<span class="${className}" data-aop-id="${correspondingAopId}" title="Click to filter network by this AOP (Ctrl+Click to group): ${correspondingAopId}" ${style ? `style="${style}"` : ''}>${this.highlightMatch(title)}</span>`;
         }).join('; ');
     }
 
@@ -529,7 +574,14 @@ class AOPTableManager extends DataTableManager {
             this.selectedAop = null;
         }
         
-        this.applyGroupHighlighting();
+        // Check if all groups are now cleared
+        if (this.groupedAops.size === 0) {
+            this.aopColorMap.clear();
+            this.showAllNetworkNodes();
+        } else {
+            this.applyGroupHighlighting();
+        }
+        
         this.renderTable();
     }
 
@@ -551,6 +603,7 @@ class AOPTableManager extends DataTableManager {
     clearAopFilter() {
         console.log('Clearing AOP filter');
         this.selectedAop = null;
+        this.aopColorMap.clear(); // Clear color mapping when clearing filter
         this.showAllNetworkNodes();
         this.renderTable();
     }
@@ -558,19 +611,27 @@ class AOPTableManager extends DataTableManager {
     applyGroupHighlighting() {
         if (!window.cy || this.groupedAops.size === 0) {
             this.showAllNetworkNodes();
+            this.aopColorMap.clear(); // Clear color mapping when no groups
             return;
         }
         
         this.saveOriginalStyles();
         
+        // Expanded color palette for better variety
         const colors = [
             '#ff6b35', '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', 
-            '#795548', '#607D8B', '#E91E63', '#00BCD4', '#8BC34A'
+            '#795548', '#607D8B', '#E91E63', '#00BCD4', '#8BC34A',
+            '#F44336', '#673AB7', '#3F51B5', '#009688', '#CDDC39',
+            '#FFC107', '#FF5722', '#9E9E9E', '#5D4037', '#37474F',
+            '#1A237E', '#004D40', '#33691E', '#E65100', '#BF360C',
+            '#212121', '#3E2723', '#1B5E20', '#0D47A1', '#006064',
+            '#827717', '#F57F17', '#FF6F00', '#E65100', '#BF360C'
         ];
         
-        const aopColorMap = new Map();
+        // Clear and rebuild color mapping
+        this.aopColorMap.clear();
         Array.from(this.groupedAops).forEach((aopId, index) => {
-            aopColorMap.set(aopId, colors[index % colors.length]);
+            this.aopColorMap.set(aopId, colors[index % colors.length]);
         });
         
         const nodeColorMap = new Map();
@@ -593,7 +654,7 @@ class AOPTableManager extends DataTableManager {
                 }
                 
                 if (this.groupedAops.has(nodeAopId)) {
-                    nodeColorMap.set(node.id(), aopColorMap.get(nodeAopId));
+                    nodeColorMap.set(node.id(), this.aopColorMap.get(nodeAopId));
                     break;
                 }
             }
@@ -610,6 +671,7 @@ class AOPTableManager extends DataTableManager {
                          .style('border-color', nodeColor);
                 } else {
                     node.removeClass('aop-grouped')
+                         .addClass('aop-faded')
                          .style('opacity', 0.3)
                          .style('border-width', '2px')
                          .style('border-color', '#ccc');
@@ -621,12 +683,16 @@ class AOPTableManager extends DataTableManager {
                 const targetColor = nodeColorMap.get(edge.target().id());
                 
                 if (sourceColor && targetColor) {
-                    edge.style('opacity', 1)
+                    edge.removeClass('filtered-out')
+                        .addClass('aop-edge-highlighted')
+                        .style('opacity', 1)
                         .style('line-color', sourceColor)
                         .style('target-arrow-color', sourceColor)
                         .style('width', '3px');
                 } else {
-                    edge.style('opacity', 0.2)
+                    edge.removeClass('aop-edge-highlighted')
+                        .addClass('aop-edge-faded')
+                        .style('opacity', 0.2)
                         .style('line-color', '#ccc')
                         .style('target-arrow-color', '#ccc')
                         .style('width', '1px');
@@ -793,7 +859,8 @@ class AOPTableManager extends DataTableManager {
 
         if (allAlreadyGrouped) {
             this.groupedAops.clear();
-            this.showAllNetworkNodes();
+            this.aopColorMap.clear(); // Clear color mapping
+            this.showAllNetworkNodes(); // Restore original styles
         } else {
             this.groupedAops = new Set(allAopIds);
             this.applyGroupHighlighting();

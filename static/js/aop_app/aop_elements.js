@@ -338,7 +338,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         }
                     }
 
-                    // Update button and state - ALWAYS set to hide mode when showing genes
+                    // Update button and state - set to hide mode when showing genes
                     $("#see_genes").text("Remove gene sets");
                     window.genesVisible = true;
 

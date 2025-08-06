@@ -175,7 +175,6 @@
     display: flex;
 }
 
-/* Remove individual table panel styles since they're now stacked */
 .network-table-panel,
 .compound-table-panel,
 .gene-table-panel {
