@@ -1276,6 +1276,28 @@ edge[type="go_hierarchy"] {
     gap: 1rem;
 }
 
+/* Query genes and compounds */
+.querygc-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    height: 3%;
+    font-size: smaller;
+}
+
+.querygc-card-title {
+    margin: 0;
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: #495057;
+}
+
 /* Enhance Mode Grid */
 .enhance-grid {
     display: grid;

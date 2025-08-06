@@ -135,8 +135,8 @@
                                                 <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
                                                     No compounds in network
                                                 </div>
-                                                <button id="get-compounds-table-btn" class="btn btn-primary btn-sm">
-                                                    <i class="fas fa-flask"></i> Get stressor compounds
+                                                <button id="toggle_compounds" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-flask"></i> Show compounds
                                                 </button>
                                             </td>
                                         </tr>
@@ -200,17 +200,12 @@
                     <!-- Query AOP WIKI Section -->
                     <div class="collapsible-section">
                         <div class="collapsible-header" data-target="aop-network-content">
-                            <h4><i class="fas fa-plus-circle"></i> Query AOP WIKI RDF</h4>
+                            <h4><i class="fas fa-plus-circle"></i> Query AOP-WIKI RDF</h4>
                             <i class="fas fa-chevron-down collapse-icon"></i>
                         </div>
                         <div class="collapsible-content" id="aop-network-content">
                             <div class="aop-network-controls">
-                                <button id="see_genes" class="btn btn-primary mb-3">
-                                    <i class="fas fa-dna"></i> Get Gene sets
-                                </button>
-                                <button id="toogle_compounds" class="btn btn-primary mb-3">
-                                    <i class="fas fa-dna"></i> Get chemical stressors
-                                </button>
+                                <!-- Get by AOP, KE, MIE name or identifier -->
                                 <div class="form-group">
                                     <label for="query-type">Query Type:</label>
                                     <select id="query-type" class="form-control">
@@ -224,12 +219,21 @@
                                     <label for="query-values">AOP Identifiers or Names:</label>
                                     <textarea id="query-values" class="form-control" rows="4"
                                         placeholder="Search by AOP name or enter identifiers (one per line)&#10;Examples:&#10;liver fibrosis&#10;1&#10;aop:2&#10;https://identifiers.org/aop/3"></textarea>
-                                </div>
-                                <button id="add-aop-data" class="btn btn-primary">
+                                <button id="add-aop-data" class="btn btn-primary" type="button">
                                     <i class="fas fa-plus"></i> Add to Network
                                 </button>
                                 <div id="aop-data-status" class="mt-2"></div>
-                            </div>
+                                </div>
+                                <!-- Genes  and compound cards -->
+                                <div class="querygc-card" id="genes-compound-card">   
+                                    <h4 class="enhance-card-title"><i class="fas fa-dna"></i> Genes and Compounds</h4>                           
+                                    <button id="see_genes" class="btn btn-primary btn-sm w-100" type="button">
+                                        <i class="fas fa-dna"></i> Get gene sets associated with the selected Key Events
+                                    </button>
+                                    <button id="sidebar_toggle_compounds" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-flask"></i> Show compounds
+                                    </button>
+                                </div>
                         </div>
                     </div>
 
@@ -391,22 +395,6 @@
                                 </div>
                                 <button id="fetch_predictions" type="button" class="btn btn-primary btn-sm w-100">
                                     <i class="fas fa-flask"></i> Fetch Predictions
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Compounds Card -->
-                        <div class="enhance-card" id="compounds-card">
-                            <div class="enhance-card-header">
-                                <i class="fas fa-flask"></i>
-                                <h4 class="enhance-card-title">Chemical stressors</h4>
-                            </div>
-                            <div class="enhance-card-content">
-                                Add chemical compounds from AOP database. Show compound-target relationships and chemical structures.
-                            </div>
-                            <div class="enhance-card-controls">
-                                <button id="toggle_compounds" class="btn btn-primary btn-sm w-100">
-                                    <i class="fas fa-flask"></i> Show Compounds
                                 </button>
                             </div>
                         </div>

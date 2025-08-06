@@ -1,5 +1,5 @@
 /**
- * Enhanced AOP Table functionality with filtering and network integration
+ * AOP Table functionality with filtering and network integration
  * Merged functionality from table_aop.js and aop_table_enhancements.js
  */
 
@@ -638,7 +638,7 @@ class AOPTableManager {
             });
         }
         
-        // Also clear enhanced table
+        // Also clear table
         this.currentData = [];
         this.filteredData = [];
         this.renderTable();
@@ -676,7 +676,7 @@ class AOPTableManager {
         });
     }
 
-    // Enhanced debouncedUpdateTable with legacy support
+    // debouncedUpdateTable with legacy support
     debouncedUpdateTable(delay = 500) {
         // Clear any existing timeout
         if (this.updateTimeout) {
@@ -739,16 +739,16 @@ class AOPTableManager {
                 return;
             }
             
-            console.log('Enhanced AOP table manager - Received AOP table data:', data.aop_data);
+            console.log('Received AOP table data:', data.aop_data);
             
             if (data.aop_data && data.aop_data.length > 0) {
-                // Update enhanced table
+                // Update table
                 this.updateTable(data.aop_data);
                 
                 // Also update legacy table if it exists
                 this.updateLegacyTable(data.aop_data, tableBody);
                 
-                console.log(`Enhanced AOP table updated with ${data.aop_data.length} entries`);
+                console.log(`AOP table updated with ${data.aop_data.length} entries`);
             } else {
                 this.showEmptyAopTable();
             }
@@ -1325,10 +1325,10 @@ class AOPTableManager {
 }
 
 // Initialize the AOP Table Manager immediately
-console.log('Initializing Enhanced AOP Table Manager...');
+console.log('Initializing AOP Table Manager...');
 window.aopTableManager = new AOPTableManager();
 
-// Enhanced global functions that work with both table systems
+// global functions
 window.populateAopTable = function(immediate = false) {
     if (!window.aopTableManager) {
         console.warn("AOP Table Manager not initialized");
@@ -1345,9 +1345,8 @@ window.populateAopTable = function(immediate = false) {
     }
 };
 
-// Legacy function support (from table_aop.js)
 window.initializeAopTable = function() {
-    console.log('Initializing AOP table functionality (legacy support)');
+    console.log('Initializing AOP table functionality');
     
     // Set up listeners if Cytoscape is ready
     if (window.cy) {
@@ -1390,9 +1389,9 @@ $(document).on('click', '.curie-link', function(e) {
     }
 });
 
-// Initialize when DOM is ready (legacy support)
+// Initialize when DOM is ready
 $(document).ready(function() {
-    // Ensure enhanced table manager is available
+    // Ensure table manager is available
     if (!window.aopTableManager) {
         window.aopTableManager = new AOPTableManager();
     }

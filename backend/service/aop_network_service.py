@@ -245,7 +245,7 @@ class AOPNetworkService:
             compound_table_builder = CompoundTableBuilder(parser)
             compound_data = compound_table_builder.build_compound_table()
             
-            logger.info(f"Generated {len(compound_data)} compound table entries using data model")
+            logger.info(f"Generated {len(compound_data)} compound table entries")
             return {"compound_data": compound_data}, 200
             
         except Exception as e:
