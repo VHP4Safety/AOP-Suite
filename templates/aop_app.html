@@ -116,9 +116,6 @@
                     <!-- Compounds Table Panel -->
                     <div class="table-panel compound-table-panel" id="compounds-table-container-panel">
                         <div class="panel-content">
-                            <div class="compound-selection-hint">
-                                <p>Click compound rows to show their pathways in the network</p>
-                            </div>
                             <div class="table-wrapper">
                                 <div id="loading_compound" class="loading-indicator">
                                     <i class="fas fa-spinner fa-spin"></i> Loading compounds...
@@ -1150,6 +1147,48 @@
             });
         }
     };
+
+    // Initialize table managers and their filters when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Ensure table managers are initialized with proper delay
+        setTimeout(() => {
+            // Initialize gene table filter if not already done
+            if (window.geneTableManager && window.geneTableManager.setupFilterInput) {
+                window.geneTableManager.setupFilterInput();
+            }
+            
+            // Initialize compound table filter if not already done  
+            if (window.compoundTableManager && window.compoundTableManager.setupFilterInput) {
+                window.compoundTableManager.setupFilterInput();
+            }
+
+            // Initial population of tables
+            if (window.populateGeneTable) {
+                window.populateGeneTable();
+            }
+            if (window.populateCompoundTable) {
+                window.populateCompoundTable();
+            }
+        }, 500);
+    });
+
+    // Gene table button handler - ensure filter is maintained
+    $(document).on('click', '#get-genes-table-btn', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.toggleGenes) {
+            window.toggleGenes();
+        }
+    });
+
+    // Compound table button handler - ensure filter is maintained  
+    $(document).on('click', '#toggle_compounds, #sidebar_toggle_compounds', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.toggleCompounds) {
+            window.toggleCompounds();
+        }
+    });
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
