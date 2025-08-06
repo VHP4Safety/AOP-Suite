@@ -952,6 +952,7 @@ class GeneTableManager extends DataTableManager {
     constructor() {
         super('gene-table', '#gene-table-container');
         this.init();
+        this.setupNetworkListeners();
     }
 
     getTableDisplayName() {
@@ -983,23 +984,80 @@ class GeneTableManager extends DataTableManager {
         return searchFields.includes(this.filterText);
     }
 
-    renderTable() {
-        const tableContainer = document.querySelector('#gene_table').closest('.table-responsive') || 
-                              document.querySelector('#gene_table')?.parentElement;
-        if (!tableContainer) return;
+    setupFilterInput() {
+        // Find the correct container for the gene table
+        const geneTableWrapper = document.querySelector('#gene_table')?.closest('.table-wrapper') || 
+                                 document.querySelector('.gene-table-panel .table-wrapper');
+        
+        if (geneTableWrapper && !document.querySelector(`#${this.tableId}-filter`)) {
+            const filterContainer = document.createElement('div');
+            filterContainer.className = 'table-filter-container mb-3';
+            filterContainer.innerHTML = `
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    </div>
+                    <input type="text" id="${this.tableId}-filter" class="form-control" 
+                           placeholder="Filter ${this.getTableDisplayName()} table...">
+                    <div class="input-group-append">
+                        <button class="btn btn-outline-secondary" id="clear-${this.tableId}-filter" type="button">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <small class="form-text text-muted">
+                    ${this.getFilterHelpText()}
+                </small>
+            `;
+            
+            geneTableWrapper.insertBefore(filterContainer, geneTableWrapper.firstChild);
+            
+            // Add event listeners
+            document.getElementById(`${this.tableId}-filter`).addEventListener('input', (e) => {
+                this.handleFilter(e.target.value);
+            });
+            
+            document.getElementById(`clear-${this.tableId}-filter`).addEventListener('click', () => {
+                document.getElementById(`${this.tableId}-filter`).value = '';
+                this.handleFilter('');
+            });
+        }
+    }
 
-        const table = document.querySelector('#gene_table');
-        if (!table) return;
-
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
-
-        tbody.innerHTML = '';
-
-        if (this.filteredData.length === 0) {
-            this.showEmptyTable();
+    setupNetworkListeners() {
+        if (!window.cy) {
+            console.log('Cytoscape not ready, will setup gene table listeners later');
             return;
         }
+        
+        console.log('Setting up gene table network listeners');
+        
+        window.cy.on('add remove', (event) => {
+            console.log('Network changed, updating gene table');
+            this.debouncedUpdateTable();
+        });
+    }
+
+    debouncedUpdateTable(delay = 500) {
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+
+        this.updateTimeout = setTimeout(() => {
+            if (!this.isUpdating) {
+                this.performTableUpdate();
+            }
+        }, delay);
+    }
+
+    generateTableHTML() {
+        const headers = ['Gene Symbol', 'Protein Name'];
+
+        let html = '<thead><tr>';
+        headers.forEach(header => {
+            html += `<th>${header}</th>`;
+        });
+        html += '</tr></thead><tbody>';
 
         this.filteredData.forEach((gene, index) => {
             const proteinDisplay = gene.protein !== "N/A" ?
@@ -1010,7 +1068,7 @@ class GeneTableManager extends DataTableManager {
                 `<a href="https://identifiers.org/ensembl:${gene.gene}" target="_blank">${this.highlightMatch(gene.gene)}</a>` :
                 "N/A";
 
-            tbody.innerHTML += `
+            html += `
                 <tr data-gene="${gene.gene}" 
                     data-uniprot-id="${gene.uniprot_id}" 
                     data-ensembl-id="${gene.ensembl_id}"
@@ -1027,22 +1085,43 @@ class GeneTableManager extends DataTableManager {
             `;
         });
 
-        // Add summary if filtered
-        if (this.filterText) {
-            const tfoot = table.querySelector('tfoot') || table.createTFoot();
-            tfoot.innerHTML = `
-                <tr>
-                    <td colspan="2" class="text-muted small">
-                        Showing ${this.filteredData.length} of ${this.currentData.length} genes
-                        ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
-                    </td>
-                </tr>
-            `;
-        } else {
-            const tfoot = table.querySelector('tfoot');
-            if (tfoot) tfoot.remove();
+        html += '</tbody>';
+
+        // Add summary
+        const totalRows = this.currentData.length;
+        const filteredRows = this.filteredData.length;
+        
+        html += `<tfoot><tr><td colspan="2" class="text-muted small">
+            Showing ${filteredRows} of ${totalRows} genes
+            ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
+        </td></tr></tfoot>`;
+
+        return html;
+    }
+
+    renderTable() {
+        const tableContainer = document.querySelector('#gene_table')?.closest('.table-responsive') || 
+                              document.querySelector('#gene_table')?.parentElement ||
+                              document.querySelector(this.containerSelector);
+        
+        if (!tableContainer) {
+            console.warn("Gene table container not found");
+            return;
         }
 
+        let table = document.querySelector('#gene_table');
+        if (!table) {
+            console.warn("Gene table not found");
+            return;
+        }
+
+        if (this.filteredData.length === 0) {
+            this.showEmptyTable();
+            return;
+        }
+
+        const html = this.generateTableHTML();
+        table.innerHTML = html;
         this.setupGeneTableEventHandlers();
     }
 
@@ -1073,6 +1152,18 @@ class GeneTableManager extends DataTableManager {
                     background-color: #e7f3ff !important;
                     transform: translateY(-1px);
                     box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+                }
+
+                .gene-table-panel .table-filter-container {
+                    background: #f8f9fa;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin-bottom: 10px;
+                }
+
+                .gene-table-panel .input-group-text {
+                    background: #e9ecef;
+                    border-color: #ced4da;
                 }
             `;
             document.head.appendChild(styles);
@@ -1224,6 +1315,7 @@ class CompoundTableManager extends DataTableManager {
     constructor() {
         super('compound-table', '#compound-table-container');
         this.init();
+        this.setupNetworkListeners();
     }
 
     getTableDisplayName() {
@@ -1252,6 +1344,72 @@ class CompoundTableManager extends DataTableManager {
         ].join(' ').toLowerCase();
         
         return searchFields.includes(this.filterText);
+    }
+
+    setupFilterInput() {
+        // Find the correct container for the compound table
+        const compoundTableWrapper = document.querySelector('#compound_table')?.closest('.table-wrapper') || 
+                                    document.querySelector('.compound-table-panel .table-wrapper');
+        
+        if (compoundTableWrapper && !document.querySelector(`#${this.tableId}-filter`)) {
+            const filterContainer = document.createElement('div');
+            filterContainer.className = 'table-filter-container mb-3';
+            filterContainer.innerHTML = `
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    </div>
+                    <input type="text" id="${this.tableId}-filter" class="form-control" 
+                           placeholder="Filter ${this.getTableDisplayName()} table...">
+                    <div class="input-group-append">
+                        <button class="btn btn-outline-secondary" id="clear-${this.tableId}-filter" type="button">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <small class="form-text text-muted">
+                    ${this.getFilterHelpText()}
+                </small>
+            `;
+            
+            compoundTableWrapper.insertBefore(filterContainer, compoundTableWrapper.firstChild);
+            
+            // Add event listeners
+            document.getElementById(`${this.tableId}-filter`).addEventListener('input', (e) => {
+                this.handleFilter(e.target.value);
+            });
+            
+            document.getElementById(`clear-${this.tableId}-filter`).addEventListener('click', () => {
+                document.getElementById(`${this.tableId}-filter`).value = '';
+                this.handleFilter('');
+            });
+        }
+    }
+
+    setupNetworkListeners() {
+        if (!window.cy) {
+            console.log('Cytoscape not ready, will setup compound table listeners later');
+            return;
+        }
+        
+        console.log('Setting up compound table network listeners');
+        
+        window.cy.on('add remove', (event) => {
+            console.log('Network changed, updating compound table');
+            this.debouncedUpdateTable();
+        });
+    }
+
+    debouncedUpdateTable(delay = 500) {
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+
+        this.updateTimeout = setTimeout(() => {
+            if (!this.isUpdating) {
+                this.performTableUpdate();
+            }
+        }, delay);
     }
 
     generateCompoundRowHTML(row, index) {
@@ -1298,43 +1456,39 @@ class CompoundTableManager extends DataTableManager {
 
     renderTable() {
         const tableBody = $("#compound_table tbody");
-        if (!tableBody.length) {
-            console.warn("Compound table body not found");
+        const table = document.querySelector('#compound_table');
+        
+        if (!tableBody.length || !table) {
+            console.warn("Compound table not found");
             return;
         }
-
-        // Clear the entire table body first
-        tableBody.empty();
 
         if (this.filteredData.length === 0) {
             this.showEmptyTable();
             return;
         }
 
+        // Clear the entire table body first
+        tableBody.empty();
+
         this.filteredData.forEach((row, index) => {
             const rowHTML = this.generateCompoundRowHTML(row, index);
             tableBody.append(rowHTML);
         });
 
-        // Add summary if filtered
-        if (this.filterText) {
-            const table = document.querySelector('#compound_table');
-            if (table) {
-                const tfoot = table.querySelector('tfoot') || table.createTFoot();
-                tfoot.innerHTML = `
-                    <tr>
-                        <td class="text-muted small">
-                            Showing ${this.filteredData.length} of ${this.currentData.length} compounds
-                            ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
-                        </td>
-                    </tr>
-                `;
-            }
-        } else {
-            const table = document.querySelector('#compound_table');
-            const tfoot = table?.querySelector('tfoot');
-            if (tfoot) tfoot.remove();
-        }
+        // Add summary to tfoot
+        const tfoot = table.querySelector('tfoot') || table.createTFoot();
+        const totalRows = this.currentData.length;
+        const filteredRows = this.filteredData.length;
+        
+        tfoot.innerHTML = `
+            <tr>
+                <td class="text-muted small">
+                    Showing ${filteredRows} of ${totalRows} compounds
+                    ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
+                </td>
+            </tr>
+        `;
 
         this.setupCompoundTableEventHandlers();
         console.log(`Compound table updated with ${this.filteredData.length} compounds from network.`);
@@ -1374,6 +1528,27 @@ class CompoundTableManager extends DataTableManager {
                     height: auto;
                     border-radius: 4px;
                     border: 1px solid #ddd;
+                }
+
+                .compound-table-panel .table-filter-container {
+                    background: #f8f9fa;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin-bottom: 10px;
+                }
+
+                .compound-table-panel .input-group-text {
+                    background: #e9ecef;
+                    border-color: #ced4da;
+                }
+
+                .compound-table-panel .compound-selection-hint {
+                    background: #e7f3ff;
+                    padding: 8px 12px;
+                    border-radius: 4px;
+                    margin-bottom: 10px;
+                    font-size: 0.9em;
+                    color: #0056b3;
                 }
             `;
             document.head.appendChild(styles);
@@ -1464,6 +1639,8 @@ class CompoundTableManager extends DataTableManager {
 
     showEmptyTable() {
         const tableBody = $("#compound_table tbody");
+        const table = document.querySelector('#compound_table');
+        
         if (!tableBody.length) return;
 
         tableBody.empty();
@@ -1479,6 +1656,17 @@ class CompoundTableManager extends DataTableManager {
                 </td>
             </tr>
         `);
+
+        // Clear tfoot when showing empty table
+        const tfoot = table?.querySelector('tfoot');
+        if (tfoot) tfoot.remove();
+
+        // Clear filter when showing empty table
+        const filterInput = document.getElementById(`${this.tableId}-filter`);
+        if (filterInput) {
+            filterInput.value = '';
+            this.filterText = '';
+        }
 
         // Add click handler for the table button
         $("#get-compounds-table-btn").off("click").on("click", function (e) {
@@ -1505,11 +1693,25 @@ class CompoundTableManager extends DataTableManager {
     }
 }
 
-// Initialize the managers
+// Initialize the managers with proper delay to ensure DOM is ready
 console.log('Initializing Data Table Managers...');
 window.aopTableManager = new AOPTableManager();
-window.geneTableManager = new GeneTableManager();
-window.compoundTableManager = new CompoundTableManager();
+
+// Initialize Gene Table Manager with delay to ensure DOM is ready
+setTimeout(() => {
+    if (!window.geneTableManager) {
+        window.geneTableManager = new GeneTableManager();
+        console.log('Gene Table Manager initialized with filtering');
+    }
+}, 100);
+
+// Initialize Compound Table Manager with delay to ensure DOM is ready
+setTimeout(() => {
+    if (!window.compoundTableManager) {
+        window.compoundTableManager = new CompoundTableManager();
+        console.log('Compound Table Manager initialized with filtering');
+    }
+}, 100);
 
 // Global functions
 window.initializeAopTable = function () {
@@ -1577,4 +1779,14 @@ $(document).ready(function() {
     }
     
     window.initializeAopTable();
+
+    // Initialize other table managers after a short delay to ensure DOM is ready
+    setTimeout(() => {
+        if (!window.geneTableManager) {
+            window.geneTableManager = new GeneTableManager();
+        }
+        if (!window.compoundTableManager) {
+            window.compoundTableManager = new CompoundTableManager();
+        }
+    }, 200);
 });
