@@ -336,46 +336,36 @@ class AOPTableManager extends DataTableManager {
             row.aop_list,
             row.aop_titles,
             row.source_type,
-            row.target_type
+            row.target_type || null
         ].join(' ').toLowerCase();
         
         return searchFields.includes(this.filterText);
     }
 
     generateTableHTML() {
-        const headers = [
-            'Source Node',
-            'KER Label',
-            'Target Node', 
-            'AOP IDs',
-            'AOP Titles'
-        ];
+        if (!this.filteredData || this.filteredData.length === 0) {
+            return '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #6c757d; font-style: italic;">No AOP data available. Use the controls above to query and populate the network.</td></tr>';
+        }
 
-        let html = '<thead><tr>';
-        headers.forEach(header => {
-            html += `<th>${header}</th>`;
-        });
-        html += '</tr></thead><tbody>';
-
+        let html = '';
         this.filteredData.forEach((row, index) => {
-            const rowClass = row.is_connected ? '' : 'disconnected-row';
-            html += `<tr class="${rowClass}" data-row-index="${index}">`;
+            html += `<tr data-row-index="${index}" class="clickable-row">`;
             
-            // Source node
+            // Source node with type badge
             html += `<td>
                 <span class="node-type-badge node-type-${row.source_type}">${row.source_type.toUpperCase()}</span>
-                <div class="${row.source_label.includes('(missing label)') ? 'missing-label' : ''}" 
-                     data-node-id="${row.source_id}">${this.highlightMatch(row.source_label)}</div>
+                <div class="${(row.source_label || '').includes('(missing label)') ? 'missing-label' : ''}" 
+                     data-node-id="${row.source_id}">${this.highlightMatch(row.source_label || 'N/A')}</div>
             </td>`;
             
             // KER Label
-            html += `<td><span class="ker-label-cell">${this.highlightMatch(row.ker_label)}</span></td>`;
+            html += `<td><span class="ker-label-cell">${this.highlightMatch(row.ker_label || 'N/A')}</span></td>`;
             
-            // Target node
+            // Target node - add null checks for target_label and target_type
             html += `<td>
-                ${row.target_label !== 'N/A' ? 
-                    `<span class="node-type-badge node-type-${row.target_type}">${row.target_type.toUpperCase()}</span>
-                     <div class="${row.target_label.includes('(missing label)') ? 'missing-label' : ''}" 
+                ${row.target_label && row.target_label !== 'N/A' ? 
+                    `<span class="node-type-badge node-type-${row.target_type || 'unknown'}">${(row.target_type || 'unknown').toUpperCase()}</span>
+                     <div class="${(row.target_label || '').includes('(missing label)') ? 'missing-label' : ''}" 
                           data-node-id="${row.target_id}">${this.highlightMatch(row.target_label)}</div>` 
                     : 'N/A'}
             </td>`;
@@ -386,28 +376,12 @@ class AOPTableManager extends DataTableManager {
             </td>`;
             
             // AOP Titles - make clickable
-            html += `<td class="aop-titles-cell">
+            html += `<td>
                 ${this.generateClickableAopTitles(row.aop_titles, row.aop_list)}
             </td>`;
             
             html += '</tr>';
         });
-
-        html += '</tbody>';
-        
-        // Add summary
-        const totalRows = this.currentData.length;
-        const filteredRows = this.filteredData.length;
-        const connectedRows = this.filteredData.filter(r => r.is_connected).length;
-        const disconnectedRows = filteredRows - connectedRows;
-        
-        html += `<tfoot><tr><td colspan="5" class="text-muted small">
-            Showing ${filteredRows} of ${totalRows} entries 
-            (${connectedRows} connected, ${disconnectedRows} disconnected nodes)
-            ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
-            ${this.selectedAop ? ` - Filtered by AOP: ${this.selectedAop}` : ''}
-            ${this.groupedAops.size > 0 ? ` - Grouped AOPs: ${this.groupedAops.size}` : ''}
-        </td></tr></tfoot>`;
 
         return html;
     }
@@ -617,7 +591,7 @@ class AOPTableManager extends DataTableManager {
         
         this.saveOriginalStyles();
         
-        // Expanded color palette for better variety
+        // Color palette for AOP groups
         const colors = [
             '#ff6b35', '#4CAF50', '#2196F3', '#9C27B0', '#FF9800', 
             '#795548', '#607D8B', '#E91E63', '#00BCD4', '#8BC34A',
@@ -1693,6 +1667,744 @@ class CompoundTableManager extends DataTableManager {
     }
 }
 
+/**
+ * History Table Manager - tracks query history across all operations
+ */
+class HistoryTableManager extends DataTableManager {
+    constructor() {
+        super('history-table', '#history-table-container');
+        this.init();
+        this.setupHistoryTable();
+    }
+
+    getTableDisplayName() {
+        return 'Query History';
+    }
+
+    getFilterHelpText() {
+        return 'Filter by query type, source, or SPARQL content.';
+    }
+
+    getVisibleNodeIds() {
+        return new Set(); // History table doesn't have associated nodes
+    }
+
+    matchesFilter(row) {
+        const searchFields = [
+            row.type,
+            row.source,
+            row.content,
+            row.elementsSummary ? Object.keys(row.elementsSummary.types).join(' ') : ''
+        ].join(' ').toLowerCase();
+        
+        return searchFields.includes(this.filterText);
+    }
+
+    setupHistoryTable() {
+        const tableContainer = document.getElementById('history-table-container');
+        if (!tableContainer) {
+            console.warn('History table container not found');
+            return;
+        }
+
+        // Create table HTML if it doesn't exist
+        if (!document.getElementById('history_table')) {
+            tableContainer.innerHTML = `
+                <div class="table-wrapper">
+                    <table id="history_table" class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th style="width: 12%;">Type</th>
+                                <th style="width: 15%;">Source</th>
+                                <th style="width: 10%;">Timestamp</th>
+                                <th style="width: 30%;">Received data</th>
+                                <th style="width: 33%;">Query</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                        <tfoot>
+                        </tfoot>
+                    </table>
+                </div>
+            `;
+        }
+
+        this.setupFilterInput();
+        this.showEmptyTable();
+    }
+
+    addHistoryEntry(type, source, content, timestamp = null, elements = null) {
+        if (!content || !content.trim()) {
+            console.warn('Cannot add empty history entry');
+            return;
+        }
+
+        const entry = {
+            type: type,
+            source: source,
+            content: content,
+            timestamp: timestamp || new Date().toLocaleString(),
+            elements: elements || null,
+            elementsSummary: this.generateElementsSummary(elements)
+        };
+
+        // Add to current data
+        this.currentData.unshift(entry); // Add to beginning for newest first
+        
+        // Update filtered data properly based on current filter
+        if (!this.filterText) {
+            this.filteredData = [...this.currentData];
+        } else {
+            this.filteredData = this.currentData.filter(row => this.matchesFilter(row));
+        }
+        
+        // Re-render table
+        this.renderTable();
+        
+        console.log(`Added ${type} query to history:`, entry);
+    }
+
+    generateElementsSummary(elements) {
+        if (!elements) return { total: 0, nodes: 0, edges: 0, types: {} };
+
+        const summary = {
+            total: elements.length,
+            nodes: 0,
+            edges: 0,
+            types: {}
+        };
+
+        elements.forEach(element => {
+            const group = element.group || (element.data ? (element.data.source ? 'edges' : 'nodes') : 'unknown');
+            
+            if (group === 'nodes') {
+                summary.nodes++;
+                const nodeType = element.data?.type || element.data?.node_type || 'unknown';
+                summary.types[nodeType] = (summary.types[nodeType] || 0) + 1;
+            } else if (group === 'edges') {
+                summary.edges++;
+            }
+        });
+
+        return summary;
+    }
+
+    generateHistoryRowHTML(row, index) {
+        const typeIcons = {
+            'compound': 'fas fa-flask',
+            'gene': 'fas fa-dna',
+            'aop_network': 'fas fa-project-diagram',
+            'query': 'fas fa-search'
+        };
+
+        const typeColors = {
+            'compound': '#28a745',
+            'gene': '#17a2b8',
+            'aop_network': '#6f42c1',
+            'query': '#ffc107'
+        };
+
+        const icon = typeIcons[row.type] || 'fas fa-question';
+        const color = typeColors[row.type] || '#6c757d';
+
+        // Truncate long queries for display
+        const truncatedContent = row.content.length > 150 
+            ? row.content.substring(0, 150) + '...' 
+            : row.content;
+
+        // Generate elements summary display
+        const elementsDisplay = this.generateElementsDisplay(row.elementsSummary, index);
+
+        return `
+            <tr data-row-index="${index}" style="cursor: pointer;" title="Click to view full query and elements">
+                <td>
+                    <i class="${icon}" style="color: ${color}; margin-right: 5px;"></i>
+                    ${this.highlightMatch(row.type)}
+                </td>
+                <td>${this.highlightMatch(row.source)}</td>
+                <td class="text-muted small">${row.timestamp}</td>
+                <td class="elements-cell">
+                    ${elementsDisplay}
+                </td>
+                <td>
+                    <code class="text-muted small">${this.highlightMatch(truncatedContent)}</code>
+                </td>
+            </tr>
+        `;
+    }
+
+    generateElementsDisplay(elementsSummary, index) {
+        if (!elementsSummary || elementsSummary.total === 0) {
+            return '<span class="text-muted">No elements</span>';
+        }
+
+        const { total, nodes, edges, types } = elementsSummary;
+        
+        // Create type badges
+        const typeBadges = Object.entries(types)
+            .filter(([type, count]) => count > 0)
+            .map(([type, count]) => `<span class="badge badge-secondary badge-sm">${type}: ${count}</span>`)
+            .join(' ');
+
+        return `
+            <div class="elements-summary">
+                <div class="elements-count" title="Total: ${total}, Nodes: ${nodes}, Edges: ${edges}">
+                    <i class="fas fa-project-diagram" style="color: #6c757d;"></i>
+                    <strong>${total}</strong> <small>(${nodes}n, ${edges}e)</small>
+                </div>
+                ${typeBadges ? `<div class="elements-types mt-1">${typeBadges}</div>` : ''}
+                ${total > 0 ? `<button class="btn btn-sm btn-outline-primary mt-1 view-elements-btn" data-row-index="${index}" onclick="event.stopPropagation();">
+                    <i class="fas fa-eye"></i> View
+                </button>` : ''}
+            </div>
+        `;
+    }
+
+    renderTable() {
+        
+        const tableBody = $("#history_table tbody");
+        const table = document.querySelector('#history_table');
+        
+        if (!tableBody.length || !table) {
+            console.warn("History table not found");
+            return;
+        }
+
+        if (this.filteredData.length === 0) {
+            this.showEmptyTable();
+            return;
+        }
+
+        // Clear the entire table body first
+        tableBody.empty();
+
+        this.filteredData.forEach((row, index) => {
+            const rowHTML = this.generateHistoryRowHTML(row, index);
+            tableBody.append(rowHTML);
+        });
+
+        // Add summary to tfoot
+        const tfoot = table.querySelector('tfoot') || table.createTFoot();
+        const totalRows = this.currentData.length;
+        const filteredRows = this.filteredData.length;
+        
+        tfoot.innerHTML = `
+            <tr>
+                <td colspan="5" class="text-muted small">
+                    Showing ${filteredRows} of ${totalRows} queries
+                    ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
+                </td>
+            </tr>
+        `;
+
+        this.setupHistoryTableEventHandlers();
+        console.log(`History table updated with ${this.filteredData.length} entries.`);
+    }
+
+    setupHistoryTableEventHandlers() {
+        const tableBody = $("#history_table tbody");
+        if (!tableBody.length) return;
+
+        // Remove existing event handlers to prevent duplicates
+        tableBody.off("click", "tr");
+        tableBody.off("click", ".view-elements-btn");
+
+        // Add click handler for history rows to show full query
+        tableBody.on("click", "tr", (e) => {
+            // Don't trigger if clicking on view elements button
+            if ($(e.target).closest('.view-elements-btn').length) {
+                return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const row = $(e.currentTarget);
+            const rowIndex = row.data("row-index");
+            
+            if (rowIndex !== undefined && this.filteredData[rowIndex]) {
+                this.showFullQuery(this.filteredData[rowIndex]);
+            }
+        });
+
+        // Add click handler for view elements buttons
+        tableBody.on("click", ".view-elements-btn", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const rowIndex = $(e.target).closest('.view-elements-btn').data("row-index");
+            
+            if (rowIndex !== undefined && this.filteredData[rowIndex]) {
+                this.showElementsModal(this.filteredData[rowIndex]);
+            }
+        });
+    }
+
+    showFullQuery(entry) {
+        // Create modal to show full query
+        console.log(entry.content);
+
+        const modalWrapper = document.createElement("div");
+        modalWrapper.innerHTML = `
+    <div class="modal fade" id="queryModal" tabindex="-1" role="dialog" aria-labelledby="queryModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="queryModalLabel">
+                        <i class="fas fa-search"></i> ${entry.type.toUpperCase()} Query - ${entry.timestamp}
+                    </h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <p><strong>Source:</strong> ${entry.source}</p>
+                            <p><strong>Query:</strong></p>
+                            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.9em; white-space: pre-wrap; max-height: 400px; overflow-y: auto;"></pre>
+                        </div>
+                        <div class="col-md-4">
+                            <h6><strong>Elements Summary:</strong></h6>
+                            ${this.generateElementsSummaryDisplay(entry.elementsSummary, entry.elements)}
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer" data-entry-index="${this.getEntryIndex(entry)}">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-info show-elements-btn">
+                        <i class="fas fa-project-diagram"></i> View Elements
+                    </button>
+                    <button type="button" class="btn btn-primary copy-query-btn">
+                        <i class="fas fa-copy"></i> Copy Query
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+`;
+
+        // Set <pre> text content so < > substrings are preserved
+        modalWrapper.querySelector("pre").textContent = entry.content;
+
+        const modalHtml = modalWrapper.innerHTML;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('queryModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Add event listeners after modal is created
+        const modal = document.getElementById('queryModal');
+        const entryIndex = parseInt(modal.querySelector('[data-entry-index]').dataset.entryIndex);
+        
+        modal.querySelector('.show-elements-btn').addEventListener('click', () => {
+            this.showElementsModal(entry);
+        });
+        
+        modal.querySelector('.copy-query-btn').addEventListener('click', () => {
+            navigator.clipboard.writeText(entry.content).then(() => {
+                // Visual feedback for copy success
+                const btn = modal.querySelector('.copy-query-btn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-success');
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-primary');
+                }, 2000);
+            });
+        });
+
+        // Show modal
+        if (typeof $ !== 'undefined' && $.fn.modal) {
+            $('#queryModal').modal('show');
+            $('#queryModal').on('hidden.bs.modal', function () {
+                $(this).remove();
+            });
+        }
+    }
+
+    generateElementsSummaryDisplay(elementsSummary, elements) {
+        if (!elementsSummary || elementsSummary.total === 0) {
+            return '<p class="text-muted">No elements retrieved</p>';
+        }
+
+        const { total, nodes, edges, types } = elementsSummary;
+        
+        let html = `
+            <div class="alert alert-info">
+                <p><strong>Total Elements:</strong> ${total}</p>
+                <p><strong>Nodes:</strong> ${nodes} | <strong>Edges:</strong> ${edges}</p>
+            </div>
+        `;
+
+        if (Object.keys(types).length > 0) {
+            html += '<h6>Node Types:</h6><ul class="list-unstyled">';
+            Object.entries(types).forEach(([type, count]) => {
+                html += `<li><span class="badge badge-secondary">${type}</span> ${count}</li>`;
+            });
+            html += '</ul>';
+        }
+
+        if (elements && elements.length > 0) {
+            html += `
+                <button class="btn btn-sm btn-success mt-2 restore-elements-btn">
+                    <i class="fas fa-upload"></i> Restore to Network
+                </button>
+            `;
+        }
+
+        return html;
+    }
+
+    showElementsModal(entry) {
+        if (!entry.elements || entry.elements.length === 0) {
+            this.showModal('No Data', 'No elements data available for this query.', 'warning');
+            return;
+        }
+
+        const modalHtml = `
+            <div class="modal fade" id="elementsModal" tabindex="-1" role="dialog" aria-labelledby="elementsModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-xl" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="elementsModalLabel">
+                                <i class="fas fa-project-diagram"></i> Network Elements - ${entry.type.toUpperCase()} Query
+                            </h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row mb-3">
+                                <div class="col-md-12">
+                                    ${this.generateElementsSummaryDisplay(entry.elementsSummary, entry.elements)}
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <h6>Elements Data:</h6>
+                                    <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; font-size: 0.8em; max-height: 400px; overflow-y: auto;">${JSON.stringify(entry.elements, null, 2)}</pre>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-info copy-elements-btn">
+                                <i class="fas fa-copy"></i> Copy Elements JSON
+                            </button>
+                            <button type="button" class="btn btn-success restore-elements-modal-btn">
+                                <i class="fas fa-upload"></i> Restore to Network
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('elementsModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Add event listeners after modal is created
+        const modal = document.getElementById('elementsModal');
+        
+        modal.querySelector('.copy-elements-btn').addEventListener('click', () => {
+            navigator.clipboard.writeText(JSON.stringify(entry.elements, null, 2)).then(() => {
+                // Visual feedback for copy success
+                const btn = modal.querySelector('.copy-elements-btn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                btn.classList.remove('btn-info');
+                btn.classList.add('btn-success');
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-info');
+                }, 2000);
+            });
+        });
+        
+        modal.querySelector('.restore-elements-modal-btn').addEventListener('click', () => {
+            this.restoreElements(entry.elements);
+        });
+
+        // Add event listener for restore button in summary section
+        const restoreBtn = modal.querySelector('.restore-elements-btn');
+        if (restoreBtn) {
+            restoreBtn.addEventListener('click', () => {
+                this.restoreElements(entry.elements);
+            });
+        }
+
+        // Show modal
+        if (typeof $ !== 'undefined' && $.fn.modal) {
+            $('#elementsModal').modal('show');
+            $('#elementsModal').on('hidden.bs.modal', function () {
+                $(this).remove();
+            });
+        }
+    }
+
+    getEntryIndex(entry) {
+        return this.currentData.findIndex(item => 
+            item.timestamp === entry.timestamp && 
+            item.type === entry.type && 
+            item.content === entry.content
+        );
+    }
+
+    restoreElements(elements) {
+        if (!window.cy || !elements || elements.length === 0) {
+            this.showModal('Error', 'Cannot restore elements: Network not available or no elements provided.', 'error');
+            return;
+        }
+
+        try {
+            // Separate nodes and edges for proper order of addition
+            const nodes = elements.filter(el => 
+                el.group === 'nodes' || 
+                (!el.group && !el.data?.source && !el.data?.target)
+            );
+            const edges = elements.filter(el => 
+                el.group === 'edges' || 
+                (!el.group && (el.data?.source || el.data?.target))
+            );
+            
+            console.log(`Restoring ${nodes.length} nodes and ${edges.length} edges`);
+            
+            // Track existing element IDs to avoid duplicates
+            const existingIds = new Set();
+            window.cy.elements().forEach(element => {
+                existingIds.add(element.id());
+            });
+            
+            // Filter out elements that already exist
+            const newNodes = nodes.filter(node => !existingIds.has(node.data?.id));
+            const newEdges = edges.filter(edge => !existingIds.has(edge.data?.id));
+            
+            let addedNodesCount = 0;
+            let addedEdgesCount = 0;
+            
+            // Add new nodes first
+            if (newNodes.length > 0) {
+                window.cy.add(newNodes);
+                addedNodesCount = newNodes.length;
+                console.log(`Added ${newNodes.length} new nodes successfully`);
+            }
+            
+            // Then add new edges (only those with valid source/target)
+            if (newEdges.length > 0) {
+                const validEdges = [];
+                const skippedEdges = [];
+                
+                newEdges.forEach(edge => {
+                    const source = edge.data?.source;
+                    const target = edge.data?.target;
+                    
+                    // Verify both source and target nodes exist
+                    if (source && target && 
+                        window.cy.getElementById(source).length > 0 && 
+                        window.cy.getElementById(target).length > 0) {
+                        validEdges.push(edge);
+                    } else {
+                        skippedEdges.push({
+                            id: edge.data?.id,
+                            source: source,
+                            target: target,
+                            reason: `Missing source (${source}) or target (${target}) node`
+                        });
+                    }
+                });
+                
+                if (validEdges.length > 0) {
+                    window.cy.add(validEdges);
+                    addedEdgesCount = validEdges.length;
+                    console.log(`Added ${validEdges.length} new edges successfully`);
+                }
+                
+                if (skippedEdges.length > 0) {
+                    console.warn('Skipped edges due to missing nodes:', skippedEdges);
+                }
+            }
+            
+            // Fit to viewport only if we added elements
+            if (addedNodesCount > 0 || addedEdgesCount > 0) {
+                window.resetNetworkLayout();
+            }
+            
+            // Update all table managers
+            if (window.aopTableManager) window.aopTableManager.performTableUpdate();
+            if (window.geneTableManager) window.geneTableManager.performTableUpdate();
+            if (window.compoundTableManager) window.compoundTableManager.performTableUpdate();
+            
+            // Close modal
+            $('#elementsModal').modal('hide');
+            
+            const totalRestored = addedNodesCount + addedEdgesCount;
+            const skippedCount = (nodes.length - addedNodesCount) + (edges.length - addedEdgesCount);
+            
+            if (totalRestored > 0) {
+                let message = `Successfully added ${totalRestored} elements to the network!`;
+                if (skippedCount > 0) {
+                    message += ` (${skippedCount} elements were already present)`;
+                }
+                this.showModal('Success', message, 'success');
+            } else {
+                this.showModal('Information', 'All elements from this query are already present in the network.', 'info');
+            }
+            
+            console.log('Restored elements to network:', { 
+                newNodes: addedNodesCount, 
+                newEdges: addedEdgesCount,
+                skipped: skippedCount 
+            });
+            
+        } catch (error) {
+            console.error('Error restoring elements:', error);
+            this.showModal('Error', 'Error restoring elements to network. Check console for details.', 'error');
+        }
+    }
+
+    showModal(title, message, type = 'info') {
+        const iconMap = {
+            'success': 'fas fa-check-circle',
+            'error': 'fas fa-exclamation-triangle',
+            'warning': 'fas fa-exclamation-circle',
+            'info': 'fas fa-info-circle'
+        };
+
+        const colorMap = {
+            'success': '#28a745',
+            'error': '#dc3545',
+            'warning': '#ffc107',
+            'info': '#17a2b8'
+        };
+
+        const icon = iconMap[type] || iconMap['info'];
+        const color = colorMap[type] || colorMap['info'];
+
+        const modalHtml = `
+            <div class="modal fade" id="messageModal" tabindex="-1" role="dialog" aria-labelledby="messageModalLabel" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header" style="border-bottom: 2px solid ${color};">
+                            <h5 class="modal-title" id="messageModalLabel">
+                                <i class="${icon}" style="color: ${color}; margin-right: 8px;"></i>
+                                ${title}
+                            </h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body">
+                            <p>${message}</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove existing modal if present
+        const existingModal = document.getElementById('messageModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // Show modal
+        if (typeof $ !== 'undefined' && $.fn.modal) {
+            $('#messageModal').modal('show');
+            $('#messageModal').on('hidden.bs.modal', function () {
+                $(this).remove();
+            });
+        }
+    }
+
+    showEmptyTable() {
+        const tableBody = $("#history_table tbody");
+        const table = document.querySelector('#history_table');
+        
+        if (!tableBody.length) return;
+
+        tableBody.empty();
+        tableBody.append(`
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 20px; color: #6c757d; font-style: italic;">
+                    No queries executed yet. Query history will appear here after running compound, gene, or AOP network queries.
+                </td>
+            </tr>
+        `);
+
+        // Clear tfoot when showing empty table
+        const tfoot = table?.querySelector('tfoot');
+        if (tfoot) tfoot.remove();
+    }
+
+    // Add CSS styles for the new elements column
+    setupTableStyles() {
+        super.setupTableStyles();
+        
+        if (!document.querySelector('#history-table-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'history-table-styles';
+            styles.textContent = `
+                .elements-summary {
+                    font-size: 0.85em;
+                }
+                
+                .elements-count {
+                    margin-bottom: 4px;
+                }
+                
+                .elements-types .badge {
+                    font-size: 0.7em;
+                    margin-right: 2px;
+                    margin-bottom: 2px;
+                }
+                
+                .view-elements-btn {
+                    font-size: 0.7em;
+                    padding: 2px 6px;
+                }
+                
+                .badge-sm {
+                    font-size: 0.7em;
+                    padding: 2px 6px;
+                }
+                
+                #history_table .elements-cell {
+                    min-width: 120px;
+                }
+                
+                #history_table pre {
+                    font-size: 0.8em;
+                    line-height: 1.2;
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+    }
+}
+
 // Initialize the managers with proper delay to ensure DOM is ready
 console.log('Initializing Data Table Managers...');
 window.aopTableManager = new AOPTableManager();
@@ -1710,6 +2422,14 @@ setTimeout(() => {
     if (!window.compoundTableManager) {
         window.compoundTableManager = new CompoundTableManager();
         console.log('Compound Table Manager initialized with filtering');
+    }
+}, 100);
+
+// Initialize History Table Manager with delay to ensure DOM is ready
+setTimeout(() => {
+    if (!window.historyTableManager) {
+        window.historyTableManager = new HistoryTableManager();
+        console.log('History Table Manager initialized');
     }
 }, 100);
 
@@ -1787,6 +2507,9 @@ $(document).ready(function() {
         }
         if (!window.compoundTableManager) {
             window.compoundTableManager = new CompoundTableManager();
+        }
+        if (!window.historyTableManager) {
+            window.historyTableManager = new HistoryTableManager();
         }
     }, 200);
 });

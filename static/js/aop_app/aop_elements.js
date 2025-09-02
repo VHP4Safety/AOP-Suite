@@ -257,10 +257,8 @@ document.addEventListener("DOMContentLoaded", function () {
         if (action === 'show') {
             // Check if there are selected elements
             const hasSelection = window.cy && window.cy.$(':selected').length > 0;
-
             // Extract Key Event URIs from either selected nodes or all nodes
             const keyEventUris = getKeyEventsFromNetwork(hasSelection);
-
             if (keyEventUris.length === 0) {
                 const scopeMessage = hasSelection ? "selected elements" : "network";
                 console.log(`No Key Events found in ${scopeMessage} for gene loading`);
@@ -268,10 +266,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 window.genesVisible = true;
                 return;
             }
-
             const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
             console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for gene loading:`, keyEventUris);
-
             // Call the load_and_show_genes endpoint with the extracted KEs
             fetch(`/load_and_show_genes?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
                 method: 'GET'
@@ -291,51 +287,50 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     const fontSlider = document.getElementById('font-size-slider');
                     const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                    
+                    // Add query to history table
+                    if (data.sparql_query && window.historyTableManager) {
+                        window.historyTableManager.addHistoryEntry('gene', 'AOP-Wiki RDF', data.sparql_query, null, data.gene_elements);
+                    }
 
-                    if (data.gene_elements) {
-                        // Add only new gene elements
-                        data.gene_elements.forEach(element => {
-                            console.log(element.data);
-                            const elementId = element.data?.id;
-                            if (elementId && !window.cy.getElementById(elementId).length) {
-                                try {
-                                    window.cy.add(element);
-                                } catch (error) {
-                                    console.warn("Error adding gene element:", elementId, error.message);
-                                }
+                    // Add only new gene elements
+                    data.gene_elements.forEach(element => {
+                        console.log(element.data);
+                        const elementId = element.data?.id;
+                        if (elementId && !window.cy.getElementById(elementId).length) {
+                            try {
+                                window.cy.add(element);
+                            } catch (error) {
+                                console.warn("Error adding gene element:", elementId, error.message);
+                            }
+                        }
+                    });
+
+                    // Show genes based on selection
+                    if (hasSelection) {
+                        // Only show genes connected to selected nodes
+                        const selectedNodes = window.cy.$(':selected').nodes();
+                        const geneNodesToShow = window.cy.collection();
+                        selectedNodes.forEach(node => {
+                            const connectedGenes = node.connectedEdges().connectedNodes('.uniprot-node, .ensembl-node');
+                            geneNodesToShow.merge(connectedGenes);
+                        });
+                        geneNodesToShow.show();
+                        geneNodesToShow.connectedEdges().show();
+                        console.log(`Showed ${geneNodesToShow.length} genes connected to selected nodes`);
+                    } else {
+                        // Show all genes
+                        window.cy.elements(".uniprot-node, .ensembl-node").show();
+                        window.cy.edges().forEach(function (edge) {
+                            const source = edge.source();
+                            const target = edge.target();
+                            const sourceIsGene = source.hasClass("uniprot-node") || source.hasClass("ensembl-node");
+                            const targetIsGene = target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
+                            if (source.visible() && target.visible() && (sourceIsGene || targetIsGene)) {
+                                edge.show();
                             }
                         });
-
-                        // Show genes based on selection
-                        if (hasSelection) {
-                            // Only show genes connected to selected nodes
-                            const selectedNodes = window.cy.$(':selected').nodes();
-                            const geneNodesToShow = window.cy.collection();
-
-                            selectedNodes.forEach(node => {
-                                const connectedGenes = node.connectedEdges().connectedNodes('.uniprot-node, .ensembl-node');
-                                geneNodesToShow.merge(connectedGenes);
-                            });
-
-                            geneNodesToShow.show();
-                            geneNodesToShow.connectedEdges().show();
-
-                            console.log(`Showed ${geneNodesToShow.length} genes connected to selected nodes`);
-                        } else {
-                            // Show all genes
-                            window.cy.elements(".uniprot-node, .ensembl-node").show();
-                            window.cy.edges().forEach(function (edge) {
-                                const source = edge.source();
-                                const target = edge.target();
-                                const sourceIsGene = source.hasClass("uniprot-node") || source.hasClass("ensembl-node");
-                                const targetIsGene = target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
-                                if (source.visible() && target.visible() && (sourceIsGene || targetIsGene)) {
-                                    edge.show();
-                                }
-                            });
-
-                            console.log(`Showed all gene nodes`);
-                        }
+                        console.log(`Showed all gene nodes`);
                     }
 
                     // Update button and state - set to hide mode when showing genes
@@ -359,17 +354,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     console.error("Error loading genes:", error);
                     showStatus(`Error loading genes: ${error.message}`, 'error');
                 });
-
         } else {
             // Remove gene sets
             const hasSelection = window.cy && window.cy.$(':selected').length > 0;
-
             if (hasSelection) {
                 // Hide only genes connected to selected nodes
                 const selectedNodes = window.cy.$(':selected').nodes();
                 const genesToHide = window.cy.collection();
                 const proteinsToHide = window.cy.collection();
-
                 selectedNodes.forEach(node => {
                     const connectedProts = node.connectedEdges().connectedNodes('.uniprot-node');
                     const connectedGenes = connectedProts.connectedEdges().connectedNodes('.ensembl-node');
@@ -381,7 +373,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 genesToHide.connectedEdges().remove();
                 proteinsToHide.remove();
                 proteinsToHide.connectedEdges().remove();
-
                 console.log(`Removed ${genesToHide.length} genes and ${proteinsToHide.length} proteins connected to selected nodes`);
             } else {
                 // Hide all genes
@@ -396,7 +387,6 @@ document.addEventListener("DOMContentLoaded", function () {
             window.resetNetworkLayout();
             window.genesVisible = false;
             $("#see_genes").html('<i class="fas fa-dna"></i> Get gene sets');
-
             setTimeout(() => {
                 if (window.populateGeneTable) {
                     window.populateGeneTable();
@@ -410,10 +400,8 @@ document.addEventListener("DOMContentLoaded", function () {
         if (action === 'show') {
             // Check if there are selected elements
             const hasSelection = window.cy && window.cy.$(':selected').length > 0;
-
             // Extract AOP URIs from either selected nodes or all nodes
             const aopUris = getAOPsFromNetwork(hasSelection);
-
             if (aopUris.length === 0) {
                 const scopeMessage = hasSelection ? "selected elements" : "network";
                 console.log(`No AOPs found in ${scopeMessage} for compound loading`);
@@ -421,10 +409,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 window.compoundsVisible = true;
                 return;
             }
-
             const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
             console.log(`Found ${aopUris.length} AOPs from ${scopeMessage} for compound loading:`, aopUris);
-
             // Call the load_and_show_compounds endpoint with the extracted AOPs
             fetch(`/load_and_show_compounds?aops=${encodeURIComponent(aopUris.join(' '))}`, {
                 method: 'GET'
@@ -445,52 +431,51 @@ document.addEventListener("DOMContentLoaded", function () {
                     const fontSlider = document.getElementById('font-size-slider');
                     const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
 
-                    if (data.compound_elements) {
-                        // Add only new compound elements
-                        data.compound_elements.forEach(element => {
-                            console.log(element.data);
-                            const elementId = element.data?.id;
-                            if (elementId && !window.cy.getElementById(elementId).length) {
-                                try {
-                                    window.cy.add(element);
-                                } catch (error) {
-                                    console.warn("Error adding compound element:", elementId, error.message);
-                                }
+                    // Add query to history table
+                    if (data.sparql_query && window.historyTableManager) {
+                        window.historyTableManager.addHistoryEntry('compound', 'AOP-Wiki RDF', data.sparql_query, null, data.compound_elements);
+                    }
+
+                    // Add only new compound elements
+                    data.compound_elements.forEach(element => {
+                        console.log(element.data);
+                        const elementId = element.data?.id;
+                        if (elementId && !window.cy.getElementById(elementId).length) {
+                            try {
+                                window.cy.add(element);
+                            } catch (error) {
+                                console.warn("Error adding compound element:", elementId, error.message);
+                            }
+                        }
+                    });
+
+                    // Show compounds based on selection
+                    if (hasSelection) {
+                        // Only show compounds connected to selected nodes
+                        const selectedNodes = window.cy.$(':selected').nodes();
+                        const compoundNodesToShow = window.cy.collection();
+                        selectedNodes.forEach(node => {
+                            const connectedCompounds = node.connectedEdges().connectedNodes('.chemical-node');
+                            compoundNodesToShow.merge(connectedCompounds);
+                        });
+                        compoundNodesToShow.show();
+                        compoundNodesToShow.connectedEdges().show();
+                        console.log(`Showed ${compoundNodesToShow.length} compounds connected to selected nodes`);
+                    } else {
+                        // Show all compounds
+                        window.cy.elements(".chemical-node").show();
+                        window.cy.edges().forEach(function (edge) {
+                            const source = edge.source();
+                            const target = edge.target();
+                            const sourceIsCompound = source.hasClass("chemical-node");
+                            const targetIsCompound = target.hasClass("chemical-node");
+                            if (source.visible() && target.visible() && (sourceIsCompound || targetIsCompound)) {
+                                edge.show();
                             }
                         });
-
-                        // Show compounds based on selection
-                        if (hasSelection) {
-                            // Only show compounds connected to selected nodes
-                            const selectedNodes = window.cy.$(':selected').nodes();
-                            const compoundNodesToShow = window.cy.collection();
-
-                            selectedNodes.forEach(node => {
-                                const connectedCompounds = node.connectedEdges().connectedNodes('.chemical-node');
-                                compoundNodesToShow.merge(connectedCompounds);
-                            });
-
-                            compoundNodesToShow.show();
-                            compoundNodesToShow.connectedEdges().show();
-
-                            console.log(`Showed ${compoundNodesToShow.length} compounds connected to selected nodes`);
-                        } else {
-                            // Show all compounds
-                            window.cy.elements(".chemical-node").show();
-                            window.cy.edges().forEach(function (edge) {
-                                const source = edge.source();
-                                const target = edge.target();
-                                const sourceIsCompound = source.hasClass("chemical-node");
-                                const targetIsCompound = target.hasClass("chemical-node");
-                                if (source.visible() && target.visible() && (sourceIsCompound || targetIsCompound)) {
-                                    edge.show();
-                                }
-                            });
-
-                            console.log(`Showed all compound nodes`);
-                            window.resetNetworkLayout();
-                        }
+                        console.log(`Showed all compound nodes`);
                     }
+                    window.resetNetworkLayout();
 
                     // Update both buttons when showing compounds
                     $("#toggle_compounds").text(" Remove chemical stressors");
@@ -511,25 +496,19 @@ document.addEventListener("DOMContentLoaded", function () {
                     console.error("Error loading compounds:", error);
                     showStatus(`Error loading compounds: ${error.message}`, 'error');
                 });
-            
-
         } else {
             // Remove compound sets
             const hasSelection = window.cy && window.cy.$(':selected').length > 0;
-
             if (hasSelection) {
                 // Hide only compounds connected to selected nodes
                 const selectedNodes = window.cy.$(':selected').nodes();
                 const compoundsToHide = window.cy.collection();
-
                 selectedNodes.forEach(node => {
                     const connectedCompounds = node.connectedEdges().connectedNodes('.chemical-node');
                     compoundsToHide.merge(connectedCompounds);
                 });
-
                 compoundsToHide.remove();
                 compoundsToHide.connectedEdges().remove();
-
                 console.log(`Removed ${compoundsToHide.length} compounds connected to selected nodes`);
             } else {
                 // Hide all compounds
@@ -545,7 +524,6 @@ document.addEventListener("DOMContentLoaded", function () {
             window.compoundsVisible = false;
             $("#toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
             $("#sidebar_toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
-
             setTimeout(() => {
                 updateCompoundTableFromNetwork();
             }, 100);
@@ -553,10 +531,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ===== CORE NETWORK FUNCTIONS =====
-
     function renderAOPNetwork(elements) {
         console.debug("Rendering AOP network with elements:", elements);
-
         const loadingOverlay = document.querySelector(".loading-overlay");
         if (loadingOverlay) {
             loadingOverlay.style.display = "none";
@@ -671,7 +647,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                 ]
             });
-
             console.debug("Cytoscape instance created with elements:", window.cy.elements());
 
             // Initialize positioning with correct font size from slider
@@ -683,7 +658,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
             setupEventHandlers();
             initializeModules();
-
         } catch (error) {
             console.error("Error creating Cytoscape instance:", error);
             initializeEmptyNetwork();
@@ -706,7 +680,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
             setupEventHandlers();
             initializeModules();
-
             // Show helpful message for standalone mode
             const loadingOverlay = document.querySelector(".loading-overlay");
             if (loadingOverlay) {
@@ -731,7 +704,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 loadingOverlay.style.flexDirection = "column";
                 loadingOverlay.style.justifyContent = "center";
             }
-
         } catch (error) {
             console.error("Error creating empty Cytoscape instance:", error);
         }
@@ -773,7 +745,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 200);
     }
 
-
     function setupEventHandlers() {
         // Initialize selection functionality
         initializeNetworkSelection();
@@ -787,10 +758,8 @@ document.addEventListener("DOMContentLoaded", function () {
         window.cy.on("add", "node", function (evt) {
             const node = evt.target;
             console.debug(`Node added: ${node.id()}`);
-
             // Auto-update tables based on node type
             autoUpdateTables(node, 'added');
-
             // Always use smooth animation when nodes are added
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
@@ -807,11 +776,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
             // Auto-update tables based on node type
             autoUpdateTables(node, 'removed');
-
             // Always use smooth animation when nodes are removed
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-
             // Small delay to allow the removal to complete, then animate
             setTimeout(() => {
                 positionNodes(window.cy, fontSizeMultiplier, true);
@@ -821,7 +788,6 @@ document.addEventListener("DOMContentLoaded", function () {
         window.cy.on("add", "edge", function (evt) {
             const edge = evt.target;
             console.debug(`Edge added: ${edge.id()}`);
-
             // Use debounced update for edge additions
             if (window.populateAopTable) {
                 window.populateAopTable(false); // false = debounced
@@ -830,7 +796,6 @@ document.addEventListener("DOMContentLoaded", function () {
             // Smooth animation for edge additions
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-
             setTimeout(() => {
                 positionNodes(window.cy, fontSizeMultiplier, true);
             }, 50);
@@ -844,11 +809,9 @@ document.addEventListener("DOMContentLoaded", function () {
             if (window.populateAopTable) {
                 window.populateAopTable(false); // false = debounced
             }
-
             // Smooth animation for edge removals
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-
             setTimeout(() => {
                 positionNodes(window.cy, fontSizeMultiplier, true);
             }, 50);
@@ -857,14 +820,11 @@ document.addEventListener("DOMContentLoaded", function () {
         window.cy.on("data", "node", function (evt) {
             const node = evt.target;
             console.debug(`Node data changed: ${node.id()}`);
-
             // Auto-update tables based on node type
             autoUpdateTables(node, 'updated');
-
             // Smooth animation for data changes that might affect layout
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-
             setTimeout(() => {
                 positionNodes(window.cy, fontSizeMultiplier, true);
             }, 50);
@@ -873,11 +833,12 @@ document.addEventListener("DOMContentLoaded", function () {
         // Add batch operation handler for multiple simultaneous changes
         window.cy.on("batch", function (evt) {
             console.debug("Batch operation completed");
-
+            if (window.populateAopTable) {
+                window.populateAopTable(false); // false = debounced
+            }
             // Smooth animation after batch operations
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-
             setTimeout(() => {
                 positionNodes(window.cy, fontSizeMultiplier, true);
             }, 100);
@@ -903,7 +864,6 @@ document.addEventListener("DOMContentLoaded", function () {
         // Handle single click selection
         window.cy.on('tap', function (evt) {
             const target = evt.target;
-
             // If clicking on background, clear selection unless shift is held
             if (target === window.cy) {
                 if (!evt.originalEvent.shiftKey) {
@@ -916,7 +876,6 @@ document.addEventListener("DOMContentLoaded", function () {
             if (target.isNode() || target.isEdge()) {
                 evt.stopPropagation();
                 evt.preventDefault(); // Prevent any default URL navigation
-
                 if (evt.originalEvent.shiftKey) {
                     // Shift+click: toggle selection
                     if (target.selected()) {
@@ -977,13 +936,12 @@ document.addEventListener("DOMContentLoaded", function () {
                 })
                 .update();
         }
-    } // TODO add
+    }
 
     // Selection management functions
     function updateSelectionControls() {
         const selectionControls = document.getElementById('selection-controls');
         const selectionInfo = document.getElementById('selection-info');
-
         if (!selectionControls || !selectionInfo) {
             // Create selection controls if they don't exist
             createSelectionControls();
@@ -993,7 +951,6 @@ document.addEventListener("DOMContentLoaded", function () {
         if (window.cy) {
             const selected = window.cy.$(':selected');
             const tableSelected = window.aopTableManager ? window.aopTableManager.selectedRows.size : 0;
-
             if (selected.length > 0 || tableSelected > 0) {
                 selectionControls.style.display = 'flex';
                 selectionControls.style.visibility = 'visible';
@@ -1002,7 +959,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 } else {
                     selectionInfo.textContent = `${selected.length} selected`;
                 }
-
                 // Add visual highlighting to selected network elements
                 highlightSelectedElements(selected);
             } else {
@@ -1019,7 +975,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Find a suitable container or create one
         let container = document.querySelector('.main-content') || document.querySelector('#cy').parentElement;
-
         const selectionControlsHtml = `
             <div id="selection-controls" style="
                 position: fixed;
@@ -1061,7 +1016,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 </button>
             </div>
         `;
-
         container.insertAdjacentHTML('beforeend', selectionControlsHtml);
         console.log('Selection controls created');
     }
@@ -1101,7 +1055,6 @@ document.addEventListener("DOMContentLoaded", function () {
             data: node.data(),
             classes: node.classes()
         }));
-
         const deletedEdges = selected.edges().map(edge => ({
             id: edge.id(),
             data: edge.data()
@@ -1127,7 +1080,6 @@ document.addEventListener("DOMContentLoaded", function () {
         setTimeout(() => {
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-
             if (window.positionNodes) {
                 window.positionNodes(window.cy, fontSizeMultiplier, true);
             }
@@ -1139,12 +1091,10 @@ document.addEventListener("DOMContentLoaded", function () {
     function clearSelection() {
         if (window.cy) {
             window.cy.$(':selected').unselect();
-
             // Also clear table selection
             if (window.aopTableManager) {
                 window.aopTableManager.clearTableSelection();
             }
-
             updateSelectionControls();
         }
     }
@@ -1155,17 +1105,14 @@ document.addEventListener("DOMContentLoaded", function () {
             node.classes.includes("chemical-node") ||
             node.data.type === "chemical"
         );
-
         if (deletedCompounds.length > 0) {
             console.log(`Updating compound table after deleting ${deletedCompounds.length} compounds`);
-
             // Remove from compound_data if it exists
             deletedCompounds.forEach(compound => {
                 if (window.compound_data && window.compound_data[compound.id]) {
                     delete window.compound_data[compound.id];
                 }
             });
-
             // Update compound table
             setTimeout(() => {
                 updateCompoundTableFromNetwork();
@@ -1179,10 +1126,8 @@ document.addEventListener("DOMContentLoaded", function () {
             node.data.type === "uniprot" ||
             node.data.type === "ensembl"
         );
-
         if (deletedGenes.length > 0) {
             console.log(`Updating gene table after deleting ${deletedGenes.length} genes`);
-
             setTimeout(() => {
                 updateGeneTable();
             }, 100);
@@ -1205,12 +1150,10 @@ document.addEventListener("DOMContentLoaded", function () {
         const nodeId = nodeData.id;
 
         console.log(`Network change detected: ${action} - ${nodeId}`);
-
         // Check if it's a gene node (Ensembl)
         if (nodeClasses.includes("ensembl-node") ||
             nodeType === "ensembl" ||
             nodeId.startsWith("ensembl_")) {
-
             console.log(`Gene node ${action}: ${nodeData.label || nodeId}`);
             updateGeneTable();
         }
@@ -1218,7 +1161,6 @@ document.addEventListener("DOMContentLoaded", function () {
         // Check if it's a compound node (Chemical)
         if (nodeClasses.includes("chemical-node") ||
             nodeType === "chemical") {
-
             console.log(`Compound node ${action}: ${nodeData.label || nodeId}`);
             updateCompoundTableFromNetwork();
         }
@@ -1289,15 +1231,12 @@ document.addEventListener("DOMContentLoaded", function () {
             e.preventDefault();
             e.stopPropagation();
             console.log('Group by AOP button clicked');
-
             if (window.aopTableManager) {
                 window.aopTableManager.groupByAllAops();
-                
                 // Ensure network layout is updated after grouping
                 setTimeout(() => {
                     const fontSlider = document.getElementById('font-size-slider');
                     const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
-                    
                     if (window.positionNodes) {
                         window.positionNodes(window.cy, fontSizeMultiplier, true);
                     }
@@ -1324,7 +1263,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 window.toggleCompounds();
             }
         });
-
+                
         // Setup compound table button handler
         $("#get-compounds-table-btn").on("click", function (e) {
             e.preventDefault();
@@ -1340,7 +1279,6 @@ document.addEventListener("DOMContentLoaded", function () {
             e.stopPropagation();
             toggleGenes();
         });
-
         $('#get-genes-table-btn').on('click', function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -1367,7 +1305,6 @@ document.addEventListener("DOMContentLoaded", function () {
             e.stopPropagation();
             toggleGOProcesses();
         });
-
         $("#show_go_hierarchy").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -1380,13 +1317,11 @@ document.addEventListener("DOMContentLoaded", function () {
             e.stopPropagation();
             queryOpenTargetsCompounds();
         });
-
         $("#opentargets_query_targets").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
             queryOpenTargetsTargets();
         });
-
         $("#opentargets_query_diseases").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
@@ -1425,12 +1360,10 @@ document.addEventListener("DOMContentLoaded", function () {
             if (window.cy) {
                 // Resize first
                 window.cy.resize();
-
                 // Then apply layout with animation
                 setTimeout(() => {
                     const fontSlider = document.getElementById('font-size-slider');
                     const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5; // Use 0.5 as default
-
                     // Use animated positioning
                     if (window.positionNodes) {
                         window.positionNodes(window.cy, fontSizeMultiplier, true);
@@ -1441,7 +1374,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // ===== LAYOUT AND DOWNLOAD FUNCTIONS =====
-
     function toggleBoundingBoxes() {
         // Legacy function - now redirects to table manager
         if (window.aopTableManager) {
@@ -1518,6 +1450,7 @@ document.addEventListener("DOMContentLoaded", function () {
         return updateCompoundTableFromNetwork();
     };
 
+
     // ===== GO PROCESS FUNCTIONS =====
 
     function toggleGOProcesses() {
@@ -1566,7 +1499,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 $("#toggle_go_processes").text("Hide GO Processes");
 
                 showGOProcessStatus(`Added ${data.processes.length} GO processes to network`, "success");
-
                 if (window.positionNodes) {
                     window.positionNodes(window.cy);
                 }
@@ -1599,10 +1531,8 @@ document.addEventListener("DOMContentLoaded", function () {
                     showGOProcessStatus(`Error: ${data.error}`, "error");
                     return;
                 }
-
                 const nodes = data.processes.nodes || data.processes;
                 const edges = data.processes.edges || [];
-
                 if (!nodes || nodes.length === 0) {
                     showGOProcessStatus("No GO process hierarchy found for current Key Events", "warning");
                     return;
@@ -1642,7 +1572,6 @@ document.addEventListener("DOMContentLoaded", function () {
                 $("#toggle_go_processes").text("Hide GO Processes");
 
                 showGOProcessStatus(`Added ${nodes.length} GO processes and ${edges.length} hierarchy relationships`, "success");
-
                 if (window.positionNodes) {
                     window.positionNodes(window.cy);
                 }
@@ -1748,7 +1677,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
 
                     showOpenTargetsStatus(`Added ${data.compounds.length} compounds from OpenTargets`, "success");
-
                     if (window.positionNodes) {
                         window.positionNodes(window.cy);
                     }
@@ -1806,7 +1734,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     });
 
                     showOpenTargetsStatus(`Added ${data.targets.length} targets from OpenTargets`, "success");
-
                     if (window.positionNodes) {
                         window.positionNodes(window.cy);
                     }
@@ -1899,6 +1826,7 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>
         `;
 
+        // Auto-clear success/info messages after 5 seconds
         if (type === 'success' || type === 'info') {
             setTimeout(() => {
                 if (statusDiv.innerHTML.includes(message)) {
@@ -2080,6 +2008,7 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>
         `;
 
+        // Auto-clear success/info messages after 5 seconds
         if (type === 'success' || type === 'info') {
             setTimeout(() => {
                 if (statusDiv.innerHTML.includes(message)) {

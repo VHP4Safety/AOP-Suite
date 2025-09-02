@@ -134,6 +134,11 @@ class AOPNetworkDataManager {
                 throw new Error(result.error);
             }
 
+            // Add query to history table
+            if (result.success && result.sparql_query && window.historyTableManager && result.elements && result.elements.length > 0) {
+                window.historyTableManager.addHistoryEntry('aop_network', 'AOP-Wiki RDF', result.sparql_query, null, result.elements, );
+            }
+
             if (result.success && result.elements && result.elements.length > 0) {
                 console.log(`Successfully received ${result.elements_count} elements`);
 
