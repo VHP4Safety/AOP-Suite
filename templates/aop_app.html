@@ -49,7 +49,7 @@
                             <div class="network-stat">
                                 <i class="fas fa-link"></i>
                                 <span class="network-stat-value" id="edge-count">0</span>
-                                <span>edges        </span>
+                                <span>edges</span>
                             </div>
                         </div>
                         <div class="network-controls">
@@ -97,6 +97,9 @@
                         </button>
                         <button class="bottom-tab-btn" data-table="genes">
                             <i class="fas fa-dna"></i> Genes
+                        </button>
+                        <button class="bottom-tab-btn" data-table="history">
+                            <i class="fas fa-history"></i> Query History
                         </button>
                     </div>
                 </div>
@@ -172,6 +175,15 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- History Table Panel -->
+                    <div class="table-panel history-table-panel" id="history-table-container-panel">
+                        <div class="panel-content">
+                            <div id="history-table-container" class="table-wrapper">
+                                <!-- History table will be dynamically created by HistoryTableManager -->
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -185,7 +197,7 @@
                     </button>
                     <button class="workspace-mode-btn" data-mode="enhance">
                         <i class="fas fa-magic"></i> Enrich network
-
+                    </button>
                 </div>
             </div>
 
@@ -218,12 +230,12 @@
                                     <label for="query-values">AOP Identifiers or Names:</label>
                                     <textarea id="query-values" class="form-control" rows="4"
                                         placeholder="Search by AOP name or enter identifiers (one per line)&#10;Examples:&#10;liver fibrosis&#10;1&#10;aop:2&#10;https://identifiers.org/aop/3"></textarea>
-                                <button id="add-aop-data" class="btn btn-primary" type="button">
-                                    <i class="fas fa-plus"></i> Add to Network
-                                </button>
-                                <div id="aop-data-status" class="mt-2"></div>
+                                    <button id="add-aop-data" class="btn btn-primary" type="button">
+                                        <i class="fas fa-plus"></i> Add to Network
+                                    </button>
+                                    <div id="aop-data-status" class="mt-2"></div>
                                 </div>
-                                <!-- Genes  and compound cards -->
+                                <!-- Genes and compound cards -->
                                 <div class="querygc-card" id="genes-compound-card">   
                                     <h4 class="enhance-card-title"> Genes and Compounds</h4>                           
                                     <button id="see_genes" class="btn btn-primary btn-sm w-100" type="button">
@@ -233,6 +245,7 @@
                                         <i class="fas fa-flask"></i>  Get chemical stressors for the network
                                     </button>
                                 </div>
+                            </div>
                         </div>
                     </div>
 
@@ -318,7 +331,7 @@
                         </div>
                     </div>
                 </div>
-            </div>
+
                 <!-- Enhance Mode -->
                 <div class="workspace-mode enhance-mode" id="enhance-mode">
                     <div class="mode-status info">
@@ -486,6 +499,36 @@
     </div>
 </div>
 
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="delete-confirmation-modal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="fas fa-exclamation-triangle text-warning"></i> Confirm Deletion
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="delete-message">Are you sure you want to delete the selected element(s)?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle"></i> This action cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-btn">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     // Global variables
     let compound_data = {};
@@ -500,14 +543,15 @@
     // Make sure cy is available globally from the start
     window.cy = null;
 
-        // Update activity display
-        function updateActivity() {
-            const value = document.getElementById('threshold_pchembl').value;
-            const activityDisplay = document.getElementById('activity_display');
-            if (activityDisplay) {
-                activityDisplay.textContent = `-${value}`;
-            }
-        }            
+    // Update activity display
+    function updateActivity() {
+        const value = document.getElementById('threshold_pchembl').value;
+        const activityDisplay = document.getElementById('activity_display');
+        if (activityDisplay) {
+            activityDisplay.textContent = `-${value}`;
+        }
+    }
+
     // Selection management functions
     function updateSelectionControls() {
         const selectionControls = document.getElementById('selection-controls');
@@ -579,10 +623,26 @@
     function deleteSelectedElements() {
         if (!window.cy || selectedElements.length === 0) return;
 
-        const elementsToRemove = window.cy.getElementById(selectedElements);
+        // Update modal message with count
+        const deleteMessage = document.getElementById('delete-message');
+        const deleteModal = document.getElementById('delete-confirmation-modal');
+        const confirmButton = document.getElementById('confirm-delete-btn');
         
-        // Confirm deletion
-        if (confirm(`Are you sure you want to delete ${selectedElements.length} selected element(s)?`)) {
+        deleteMessage.textContent = `Are you sure you want to delete ${selectedElements.length} selected element(s)?`;
+        
+        // Show modal
+        if (typeof $ !== 'undefined' && $.fn.modal) {
+            $('#delete-confirmation-modal').modal('show');
+        } else {
+            // Fallback for non-Bootstrap environments
+            deleteModal.style.display = 'block';
+            deleteModal.classList.add('show');
+        }
+        
+        // Set up one-time event listener for confirmation
+        const handleConfirm = function() {
+            const elementsToRemove = window.cy.getElementById(selectedElements);
+            
             // Remove elements from the network
             elementsToRemove.remove();
             
@@ -597,7 +657,21 @@
             if (window.updateTables) {
                 window.updateTables();
             }
-        }
+            
+            // Hide modal
+            if (typeof $ !== 'undefined' && $.fn.modal) {
+                $('#delete-confirmation-modal').modal('hide');
+            } else {
+                deleteModal.style.display = 'none';
+                deleteModal.classList.remove('show');
+            }
+            
+            // Remove this event listener
+            confirmButton.removeEventListener('click', handleConfirm);
+        };
+        
+        // Add event listener for this deletion
+        confirmButton.addEventListener('click', handleConfirm);
     }
 
     function clearSelection() {
@@ -944,6 +1018,10 @@
             toggleTablePanel('gene-table-panel');
         });
         
+        document.getElementById('toggle-history-table')?.addEventListener('click', function() {
+            toggleTablePanel('history-table-panel');
+        });
+
         // Initial table height setup
         setTimeout(updateTableContainerHeights, 100);
     }
@@ -974,13 +1052,7 @@
         const thresholdInput = document.getElementById('threshold_pchembl');
         if (thresholdInput) {
             thresholdInput.addEventListener('input', updateActivity);
-            updateActivity();
         }
-
-        // Initialize resizing
-        initializeResizing();
-
-        // Initialize selection handlers
         initializeSelectionHandlers();
 
         // Bottom panel tab buttons
@@ -1045,7 +1117,7 @@
             updateNetworkStats();
             window.cy.on('add remove', updateNetworkStats);
         }
-        
+
         // Initialize network selection when cy is ready
         if (window.cy) {
             initializeNetworkSelection();
@@ -1062,7 +1134,7 @@
                 }
             }, 100);
         }
-        
+
         // Initialize table heights
         setTimeout(updateTableContainerHeights, 200);
     });
@@ -1100,18 +1172,18 @@
             const ensemblId = $(this).data('ensembl-id');
             
             if (!geneSymbol) return;
-            
+
             // Remove previous highlights
             $('#gene_table tbody tr').removeClass('table-success');
-            
+
             // Highlight clicked row
             $(this).addClass('table-success');
-            
+
             // Highlight corresponding nodes in the network
             if (window.cy) {
                 // Remove previous highlights
                 window.cy.elements().removeClass('highlighted');
-                
+
                 // Find and highlight gene nodes
                 const ensemblNode = window.cy.getElementById(ensemblId);
                 const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
@@ -1125,16 +1197,15 @@
                 if (uniprotNode.length > 0) {
                     uniprotNode.addClass('highlighted');
                 }
-                
+
                 // Also highlight connecting edges
                 const connectedEdges = ensemblNode.connectedEdges().union(uniprotNode.connectedEdges());
                 connectedEdges.addClass('highlighted');
             }
-            
+
             console.log(`Clicked gene: ${geneSymbol}, UniProt: ${uniprotId}`);
         });
     }
-
 
     // Also reinitialize handlers when gene table is updated
     window.populateGeneTable = function () {
@@ -1156,7 +1227,7 @@
             if (window.geneTableManager && window.geneTableManager.setupFilterInput) {
                 window.geneTableManager.setupFilterInput();
             }
-            
+
             // Initialize compound table filter if not already done  
             if (window.compoundTableManager && window.compoundTableManager.setupFilterInput) {
                 window.compoundTableManager.setupFilterInput();
@@ -1166,6 +1237,7 @@
             if (window.populateGeneTable) {
                 window.populateGeneTable();
             }
+
             if (window.populateCompoundTable) {
                 window.populateCompoundTable();
             }
@@ -1189,6 +1261,28 @@
             window.toggleCompounds();
         }
     });
+
+    // Initialize table managers
+    if (typeof CompoundTableManager !== 'undefined') {
+        window.compoundTableManager = new CompoundTableManager();
+        console.log('Compound Table Manager initialized');
+    }
+
+    if (typeof GeneTableManager !== 'undefined') {
+        window.geneTableManager = new GeneTableManager();
+        console.log('Gene Table Manager initialized');
+    }
+
+    if (typeof AOPTableManager !== 'undefined') {
+        window.aopTableManager = new AOPTableManager();
+        console.log('AOP Table Manager initialized');
+    }
+
+    // Initialize History Table Manager
+    if (typeof HistoryTableManager !== 'undefined') {
+        window.historyTableManager = new HistoryTableManager();
+        console.log('History Table Manager initialized');
+    }
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
