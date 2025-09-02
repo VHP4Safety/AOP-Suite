@@ -33,11 +33,11 @@ class AOPQueryService:
         """Query AOP network data and return structured model"""
         try:
             # Build and execute SPARQL query
-            sparql_query = self._build_aop_sparql_query(query_type, values)
-            if not sparql_query:
+            network_query = self._build_aop_sparql_query(query_type, values)
+            if not network_query:
                 raise AOPDataError(f"Invalid query type: {query_type}")
 
-            sparql_results = self._execute_sparql_query(sparql_query)
+            sparql_results = self._execute_sparql_query(network_query)
 
             # Build network from results using the data model
             builder = AOPNetworkBuilder()
@@ -47,7 +47,7 @@ class AOPQueryService:
             network = builder.build()
             logger.info(f"Built AOP network: {network.get_summary()}")
 
-            return network
+            return network, network_query
 
         except Exception as e:
             logger.error(f"Failed to query AOP network: {e}")
@@ -75,7 +75,7 @@ class AOPQueryService:
             updated_network = builder.build()
             logger.info(f"Added gene associations: {len(updated_network.gene_associations)} genes")
 
-            return updated_network
+            return updated_network, gene_query
 
         except Exception as e:
             logger.error(f"Failed to query genes for network: {e}")
@@ -104,7 +104,7 @@ class AOPQueryService:
             updated_network = builder.build()
             logger.info(f"Added compound associations: {len(updated_network.compound_associations)} compounds")
 
-            return updated_network
+            return updated_network, compound_query
 
         except Exception as e:
             logger.error(f"Failed to query compounds for network: {e}")
@@ -228,112 +228,3 @@ WHERE {
 
 # Global service instance
 aop_query_service = AOPQueryService()
-
-# Public API functions that use the data model
-def get_aop_network_data(query_type: str, values: str) -> Dict[str, Any]:
-    """Get AOP network data using the data model"""
-    try:
-        network = aop_query_service.query_aop_network(query_type, values)
-        summary = network.get_summary()
-        
-        response_data = {
-            "success": True,
-            "elements": network.to_cytoscape_elements(),
-            "elements_count": len(network.to_cytoscape_elements()),
-            "report": summary,
-        }
-        
-        # Generate warnings if incomplete
-        warnings = []
-        if summary.get("mie_count", 0) == 0:
-            warnings.append("No Molecular Initiating Events (MIEs) found")
-        if summary.get("ao_count", 0) == 0:
-            warnings.append("No Adverse Outcomes (AOs) found")
-        if summary.get("ker_count", 0) == 0:
-            if summary.get("mie_count", 0) > 0 or summary.get("ao_count", 0) > 0:
-                warnings.append("No Key Event Relationships (KERs) found")
-        
-        if warnings:
-            response_data["warning"] = {
-                "type": "incomplete_aop_data",
-                "message": f"Warnings: {'; '.join(warnings)}",
-                "details": f"Found: {summary.get('mie_count', 0)} MIEs, {summary.get('ao_count', 0)} AOs, {summary.get('ke_count', 0)} intermediate KEs, {summary.get('ker_count', 0)} KERs",
-                "specific_issues": warnings,
-            }
-        
-        return response_data
-        
-    except Exception as e:
-        logger.error(f"AOP network query failed: {e}")
-        return {"error": str(e)}, 500
-
-def load_and_show_genes(kes: str) -> List[Dict[str, Any]]:
-    """Load genes for KEs using the data model"""
-    try:
-        # Create temporary network with KEs
-        temp_network = AOPNetwork()
-        ke_uris = [uri.strip('<>') for uri in kes.split()]
-        
-        for ke_uri in ke_uris:
-            ke_id = ke_uri.split("/")[-1] if "/" in ke_uri else ke_uri
-            key_event = AOPKeyEvent(
-                ke_id=ke_id,
-                uri=ke_uri,
-                title="Temporary KE",
-                ke_type=NodeType.KE
-            )
-            temp_network.add_key_event(key_event)
-        
-        # Query genes using the data model
-        enriched_network = aop_query_service.query_genes_for_network(temp_network)
-        
-        # Convert to Cytoscape elements
-        cytoscape_elements = []
-        for association in enriched_network.gene_associations:
-            cytoscape_elements.extend(association.to_cytoscape_elements())
-        
-        logger.info(f"Generated {len(cytoscape_elements)} gene elements using data model")
-        return cytoscape_elements
-        
-    except Exception as e:
-        logger.error(f"Gene query failed: {e}")
-        return []
-
-def load_and_show_compounds(aops: str) -> List[Dict[str, Any]]:
-    """Load compounds for AOPs using the data model"""
-    try:
-        # Create temporary network with AOPs
-        temp_network = AOPNetwork()
-        aop_uris = [uri.strip('<>') for uri in aops.split()]
-        
-        for aop_uri in aop_uris:
-            aop_id = aop_uri.split("/")[-1] if "/" in aop_uri else aop_uri
-            # Add basic AOP info to network
-            temp_network.aop_info[aop_uri] = {
-                "aop_id": aop_id,
-                "title": "Temporary AOP"
-            }
-        
-        # Query compounds using the data model
-        enriched_network = aop_query_service.query_compounds_for_network(temp_network)
-        
-        # Convert to Cytoscape elements
-        cytoscape_elements = []
-        for association in enriched_network.compound_associations:
-            cytoscape_elements.extend(association.to_cytoscape_elements())
-        
-        logger.info(f"Generated {len(cytoscape_elements)} compound elements using data model")
-        return cytoscape_elements
-        
-    except Exception as e:
-        logger.error(f"Compound query failed: {e}")
-        return []
-
-def populate_aop_table(cy_elements):
-    """Populate AOP table using data model - should be called via service layer"""
-    logger.warning("populate_aop_table called directly - should use service layer")
-    
-    # Import here to avoid circular dependency
-    from backend.service.aop_network_service import AOPTableBuilder
-    builder = AOPTableBuilder(cy_elements)
-    return builder.build_aop_table()

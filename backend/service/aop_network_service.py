@@ -46,7 +46,7 @@ class AOPNetworkService:
             logger.info(f"Building AOP network: {query_type}, {len(values.split())} values")
             
             # Use the AOP data model via the query service
-            network = aop_query_service.query_aop_network(query_type, values)
+            network, query = aop_query_service.query_aop_network(query_type, values)
             self.current_network = network
             
             # Get summary and elements
@@ -58,6 +58,7 @@ class AOPNetworkService:
                 "elements": elements,
                 "elements_count": len(elements),
                 "report": summary,
+                "sparql_query": query
             }
             
             # Generate warnings if incomplete
@@ -110,7 +111,7 @@ class AOPNetworkService:
                 temp_network.add_key_event(key_event)
             
             # Query genes for this network
-            enriched_network = aop_query_service.query_genes_for_network(temp_network)
+            enriched_network, query = aop_query_service.query_genes_for_network(temp_network)
             
             # Convert gene associations to Cytoscape elements
             gene_elements = []
@@ -118,7 +119,7 @@ class AOPNetworkService:
                 gene_elements.extend(association.to_cytoscape_elements())
 
             logger.info(f"Retrieved {len(gene_elements)} gene elements using data model")
-            return {"gene_elements": gene_elements}, 200
+            return {"gene_elements": gene_elements, "sparql_query": query}, 200
             
         except Exception as e:
             logger.error(f"Error in load_and_show_genes: {e}")
@@ -217,7 +218,7 @@ class AOPNetworkService:
                 temp_network.aop_info[aop_uri] = aop_info
             
             # Query compounds for this network
-            enriched_network = aop_query_service.query_compounds_for_network(temp_network)
+            enriched_network, query = aop_query_service.query_compounds_for_network(temp_network)
             
             # Convert compound associations to Cytoscape elements
             compound_elements = []
@@ -225,7 +226,7 @@ class AOPNetworkService:
                 compound_elements.extend(association.to_cytoscape_elements())
 
             logger.info(f"Retrieved {len(compound_elements)} compound elements")
-            return {"compound_elements": compound_elements}, 200
+            return {"compound_elements": compound_elements, "sparql_query": query}, 200
             
         except Exception as e:
             logger.error(f"Error in load_and_show_compounds: {e}")
