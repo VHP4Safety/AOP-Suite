@@ -2489,10 +2489,7 @@ window.populateCompoundTable = function () {
     return Promise.resolve();
 };
 
-// Legacy compatibility functions
-window.updateGeneTable = window.populateGeneTable;
-window.updateCompoundTableFromNetwork = window.populateCompoundTable;
-
+// Document ready initialization
 $(document).ready(function() {
     if (!window.aopTableManager) {
         window.aopTableManager = new AOPTableManager();

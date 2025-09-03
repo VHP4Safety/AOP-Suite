@@ -23,118 +23,6 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log(`[${type.toUpperCase()}] ${message}`);
     }
 
-    // ===== TABLE MANAGEMENT FUNCTIONS =====
-    
-    // Simplified compound table function - delegates to CompoundTableManager
-    function updateCompoundTableFromNetwork() {
-        if (window.compoundTableManager) {
-            return window.compoundTableManager.performTableUpdate();
-        } else {
-            console.warn("Compound Table Manager not available");
-            return Promise.resolve();
-        }
-    }
-
-    // Setup click handlers for compound table cells
-    function setupCompoundCellClickHandlers() {
-        $("#compound_table tbody tr").off("click").on("click", function (e) {
-            e.preventDefault();
-            const compoundId = $(this).data("compound-id");
-            const smiles = $(this).data("smiles");
-
-            if (window.cy && compoundId) {
-                // Clear previous highlights
-                window.cy.elements().removeClass('highlighted');
-
-                // Try to find and highlight the compound node in the network
-                const compoundNode = window.cy.getElementById(compoundId);
-                if (compoundNode.length > 0) {
-                    compoundNode.addClass('highlighted');
-
-                    // Center on the compound with animation
-                    window.cy.animate({
-                        center: { eles: compoundNode },
-                        zoom: Math.max(window.cy.zoom(), 1.5)
-                    }, {
-                        duration: 500
-                    });
-
-                    // Remove highlight after a few seconds
-                    setTimeout(() => {
-                        compoundNode.removeClass('highlighted');
-                    }, 3000);
-                }
-            }
-
-            console.log(`Compound clicked: ${compoundId}`);
-        });
-    }
-
-    // Setup click handlers for gene table cells
-    function setupGeneCellClickHandlers() {
-        // Remove any existing handlers to prevent duplicates
-        $(document).off('click', '.gene-cell, .protein-cell');
-
-        // Add click handlers for gene and protein cells (but not on links)
-        $(document).on('click', '.gene-cell, .protein-cell', function (e) {
-            // Don't trigger if clicking on a link
-            if ($(e.target).is('a') || $(e.target).closest('a').length) {
-                return;
-            }
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            const nodeId = $(this).data('node-id');
-            if (!nodeId || nodeId === 'N/A') return;
-
-            // Use the same highlighting function as AOP table
-            if (window.aopTableManager && window.aopTableManager.highlightNodeInNetwork) {
-                window.aopTableManager.highlightNodeInNetwork(nodeId);
-            } else {
-                // Fallback implementation
-                highlightGeneNodeInNetwork(nodeId);
-            }
-
-            // Add visual feedback to the clicked cell
-            $('.gene-cell, .protein-cell').removeClass('highlighted-cell');
-            $(this).addClass('highlighted-cell');
-
-            // Remove highlight after a few seconds
-            setTimeout(() => {
-                $(this).removeClass('highlighted-cell');
-            }, 3000);
-
-            console.log(`Clicked on gene/protein cell, focusing on node: ${nodeId}`);
-        });
-    }
-
-    function highlightGeneNodeInNetwork(nodeId) {
-        if (!window.cy || !nodeId) return;
-
-        // Clear previous highlights
-        window.cy.elements().removeClass('highlighted');
-
-        // Find and highlight the node
-        const targetNode = window.cy.getElementById(nodeId);
-        if (targetNode.length > 0) {
-            targetNode.addClass('highlighted');
-
-            // Center on the node with animation
-            window.cy.animate({
-                center: { eles: targetNode },
-                zoom: Math.max(window.cy.zoom(), 1.5)
-            }, {
-                duration: 500
-            });
-
-            // Remove highlight after a few seconds
-            setTimeout(() => {
-                targetNode.removeClass('highlighted');
-            }, 3000);
-        }
-    }
-
     // ===== NETWORK DATA EXTRACTION FUNCTIONS =====
 
     // Helper function to get Key Events from network (either selected or all)
@@ -484,7 +372,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Update compound table
                     setTimeout(() => {
-                        updateCompoundTableFromNetwork();
+                        populateCompoundTable();
                     }, 100);
 
                     // Layout update
@@ -525,7 +413,7 @@ document.addEventListener("DOMContentLoaded", function () {
             $("#toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
             $("#sidebar_toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
             setTimeout(() => {
-                updateCompoundTableFromNetwork();
+                populateCompoundTable();
             }, 100);
         }
     }
@@ -1115,7 +1003,7 @@ document.addEventListener("DOMContentLoaded", function () {
             });
             // Update compound table
             setTimeout(() => {
-                updateCompoundTableFromNetwork();
+                populateCompoundTable();
             }, 100);
         }
 
@@ -1129,7 +1017,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (deletedGenes.length > 0) {
             console.log(`Updating gene table after deleting ${deletedGenes.length} genes`);
             setTimeout(() => {
-                updateGeneTable();
+                window.populateGeneTable();
             }, 100);
         }
 
@@ -1155,14 +1043,14 @@ document.addEventListener("DOMContentLoaded", function () {
             nodeType === "ensembl" ||
             nodeId.startsWith("ensembl_")) {
             console.log(`Gene node ${action}: ${nodeData.label || nodeId}`);
-            updateGeneTable();
+            populateGeneTable();
         }
 
         // Check if it's a compound node (Chemical)
         if (nodeClasses.includes("chemical-node") ||
             nodeType === "chemical") {
             console.log(`Compound node ${action}: ${nodeData.label || nodeId}`);
-            updateCompoundTableFromNetwork();
+            populateCompoundTable();
         }
 
         // Use debounced AOP table update for network changes
@@ -1443,13 +1331,6 @@ document.addEventListener("DOMContentLoaded", function () {
     window.toggleCompounds = toggleCompounds;
     window.toggleGenes = toggleGenes;
     window.resetNetworkLayout = resetNetworkLayout;
-    window.populateGeneTable = function () {
-        updateGeneTable();
-    };
-    window.populateCompoundTable = function () {
-        return updateCompoundTableFromNetwork();
-    };
-
 
     // ===== GO PROCESS FUNCTIONS =====
 
@@ -1683,7 +1564,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Update compound table
                     setTimeout(() => {
-                        updateCompoundTableFromNetwork();
+                        populateCompoundTable();
                     }, 200);
                 } else {
                     showOpenTargetsStatus("No compound data found in OpenTargets", "warning");
@@ -1740,7 +1621,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Update gene table
                     setTimeout(() => {
-                        updateGeneTable();
+                        populateGeneTable();
                     }, 200);
                 } else {
                     showOpenTargetsStatus("No target data found in OpenTargets", "warning");
@@ -1875,7 +1756,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Update gene table to show new expression data
                     setTimeout(() => {
-                        updateGeneTable();
+                        populateGeneTable();
                     }, 200);
                 } else {
                     showBgeeStatus("No expression data found in Bgee", "warning");
