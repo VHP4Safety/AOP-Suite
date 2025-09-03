@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.cy = null;
     window.genesVisible = false;
     window.compoundsVisible = false;
+    window.componentsVisible = false;
     window.goProcessesVisible = false;
     window.fetched_preds = false;
     window.compound_data = {};
@@ -414,6 +415,153 @@ document.addEventListener("DOMContentLoaded", function () {
             $("#sidebar_toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
             setTimeout(() => {
                 populateCompoundTable();
+            }, 100);
+        }
+    }
+
+    function toggleComponents() {
+        const action = window.componentsVisible ? 'hide' : 'show';
+        if (action === 'show') {
+            // Check if there are selected elements
+            const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+            // Extract Key Event URIs from either selected nodes or all nodes
+            const keyEventUris = getKeyEventsFromNetwork(hasSelection);
+            if (keyEventUris.length === 0) {
+                const scopeMessage = hasSelection ? "selected elements" : "network";
+                console.log(`No Key Events found in ${scopeMessage} for component loading`);
+                $("#get-components-table-btn").text("Remove components");
+                window.componentsVisible = true;
+                return;
+            }
+            const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
+            console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for component loading:`, keyEventUris);
+            
+            // Call the load_and_show_components endpoint with the extracted KEs
+            fetch(`/load_and_show_components?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
+                method: 'GET'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        console.error("Component loading error:", data.error);
+                        showStatus(`Error loading components: ${data.error}`, 'error');
+                        return;
+                    }
+
+                    const fontSlider = document.getElementById('font-size-slider');
+                    const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+
+                    // Add query to history table
+                    if (data.sparql_query && window.historyTableManager) {
+                        window.historyTableManager.addHistoryEntry(
+                            'Components Query',
+                            'AOP-Wiki SPARQL',
+                            data.sparql_query,
+                            null,
+                            data.component_elements
+                        );
+                    }
+
+                    // Add component elements to the network
+                    if (data.component_elements && data.component_elements.length > 0) {
+                        window.cy.batch(() => {
+                            data.component_elements.forEach(element => {
+                                // Check if element already exists
+                                if (!window.cy.getElementById(element.data.id).length) {
+                                    window.cy.add(element);
+                                }
+                            });
+                        });
+
+                        console.log(`Added ${data.component_elements.length} component elements to network`);
+                        showStatus(`Added ${data.component_elements.length} component elements from ${scopeMessage}`, 'success');
+                    }
+
+                    // Show components based on selection
+                    if (hasSelection) {
+                        // Show only components connected to selected nodes
+                        const selectedNodes = window.cy.$(':selected').nodes();
+                        const componentNodesToShow = window.cy.collection();
+                        selectedNodes.forEach(node => {
+                            const connectedComponents = node.connectedEdges().connectedNodes('.process-node, [type="component_process"]');
+                            componentNodesToShow.merge(connectedComponents);
+                        });
+                        componentNodesToShow.show();
+                        componentNodesToShow.connectedEdges().show();
+                        console.log(`Showed ${componentNodesToShow.length} components connected to selected nodes`);
+                    } else {
+                        // Show all components
+                        window.cy.elements(".process-node, [type='component_process']").show();
+                        window.cy.edges().forEach(function (edge) {
+                            const source = edge.source();
+                            const target = edge.target();
+                            const sourceIsComponent = source.hasClass("process-node") || source.data("type") === "component_process";
+                            const targetIsComponent = target.hasClass("process-node") || target.data("type") === "component_process";
+                            if (source.visible() && target.visible() && (sourceIsComponent || targetIsComponent)) {
+                                edge.show();
+                            }
+                        });
+                        console.log(`Showed all component nodes`);
+                    }
+                    
+                    window.resetNetworkLayout();
+
+                    // Update button state
+                    $("#get-components-table-btn").text("Remove components");
+                    window.componentsVisible = true;
+
+                    // Update component table
+                    setTimeout(() => {
+                        if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
+                            window.componentTableManager.performTableUpdate();
+                        }
+                    }, 100);
+
+                    // Layout update
+                    setTimeout(() => {
+                        positionNodes(window.cy, fontSizeMultiplier, true);
+                    }, 150);
+                })
+                .catch(error => {
+                    console.error("Error loading components:", error);
+                    showStatus(`Error loading components: ${error.message}`, 'error');
+                });
+        } else {
+            // Remove component sets
+            const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+            if (hasSelection) {
+                // Hide only components connected to selected nodes
+                const selectedNodes = window.cy.$(':selected').nodes();
+                const componentsToHide = window.cy.collection();
+                selectedNodes.forEach(node => {
+                    const connectedComponents = node.connectedEdges().connectedNodes('.process-node, [type="component_process"]');
+                    componentsToHide.merge(connectedComponents);
+                });
+                componentsToHide.remove();
+                componentsToHide.connectedEdges().remove();
+                console.log(`Removed ${componentsToHide.length} components connected to selected nodes`);
+            } else {
+                // Hide all components
+                const allComponents = window.cy.elements(".process-node, [type='component_process']");
+                allComponents.remove();
+                allComponents.connectedEdges().remove();
+
+                console.log(`Removed all component nodes`);
+            }
+
+            // Reset layout and update table
+            window.resetNetworkLayout();
+            window.componentsVisible = false;
+            $("#get-components-table-btn").text("Get components");
+            setTimeout(() => {
+                if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
+                    window.componentTableManager.performTableUpdate();
+                }
             }, 100);
         }
     }
@@ -1234,6 +1382,15 @@ document.addEventListener("DOMContentLoaded", function () {
             e.stopPropagation();
             queryBgeeAnatomical();
         });
+
+        // Setup component table button handler
+        $("#get-components-table-btn").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.toggleComponents) {
+                window.toggleComponents();
+            }
+        });
     }
 
     // Enhanced function to handle sidebar toggles with smooth transitions
@@ -1330,7 +1487,10 @@ document.addEventListener("DOMContentLoaded", function () {
     window.toggleSidebar = toggleSidebar;
     window.toggleCompounds = toggleCompounds;
     window.toggleGenes = toggleGenes;
+    window.toggleComponents = toggleComponents;
+    window.downloadNetwork = downloadNetwork;
     window.resetNetworkLayout = resetNetworkLayout;
+    window.populateaopTable = populateaopTable;
 
     // ===== GO PROCESS FUNCTIONS =====
 
@@ -1356,6 +1516,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     showGOProcessStatus(`Error: ${data.error}`, "error");
                     return;
                 }
+
                 if (!data.processes || data.processes.length === 0) {
                     showGOProcessStatus(data.message || "No GO processes found for current Key Events", "warning");
                     return;

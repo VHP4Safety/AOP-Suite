@@ -12,7 +12,8 @@
     <!-- Top Navigation Bar -->
     <header class="top-nav">
         <div class="nav-section">
-            <h1><img width="40px" alt="icon" src="{{ url_for('static', filename='images/aopapp_favicon.ico') }}"/> {{ title if title is defined else 'AOP Network Builder' }}</h1>
+            <h1><img width="40px" alt="icon" src="{{ url_for('static', filename='images/aopapp_favicon.ico') }}" /> {{
+                title if title is defined else 'AOP Network Builder' }}</h1>
         </div>
         <div class="nav-controls">
             <div class="control-group">
@@ -98,6 +99,9 @@
                         <button class="bottom-tab-btn" data-table="genes">
                             <i class="fas fa-dna"></i> Genes
                         </button>
+                        <button class="bottom-tab-btn" data-table="components">
+                            <i class="fas fa-cogs"></i> Components
+                        </button>
                         <button class="bottom-tab-btn" data-table="history">
                             <i class="fas fa-history"></i> Query History
                         </button>
@@ -133,11 +137,12 @@
                                         <tr id="default-compound-row">
                                             <td style="text-align: center; padding: 20px;">
                                                 <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                                                    No compounds in network. You can query the AOP-Wiki RDF for compounds associated with Key Events or draw your own
+                                                    No compounds in network. You can query the AOP-Wiki RDF for
+                                                    compounds associated with Key Events or draw your own
                                                     PubChem nodes.
                                                 </div>
                                                 <button id="toggle_compounds" class="btn btn-primary btn-sm">
-                                                    <i class="fas fa-flask"></i>  Get chemical stressors for the network
+                                                    <i class="fas fa-flask"></i> Get chemical stressors for the network
                                                 </button>
                                             </td>
                                         </tr>
@@ -162,7 +167,8 @@
                                         <tr id="default-gene-row">
                                             <td colspan="2" style="text-align: center; padding: 20px;">
                                                 <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                                                    No genes in network. You can query the AOP-Wiki RDF for gene sets associated with Key Events or draw your own Ensembl
+                                                    No genes in network. You can query the AOP-Wiki RDF for gene sets
+                                                    associated with Key Events or draw your own Ensembl
                                                     identifiers.
                                                 </div>
                                                 <button id="get-genes-table-btn" class="btn btn-primary btn-sm">
@@ -173,6 +179,73 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Components Table Panel -->
+                    <div class="table-panel component-table-panel" id="components-table-container-panel">
+                        <div class="panel-content">
+                            <div class="table-wrapper">
+                                <div id="loading_component" class="loading-indicator">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading components...
+                                </div>
+                                <table id="component_table" class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>KE</th>
+                                            <th>Process</th>
+                                            <th>Action</th>
+                                            <th>Object</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr id="default-component-row">
+                                            <td colspan="4" style="text-align: center; padding: 30px;">
+                                                <div
+                                                    style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
+                                                    <i class="fas fa-cogs"
+                                                        style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
+                                                    No components in network. See https://doi.org/10.1089/aivt.2017.0017 for more information.
+                                                </div>
+                                                <button id="get-components-table-btn" class="btn btn-primary btn-lg">
+                                                    <i class="fas fa-cogs"></i> Get Components
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-container" id="component-table-container">
+                        <div class="table-header">
+                            <h5>
+                                <i class="fas fa-cogs"></i> Component Processes
+                                <span id="component-row-count" class="badge badge-secondary">0</span>
+                            </h5>
+                            <div class="table-controls">
+                                <button id="get-components-table-btn" class="btn btn-sm btn-primary table-toggle-btn">
+                                    <i class="fas fa-cogs"></i> Get components for the network
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table id="component_table" class="table table-striped table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>KE ID</th>
+                                        <th>Process</th>
+                                        <th>Object</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="7" class="text-center">No component data available</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
@@ -205,7 +278,8 @@
                 <!-- Query Mode -->
                 <div class="workspace-mode query-mode active" id="query-mode">
                     <div class="mode-status info">
-                        <i class="fas fa-info-circle"></i> Build your network by querying data sources or adding elements manually.
+                        <i class="fas fa-info-circle"></i> Build your network by querying data sources or adding
+                        elements manually.
                     </div>
 
                     <!-- Query AOP WIKI Section -->
@@ -236,13 +310,13 @@
                                     <div id="aop-data-status" class="mt-2"></div>
                                 </div>
                                 <!-- Genes and compound cards -->
-                                <div class="querygc-card" id="genes-compound-card">   
-                                    <h4 class="enhance-card-title"> Genes and Compounds</h4>                           
+                                <div class="querygc-card" id="genes-compound-card">
+                                    <h4 class="enhance-card-title"> Genes and Compounds</h4>
                                     <button id="see_genes" class="btn btn-primary btn-sm w-100" type="button">
                                         <i class="fas fa-dna"></i> Get gene sets for Key Events
                                     </button>
                                     <button id="sidebar_toggle_compounds" class="btn btn-primary btn-sm">
-                                        <i class="fas fa-flask"></i>  Get chemical stressors for the network
+                                        <i class="fas fa-flask"></i> Get chemical stressors for the network
                                     </button>
                                 </div>
                             </div>
@@ -322,7 +396,8 @@
                                 </div>
                                 <div class="form-group">
                                     <label for="edge-label">Connection Label (optional):</label>
-                                    <input type="text" id="edge-label" class="form-control" placeholder="Enter connection label">
+                                    <input type="text" id="edge-label" class="form-control"
+                                        placeholder="Enter connection label">
                                 </div>
                                 <button id="add-connection" class="btn btn-success">
                                     <i class="fas fa-link"></i> Add Edge
@@ -346,7 +421,8 @@
                                 <h4 class="enhance-card-title">GO Processes</h4>
                             </div>
                             <div class="enhance-card-content">
-                                Add Gene Ontology biological processes to your network. Show hierarchical relationships and process annotations.
+                                Add Gene Ontology biological processes to your network. Show hierarchical relationships
+                                and process annotations.
                             </div>
                             <div class="enhance-card-controls">
                                 <button id="toggle_go_processes" class="btn btn-primary btn-sm w-100">
@@ -365,7 +441,8 @@
                                 <h4 class="enhance-card-title">OpenTargets</h4>
                             </div>
                             <div class="enhance-card-content">
-                                Query OpenTargets for drug-target associations, disease associations, and therapeutic hypotheses.
+                                Query OpenTargets for drug-target associations, disease associations, and therapeutic
+                                hypotheses.
                             </div>
                             <div class="enhance-card-controls">
                                 <button id="query_opentargets" class="btn btn-primary btn-sm w-100">
@@ -381,7 +458,8 @@
                                 <h4 class="enhance-card-title">Bgee Expression</h4>
                             </div>
                             <div class="enhance-card-content">
-                                Add gene expression data from Bgee database. Explore tissue-specific and developmental expression patterns.
+                                Add gene expression data from Bgee database. Explore tissue-specific and developmental
+                                expression patterns.
                             </div>
                             <div class="enhance-card-controls">
                                 <button id="query_bgee" class="btn btn-primary btn-sm w-100">
@@ -397,13 +475,16 @@
                                 <h4 class="enhance-card-title">QSPR Predictions</h4>
                             </div>
                             <div class="enhance-card-content">
-                                Generate QSPR predictions for compounds in your network. Set activity thresholds and fetch bioactivity predictions.
+                                Generate QSPR predictions for compounds in your network. Set activity thresholds and
+                                fetch bioactivity predictions.
                             </div>
                             <div class="enhance-card-controls">
                                 <div class="form-group mb-2">
                                     <label for="threshold_pchembl">pChEMBL Threshold:</label>
-                                    <input type="number" step="0.1" class="form-control" id="threshold_pchembl" value="6.5">
-                                    <small class="form-text">Activity of 10<sup id="activity_display">-6.5</sup> M</small>
+                                    <input type="number" step="0.1" class="form-control" id="threshold_pchembl"
+                                        value="6.5">
+                                    <small class="form-text">Activity of 10<sup id="activity_display">-6.5</sup>
+                                        M</small>
                                 </div>
                                 <button id="fetch_predictions" type="button" class="btn btn-primary btn-sm w-100">
                                     <i class="fas fa-flask"></i> Fetch Predictions
@@ -500,7 +581,8 @@
 </div>
 
 <!-- Delete Confirmation Modal -->
-<div class="modal fade" id="delete-confirmation-modal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel" aria-hidden="true">
+<div class="modal fade" id="delete-confirmation-modal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel"
+    aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header">
@@ -556,11 +638,11 @@
     function updateSelectionControls() {
         const selectionControls = document.getElementById('selection-controls');
         const selectionInfo = document.getElementById('selection-info');
-        
+
         if (window.cy) {
             const selected = window.cy.$(':selected');
             selectedElements = selected.map(ele => ele.id());
-            
+
             if (selected.length > 0) {
                 selectionControls.style.display = 'flex';
                 selectionInfo.textContent = `${selected.length} selected`;
@@ -576,11 +658,11 @@
 
         // Enable box selection for multi-select
         window.cy.boxSelectionEnabled(true);
-        
+
         // Handle single click selection
-        window.cy.on('tap', function(evt) {
+        window.cy.on('tap', function (evt) {
             const target = evt.target;
-            
+
             // If clicking on background, clear selection unless shift is held
             if (target === window.cy) {
                 if (!evt.originalEvent.shiftKey) {
@@ -588,11 +670,11 @@
                 }
                 return;
             }
-            
+
             // Handle node/edge selection
             if (target.isNode() || target.isEdge()) {
                 evt.stopPropagation();
-                
+
                 if (evt.originalEvent.shiftKey) {
                     // Shift+click: toggle selection
                     if (target.selected()) {
@@ -609,12 +691,12 @@
         });
 
         // Update selection controls when selection changes
-        window.cy.on('select unselect', function() {
+        window.cy.on('select unselect', function () {
             updateSelectionControls();
         });
 
         // Prevent default href behavior on nodes/edges
-        window.cy.on('tap', 'node, edge', function(evt) {
+        window.cy.on('tap', 'node, edge', function (evt) {
             evt.preventDefault();
             evt.stopPropagation();
         });
@@ -627,9 +709,9 @@
         const deleteMessage = document.getElementById('delete-message');
         const deleteModal = document.getElementById('delete-confirmation-modal');
         const confirmButton = document.getElementById('confirm-delete-btn');
-        
+
         deleteMessage.textContent = `Are you sure you want to delete ${selectedElements.length} selected element(s)?`;
-        
+
         // Show modal
         if (typeof $ !== 'undefined' && $.fn.modal) {
             $('#delete-confirmation-modal').modal('show');
@@ -638,26 +720,26 @@
             deleteModal.style.display = 'block';
             deleteModal.classList.add('show');
         }
-        
+
         // Set up one-time event listener for confirmation
-        const handleConfirm = function() {
+        const handleConfirm = function () {
             const elementsToRemove = window.cy.getElementById(selectedElements);
-            
+
             // Remove elements from the network
             elementsToRemove.remove();
-            
+
             // Clear selection tracking
             selectedElements = [];
             updateSelectionControls();
-            
+
             // Update network stats
             updateNetworkStats();
-            
+
             // Update any related tables/data if needed
             if (window.updateTables) {
                 window.updateTables();
             }
-            
+
             // Hide modal
             if (typeof $ !== 'undefined' && $.fn.modal) {
                 $('#delete-confirmation-modal').modal('hide');
@@ -665,11 +747,11 @@
                 deleteModal.style.display = 'none';
                 deleteModal.classList.remove('show');
             }
-            
+
             // Remove this event listener
             confirmButton.removeEventListener('click', handleConfirm);
         };
-        
+
         // Add event listener for this deletion
         confirmButton.addEventListener('click', handleConfirm);
     }
@@ -688,19 +770,19 @@
         document.getElementById('clear_selection')?.addEventListener('click', clearSelection);
 
         // Add keyboard shortcuts
-        document.addEventListener('keydown', function(e) {
+        document.addEventListener('keydown', function (e) {
             // Delete key to remove selected elements
             if (e.key === 'Delete' && selectedElements.length > 0) {
                 e.preventDefault();
                 deleteSelectedElements();
             }
-            
+
             // Escape key to clear selection
             if (e.key === 'Escape') {
                 e.preventDefault();
                 clearSelection();
             }
-            
+
             // Ctrl+A to select all
             if (e.ctrlKey && e.key === 'a') {
                 e.preventDefault();
@@ -716,7 +798,7 @@
         if (window.cy) {
             const nodeCount = window.cy.nodes().length;
             const edgeCount = window.cy.edges().length;
-            
+
             document.getElementById('node-count').textContent = nodeCount;
             document.getElementById('edge-count').textContent = edgeCount;
         }
@@ -737,7 +819,7 @@
             panel.classList.remove('active');
         });
         document.getElementById(tableName + '-table-container-panel').classList.add('active');
-        
+
         // Update table heights after tab switch
         setTimeout(() => {
             updateTableContainerHeights();
@@ -748,7 +830,7 @@
     // Workspace mode switching (fixed to properly hide/show)
     function switchWorkspaceMode(mode) {
         console.log('Switching to mode:', mode); // Debug log
-        
+
         // Update button states
         document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
             btn.classList.remove('active');
@@ -762,7 +844,7 @@
             modeDiv.classList.remove('active');
             modeDiv.style.display = 'none'; // Explicitly hide all modes
         });
-        
+
         // Show the selected mode
         const selectedMode = document.getElementById(mode + '-mode');
         if (selectedMode) {
@@ -784,7 +866,7 @@
         const workspaceSidebar = document.getElementById('workspace-sidebar');
         const resizeHandle = workspaceSidebar.querySelector('::before');
 
-        workspaceSidebar.addEventListener('mousedown', function(e) {
+        workspaceSidebar.addEventListener('mousedown', function (e) {
             if (e.offsetX <= 6) { // Within resize handle area
                 isResizing = true;
                 startX = e.clientX;
@@ -794,13 +876,13 @@
             }
         });
 
-        document.addEventListener('mousemove', function(e) {
+        document.addEventListener('mousemove', function (e) {
             if (!isResizing) return;
-            
+
             const width = startWidth - (e.clientX - startX);
             const minWidth = 300;
             const maxWidth = 1200;
-            
+
             if (width >= minWidth && width <= maxWidth) {
                 workspaceSidebar.style.width = width + 'px';
                 if (window.cy) {
@@ -809,7 +891,7 @@
             }
         });
 
-        document.addEventListener('mouseup', function() {
+        document.addEventListener('mouseup', function () {
             if (isResizing) {
                 isResizing = false;
                 document.body.classList.remove('resizing');
@@ -824,22 +906,22 @@
 
         const bottomPanel = document.getElementById('bottom-panel-area');
         const bottomPanelHeader = bottomPanel.querySelector('.bottom-panel-header');
-        
+
         // Resize from the header area
-        bottomPanelHeader.addEventListener('mousedown', function(e) {
+        bottomPanelHeader.addEventListener('mousedown', function (e) {
             // Prevent resize if clicking on tab buttons
             if (e.target.closest('.bottom-tab-btn')) {
                 return;
             }
-            
+
             isResizingVertical = true;
             startY = e.clientY;
-            
+
             const networkArea = document.querySelector('.network-area');
             const centralArea = document.querySelector('.central-area');
             startNetworkHeight = networkArea.offsetHeight;
             startBottomHeight = bottomPanel.offsetHeight;
-            
+
             document.body.classList.add('resizing-vertical');
             document.body.style.cursor = 'row-resize';
             e.preventDefault();
@@ -847,70 +929,70 @@
         });
 
         // Global mousemove for resize
-        document.addEventListener('mousemove', function(e) {
+        document.addEventListener('mousemove', function (e) {
             if (!isResizingVertical) return;
-            
+
             const deltaY = e.clientY - startY;
             const networkArea = document.querySelector('.network-area');
             const centralArea = document.querySelector('.central-area');
             const totalHeight = centralArea.offsetHeight;
-            
+
             // Calculate new heights - Fixed direction logic
             const newNetworkHeight = startNetworkHeight + deltaY;
             const newBottomHeight = totalHeight - newNetworkHeight;
-            
+
             const minHeight = 150;
             const maxNetworkHeight = totalHeight - minHeight;
             const maxBottomHeight = totalHeight - minHeight;
-            
+
             // Ensure minimum and maximum heights are respected
-            if (newNetworkHeight >= minHeight && 
-                newNetworkHeight <= maxNetworkHeight && 
-                newBottomHeight >= minHeight && 
+            if (newNetworkHeight >= minHeight &&
+                newNetworkHeight <= maxNetworkHeight &&
+                newBottomHeight >= minHeight &&
                 newBottomHeight <= maxBottomHeight) {
-                
+
                 // Apply new heights immediately
                 networkArea.style.height = newNetworkHeight + 'px';
                 bottomPanel.style.height = newBottomHeight + 'px';
-                
+
                 // Update table container heights immediately during drag
                 updateTableContainerHeights();
-                
+
                 // Trigger Cytoscape resize immediately
                 if (window.cy) {
                     window.cy.resize();
                 }
             }
-            
+
             e.preventDefault();
         });
 
         // Global mouseup for resize
-        document.addEventListener('mouseup', function() {
+        document.addEventListener('mouseup', function () {
             if (isResizingVertical) {
                 isResizingVertical = false;
                 document.body.classList.remove('resizing-vertical');
                 document.body.style.cursor = '';
-                
+
                 // Convert to percentages for responsive behavior
                 const networkArea = document.querySelector('.network-area');
                 const centralArea = document.querySelector('.central-area');
                 const totalHeight = centralArea.offsetHeight;
-                
+
                 if (totalHeight > 0) {
                     const networkPercent = Math.max(20, Math.min(80, (networkArea.offsetHeight / totalHeight) * 100));
                     const bottomPercent = 100 - networkPercent;
-                    
+
                     networkArea.style.height = networkPercent + '%';
                     bottomPanel.style.height = bottomPercent + '%';
                 }
-                
+
                 // Final table updates with a slight delay to ensure DOM is stable
                 setTimeout(() => {
                     updateTableContainerHeights();
                     redrawDataTables();
                 }, 50);
-                
+
                 // Final Cytoscape resize
                 if (window.cy) {
                     setTimeout(() => {
@@ -918,7 +1000,7 @@
                         window.cy.fit();
                     }, 100);
                 }
-                
+
                 //console.log('Ended vertical resize'); // Debug
             }
         });
@@ -932,7 +1014,7 @@
         const bottomPanel = document.getElementById('bottom-panel-area');
         const bottomPanelContent = bottomPanel.querySelector('.bottom-panel-content');
         const bottomPanelHeader = bottomPanel.querySelector('.bottom-panel-header');
-        
+
         if (bottomPanelContent && bottomPanelHeader) {
             const headerHeight = bottomPanelHeader.offsetHeight;
             // Use the actual pixel height of the bottom panel
@@ -968,11 +1050,11 @@
                         tableWrapper.style.height = tableHeight + 'px';
                         tableWrapper.style.overflowY = 'auto';
                         tableWrapper.style.overflowX = 'auto';
-                        
+
                         // Ensure the wrapper expands to use full height
                         tableWrapper.style.minHeight = tableHeight + 'px';
                         tableWrapper.style.maxHeight = tableHeight + 'px';
-                        
+
                         // Make sure the table inside uses full wrapper height
                         const actualTable = tableWrapper.querySelector('table');
                         if (actualTable) {
@@ -993,7 +1075,7 @@
     function redrawDataTables() {
         // Redraw any DataTables that might be present
         if (window.$.fn.DataTable) {
-            window.$('.table').each(function() {
+            window.$('.table').each(function () {
                 const table = window.$(this);
                 if (table.hasClass('dataTable')) {
                     const dataTable = table.DataTable();
@@ -1004,21 +1086,21 @@
                 }
             });
         }
-        
+
     }
 
     // Table panel controls
     function initializeTablePanelControls() {
         // Toggle buttons
-        document.getElementById('toggle-compound-table')?.addEventListener('click', function() {
+        document.getElementById('toggle-compound-table')?.addEventListener('click', function () {
             toggleTablePanel('compound-table-panel');
         });
 
-        document.getElementById('toggle-gene-table')?.addEventListener('click', function() {
+        document.getElementById('toggle-gene-table')?.addEventListener('click', function () {
             toggleTablePanel('gene-table-panel');
         });
-        
-        document.getElementById('toggle-history-table')?.addEventListener('click', function() {
+
+        document.getElementById('toggle-history-table')?.addEventListener('click', function () {
             toggleTablePanel('history-table-panel');
         });
 
@@ -1029,7 +1111,7 @@
     function toggleTablePanel(panelId) {
         const panel = document.getElementById(panelId);
         const button = panel.querySelector('.table-toggle-btn');
-        
+
         if (panel.classList.contains('collapsed')) {
             panel.classList.remove('collapsed');
             button.classList.add('active');
@@ -1037,7 +1119,7 @@
             panel.classList.add('collapsed');
             button.classList.remove('active');
         }
-        
+
         // Trigger layout update
         setTimeout(() => {
             if (window.cy) {
@@ -1057,7 +1139,7 @@
 
         // Bottom panel tab buttons
         document.querySelectorAll('.bottom-tab-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const tableName = this.getAttribute('data-table');
                 switchBottomTab(tableName);
             });
@@ -1065,7 +1147,7 @@
 
         // Workspace mode buttons (fixed)
         document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
+            btn.addEventListener('click', function () {
                 const mode = this.getAttribute('data-mode');
                 console.log('Button clicked for mode:', mode); // Debug log
                 switchWorkspaceMode(mode);
@@ -1082,11 +1164,11 @@
 
         // Collapsible sections functionality
         document.querySelectorAll('.collapsible-header').forEach(header => {
-            header.addEventListener('click', function() {
+            header.addEventListener('click', function () {
                 const targetId = this.getAttribute('data-target');
                 const content = document.getElementById(targetId);
                 const icon = this.querySelector('.collapse-icon');
-                
+
                 if (content && icon) {
                     // Toggle the content visibility
                     if (content.style.display === 'none' || content.style.display === '') {
@@ -1166,11 +1248,11 @@
 
     // Gene table row click handler
     function setupGeneTableHandlers() {
-        $(document).off('click', '#gene_table tbody tr').on('click', '#gene_table tbody tr', function() {
+        $(document).off('click', '#gene_table tbody tr').on('click', '#gene_table tbody tr', function () {
             const geneSymbol = $(this).data('gene');
             const uniprotId = $(this).data('uniprot-id');
             const ensemblId = $(this).data('ensembl-id');
-            
+
             if (!geneSymbol) return;
 
             // Remove previous highlights
@@ -1187,13 +1269,13 @@
                 // Find and highlight gene nodes
                 const ensemblNode = window.cy.getElementById(ensemblId);
                 const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
-                
+
                 if (ensemblNode.length > 0) {
                     ensemblNode.addClass('highlighted');
                     // Center on the node
                     window.cy.center(ensemblNode);
                 }
-                
+
                 if (uniprotNode.length > 0) {
                     uniprotNode.addClass('highlighted');
                 }
@@ -1220,7 +1302,7 @@
     };
 
     // Initialize table managers and their filters when DOM is ready
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
         // Ensure table managers are initialized with proper delay
         setTimeout(() => {
             // Initialize gene table filter if not already done
@@ -1245,7 +1327,7 @@
     });
 
     // Gene table button handler - ensure filter is maintained
-    $(document).on('click', '#get-genes-table-btn', function(e) {
+    $(document).on('click', '#get-genes-table-btn', function (e) {
         e.preventDefault();
         e.stopPropagation();
         if (window.toggleGenes) {
@@ -1254,7 +1336,7 @@
     });
 
     // Compound table button handler - ensure filter is maintained  
-    $(document).on('click', '#toggle_compounds, #sidebar_toggle_compounds', function(e) {
+    $(document).on('click', '#toggle_compounds, #sidebar_toggle_compounds', function (e) {
         e.preventDefault();
         e.stopPropagation();
         if (window.toggleCompounds) {
@@ -1276,6 +1358,11 @@
     if (typeof AOPTableManager !== 'undefined') {
         window.aopTableManager = new AOPTableManager();
         console.log('AOP Table Manager initialized');
+    }
+
+    if (typeof ComponentTableManager !== 'undefined') {
+        window.componentTableManager = new ComponentTableManager();
+        console.log('Component Table Manager initialized');
     }
 
     // Initialize History Table Manager

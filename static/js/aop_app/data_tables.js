@@ -2405,6 +2405,499 @@ class HistoryTableManager extends DataTableManager {
     }
 }
 
+/**
+ * Component Table Manager - extends base functionality for component-specific features
+ */
+class ComponentTableManager extends DataTableManager {
+    constructor() {
+        super('component-table', '#component-table-container');
+        this.init();
+        this.setupNetworkListeners();
+    }
+
+    getTableDisplayName() {
+        return 'Component';
+    }
+
+    getFilterHelpText() {
+        return 'Filter by KE numbers, process names, object names, or actions.';
+    }
+
+    getVisibleNodeIds() {
+        const visibleNodeIds = new Set();
+        this.filteredData.forEach(row => {
+            if (row.node_id && row.node_id !== 'N/A') visibleNodeIds.add(row.node_id);
+        });
+        return visibleNodeIds;
+    }
+
+    matchesFilter(row) {
+        const searchFields = [
+            row.ke_number,
+            row.ke_id,
+            row.process_name,
+            row.process_id,
+            row.object_name,
+            row.object_id,
+            row.action
+        ].join(' ').toLowerCase();
+        
+        return searchFields.includes(this.filterText);
+    }
+
+    setupFilterInput() {
+        // Find the correct container for the component table
+        const componentTableWrapper = document.querySelector('#component_table')?.closest('.table-wrapper') || 
+                                     document.querySelector('.component-table-panel .table-wrapper');
+        
+        if (componentTableWrapper && !document.querySelector(`#${this.tableId}-filter`)) {
+            const filterContainer = document.createElement('div');
+            filterContainer.className = 'table-filter-container mb-3';
+            filterContainer.innerHTML = `
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    </div>
+                    <input type="text" id="${this.tableId}-filter" class="form-control" 
+                           placeholder="Filter ${this.getTableDisplayName()} table...">
+                    <div class="input-group-append">
+                        <button class="btn btn-outline-secondary" id="clear-${this.tableId}-filter" type="button">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <small class="form-text text-muted">
+                    ${this.getFilterHelpText()}
+                </small>
+            `;
+            
+            componentTableWrapper.insertBefore(filterContainer, componentTableWrapper.firstChild);
+            
+            // Add event listeners
+            document.getElementById(`${this.tableId}-filter`).addEventListener('input', (e) => {
+                this.handleFilter(e.target.value);
+            });
+            
+            document.getElementById(`clear-${this.tableId}-filter`).addEventListener('click', () => {
+                document.getElementById(`${this.tableId}-filter`).value = '';
+                this.handleFilter('');
+            });
+        }
+    }
+
+    setupNetworkListeners() {
+        if (!window.cy) {
+            console.log('Cytoscape not ready, will setup component table listeners later');
+            return;
+        }
+        
+        console.log('Setting up component table network listeners');
+        
+        window.cy.on('add remove', (event) => {
+            console.log('Network changed, updating component table');
+            this.debouncedUpdateTable();
+        });
+    }
+
+    debouncedUpdateTable(delay = 500) {
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+
+        this.updateTimeout = setTimeout(() => {
+            if (!this.isUpdating) {
+                this.performTableUpdate();
+            }
+        }, delay);
+    }
+
+    generateComponentRowHTML(row, index) {
+        // Get KE label from network node if available
+        let keDisplay = row.ke_id;
+        let keLabel = '';
+        
+        const cyNode = window.cy ? window.cy.getElementById(row.ke_id) : null;
+        if (cyNode && cyNode.length > 0) {
+            keLabel = cyNode.data('label') || cyNode.data('name') || '';
+            if (keLabel) {
+                keDisplay = keLabel;
+            }
+        }
+        
+        const keLink = `<a href="https://identifiers.org/aop.events/${row.ke_number}" target="_blank" class="ke-link" title="${row.ke_id}">${this.highlightMatch(keDisplay)}</a>`;
+        
+        const processLink = row.process_iri && row.process_iri !== 'N/A' ? 
+            `<a href="${row.process_iri}" target="_blank" class="process-link">${this.highlightMatch(row.process_name)}</a>` :
+            this.highlightMatch(row.process_name);
+
+        const actionDisplay = row.action !== 'N/A' ? 
+            `<span class="action-text">${this.highlightMatch(row.action)}</span>` : 
+            '<span class="text-muted">N/A</span>';
+
+        const objectDisplay = row.object_name !== 'N/A' ?
+            (row.object_iri && row.object_iri !== 'N/A' ?
+                `<a href="${row.object_iri}" target="_blank" class="object-link">${this.highlightMatch(row.object_name)}</a>` :
+                `<span class="object-text">${this.highlightMatch(row.object_name)}</span>`) :
+            '<span class="text-muted">N/A</span>';
+
+        return `
+            <tr data-ke-id="${row.ke_id}" 
+                data-process-id="${row.process_id}"
+                data-object-id="${row.object_id}"
+                data-node-id="${row.node_id}"
+                data-row-index="${index}"
+                class="component-row"
+                style="cursor: pointer;">
+                <td class="ke-cell">
+                    <div class="ke-content">
+                        ${keLink}
+                        ${row.ke_number ? `<small class="ke-number text-muted d-block">#${row.ke_number}</small>` : ''}
+                    </div>
+                </td>
+                <td class="process-cell" data-node-id="${row.node_id}">
+                    <div class="process-content">
+                        ${processLink}
+                    </div>
+                </td>
+                <td class="action-cell">
+                    <div class="action-content">
+                        ${actionDisplay}
+                    </div>
+                </td>
+                <td class="object-cell">
+                    <div class="object-content">
+                        ${objectDisplay}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    renderTable() {
+        const tableBody = $("#component_table tbody");
+        const table = document.querySelector('#component_table');
+        
+        if (!tableBody.length || !table) {
+            console.warn("Component table not found");
+            return;
+        }
+
+        if (this.filteredData.length === 0) {
+            this.showEmptyTable();
+            return;
+        }
+
+        // Clear the entire table body first
+        tableBody.empty();
+
+        this.filteredData.forEach((row, index) => {
+            const rowHTML = this.generateComponentRowHTML(row, index);
+            tableBody.append(rowHTML);
+        });
+
+        // Add summary to tfoot
+        const tfoot = table.querySelector('tfoot') || table.createTFoot();
+        const totalRows = this.currentData.length;
+        const filteredRows = this.filteredData.length;
+        
+        tfoot.innerHTML = `
+            <tr>
+                <td colspan="4" class="text-muted small">
+                    Showing ${filteredRows} of ${totalRows} components
+                    ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
+                </td>
+            </tr>
+        `;
+
+        this.setupComponentTableEventHandlers();
+        console.log(`Component table updated with ${this.filteredData.length} components.`);
+    }
+
+    setupTableStyles() {
+        super.setupTableStyles();
+        
+        if (!document.querySelector('#component-table-styles')) {
+            const styles = document.createElement('style');
+            styles.id = 'component-table-styles';
+            styles.textContent = `
+                .component-row {
+                    border-left: 3px solid #17a2b8 !important;
+                    background-color: #f8fdff !important;
+                }
+
+                .component-row:hover {
+                    background-color: #f8f9fa !important;
+                }
+
+                .ke-link, .process-link, .object-link {
+                    color: #0056b3 !important;
+                    font-weight: 600;
+                    text-decoration: none;
+                }
+
+                .ke-link:hover, .process-link:hover, .object-link:hover {
+                    color: #003d82 !important;
+                    text-decoration: underline;
+                }
+
+                .ke-number {
+                    font-size: 0.75em;
+                    font-weight: 500;
+                    margin-top: 2px;
+                    opacity: 0.7;
+                }
+
+                .action-text, .object-text {
+                    font-weight: 500;
+                    color: #495057;
+                }
+
+                .action-text {
+                    font-style: italic;
+                    color: #6c757d;
+                }
+
+                #component_table thead th {
+                    background-color: #f8f9fa;
+                    font-weight: 600;
+                    color: #495057;
+                    border-bottom: 2px solid #dee2e6;
+                }
+
+                #component_table tbody tr {
+                    cursor: pointer;
+                    transition: background-color 0.2s ease;
+                }
+
+                #component_table tbody td {
+                    padding: 8px 12px;
+                    vertical-align: middle;
+                }
+
+                .ke-cell {
+                    font-weight: 600;
+                }
+
+                .process-cell {
+                    font-weight: 500;
+                }
+
+                .component-table-panel .table-filter-container {
+                    background: #f8f9fa;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin-bottom: 10px;
+                }
+
+                .component-table-panel .input-group-text {
+                    background: #e9ecef;
+                    border-color: #ced4da;
+                }
+            `;
+            document.head.appendChild(styles);
+        }
+    }
+
+    setupComponentTableEventHandlers() {
+        const tableBody = $("#component_table tbody");
+        if (!tableBody.length) return;
+
+        // Remove existing event handlers to prevent duplicates
+        tableBody.off("click", "tr");
+
+        // Add click handler for component rows
+        tableBody.on("click", "tr", (e) => {
+            // Don't trigger if clicking on a link
+            if ($(e.target).is('a') || $(e.target).closest('a').length) {
+                return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const row = $(e.currentTarget);
+            const keId = row.data("ke-id");
+            const nodeId = row.data("node-id");
+            const rowIndex = row.data("row-index");
+
+            // Selection handling
+            if (e.ctrlKey || e.metaKey) {
+                this.toggleRowSelection(row[0], { component: keId });
+            } else {
+                this.clearTableSelection();
+                row.addClass('table-selected');
+                this.selectedRows.add(parseInt(rowIndex));
+            }
+
+            // Network highlighting
+            if (nodeId && window.cy) {
+                this.highlightNodeInNetwork(nodeId);
+            }
+
+            console.log(`Component clicked: ${keId}`);
+        });
+
+        // Process cell click handlers for network highlighting
+        tableBody.find('.process-cell').off('click').on('click', (e) => {
+            if (e.target.closest('a')) return;
+            
+            e.preventDefault();
+            e.stopPropagation();
+
+            const nodeId = $(e.currentTarget).data('node-id');
+            if (nodeId && nodeId !== 'N/A') {
+                this.highlightNodeInNetwork(nodeId);
+            }
+        });
+    }
+
+    async performTableUpdate() {
+        if (this.isUpdating) {
+            console.log('Component table update already in progress, skipping');
+            return;
+        }
+
+        if (!window.cy) {
+            console.warn("Cytoscape not available for component table update");
+            return;
+        }
+
+        this.isUpdating = true;
+
+        try {
+            // Get component elements from the load_and_show_components endpoint
+            const keyEventUris = this.getKeyEventsFromNetwork();
+            
+            if (keyEventUris.length === 0) {
+                this.currentData = [];
+                this.filteredData = [];
+                this.showEmptyTable();
+                return;
+            }
+
+            const cyElements = window.cy.elements().jsons();
+            
+            const response = await fetch('/populate_component_table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cy_elements: cyElements })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const responseData = await response.json();
+            
+            // Get component data
+            const data = Array.isArray(responseData) ? responseData[0] : responseData;
+            console.log("data component table", data);
+            if (data.error) {
+                console.error("Error loading components:", data.error);
+                this.currentData = [];
+                this.filteredData = [];
+                this.showEmptyTable();
+              return;
+            }
+
+            if (data.component_data && data.component_data.length > 0) {
+                this.updateTable(data.component_data);
+                console.log(`Component table updated with ${data.component_data.length} components.`);
+            } else {
+                this.currentData = [];
+                this.filteredData = [];
+                this.showEmptyTable();
+            }
+
+        } catch (error) {
+            console.error("Error updating component table:", error);
+            this.showErrorTable();
+        } finally {
+            this.isUpdating = false;
+        }
+    }
+
+    getKeyEventsFromNetwork() {
+        if (!window.cy) return [];
+
+        const keyEventUris = [];
+        
+        window.cy.nodes().forEach(node => {
+            const nodeData = node.data();
+            const nodeId = nodeData.id || node.id();
+            const nodeType = nodeData.type;
+            const isMie = nodeData.is_mie;
+            const isAo = nodeData.is_ao;
+
+            if (nodeId && (nodeId.includes('aop.events') || isMie || isAo || nodeType === 'mie' || nodeType === 'key_event' || nodeType === 'ao')) {
+                if (nodeId.startsWith('http')) {
+                    keyEventUris.push(`<${nodeId}>`);
+                } else if (nodeId.includes('aop.events')) {
+                    keyEventUris.push(`<${nodeId}>`);
+                }
+            }
+        });
+
+        return keyEventUris;
+    }
+
+    showEmptyTable() {
+        const tableBody = $("#component_table tbody");
+        const table = document.querySelector('#component_table');
+        
+        if (!tableBody.length) return;
+
+        tableBody.empty();
+        tableBody.append(`
+            <tr id="default-component-row">
+                <td colspan="4" style="text-align: center; padding: 30px;">
+                    <div style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
+                        <i class="fas fa-cogs" style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
+                        No components in network. See https://doi.org/10.1089/aivt.2017.0017 for more information.
+                    </div>
+                    <button id="get-components-table-btn" class="btn btn-primary btn-lg">
+                        <i class="fas fa-cogs"></i> Get Components
+                    </button>
+                </td>
+            </tr>
+        `);
+
+        // Clear tfoot when showing empty table
+        const tfoot = table?.querySelector('tfoot');
+        if (tfoot) tfoot.remove();
+
+        // Clear filter when showing empty table
+        const filterInput = document.getElementById(`${this.tableId}-filter`);
+        if (filterInput) {
+            filterInput.value = '';
+            this.filterText = '';
+        }
+
+        // Add click handler for the table button
+        $("#get-components-table-btn").off("click").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.toggleComponents) {
+                window.toggleComponents();
+            }
+        });
+    }
+
+    showErrorTable() {
+        const tableBody = $("#component_table tbody");
+        if (!tableBody.length) return;
+
+        tableBody.empty();
+        tableBody.append(`
+            <tr>
+                <td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">
+                    <i class="fas fa-exclamation-triangle"></i> Error loading component data
+                </td>
+            </tr>
+        `);
+    }
+}
+
 // Initialize the managers with proper delay to ensure DOM is ready
 console.log('Initializing Data Table Managers...');
 window.aopTableManager = new AOPTableManager();
@@ -2430,6 +2923,14 @@ setTimeout(() => {
     if (!window.historyTableManager) {
         window.historyTableManager = new HistoryTableManager();
         console.log('History Table Manager initialized');
+    }
+}, 100);
+
+// Initialize Component Table Manager with delay to ensure DOM is ready
+setTimeout(() => {
+    if (!window.componentTableManager) {
+        window.componentTableManager = new ComponentTableManager();
+        console.log('Component Table Manager initialized with filtering');
     }
 }, 100);
 
@@ -2507,6 +3008,9 @@ $(document).ready(function() {
         }
         if (!window.historyTableManager) {
             window.historyTableManager = new HistoryTableManager();
+        }
+        if (!window.componentTableManager) {
+            window.componentTableManager = new ComponentTableManager();
         }
     }, 200);
 });

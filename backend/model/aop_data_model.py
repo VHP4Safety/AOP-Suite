@@ -14,6 +14,8 @@ class NodeType(Enum):
     UNIPROT = "uniprot"
     ENSEMBL = "ensembl"
     ORGAN = "organ"
+    COMPONENT_PROCESS = "component_process"
+    COMPONENT_OBJECT = "component_object"
     CUSTOM = "custom"
 
 
@@ -25,7 +27,61 @@ class EdgeType(Enum):
     EXPRESSION_IN = "expression_in"
     CUSTOM = "custom"
     IS_STRESSOR_OF = "is stressor of"
+    HAS_PROCESS = "has process"
+    HAS_OBJECT = "has object"
+    NA = "na"
+    # Component actions https://pmc.ncbi.nlm.nih.gov/articles/PMC6060416/
+    INCREASED = {
+        "label": "increased process quality",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0002304",
+    }
+    DECREASED = {
+        "label": "decreased process quality",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0002301",
+    }
+    DELAYED = {
+        "label": "delayed",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000502",
+    }
+    OCCURRENCE = {
+        "label": "occurrence",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000057",
+    }
+    ABNORMAL = {
+        "label": "abnormal",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000460",
+    }
+    PREMATURE = {
+        "label": "premature",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0001028",
+    }
+    DISRUPTED = {
+        "label": "disrupted",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0001507",
+    }
+    FUNCTIONAL_CHANGE = {
+        "label": "functional change",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0001509",
+    }
+    MORPHOLOGICAL_CHANGE = {
+        "label": "morphological change",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000051",
+    }
+    PATHOLOGICAL = {
+        "label": "pathological",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0001869",
+    }
+    ARRESTED = {
+        "label": "arrested",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000297",
+    }
 
+    @classmethod
+    def get_iri(cls) -> Set[str]:
+        return {item.value["iri"] for item in cls if isinstance(item.value, dict) and "iri" in item.value}
+    @classmethod
+    def get_label(cls) -> Set[str]:
+        return {item.value["label"] for item in cls if isinstance(item.value, dict) and "label" in item.value}
 
 class DataSourceType(Enum):
     AOPWIKI = "aopwiki"
@@ -185,6 +241,111 @@ class GeneAssociation:
 
 
 @dataclass
+class ComponentAssociation:
+    """Represents component associations with KEs"""
+
+    ke_uri: str
+    process: str
+    process_name: str
+    object: str
+    object_name: str
+    action: str
+
+    def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
+        """Convert to Cytoscape elements (nodes and edges)"""
+        ke = "aop.events_" + self.ke_uri.split("/")[-1]
+        process = self.process.split("/")[-1] if "/" in self.process else self.process
+        object = self.object.split("/")[-1] if "/" in self.object else self.object
+        elements = []
+        process_node_id = f"process_{process}"
+        # Component process node
+        elements.append(
+            {
+                "data": {
+                    "id": process_node_id,
+                    "label": self.process_name,
+                    "type": NodeType.COMPONENT_PROCESS.value,
+                    "process_iri": self.process,
+                    "process_name": self.process_name,
+                },
+                "classes": "process-node",
+            }
+        )
+
+        # Edge from process to KE
+        elements.append(
+            {
+                "data": {
+                    "id": f"{ke}_{process_node_id}",
+                    "source": self.ke_uri,
+                    "target": process_node_id,
+                    "label": (
+                        self.action
+                        if self.action in EdgeType.get_label()
+                        else EdgeType.NA.value
+                    ),
+                    "type": (
+                        self.action
+                        if self.action in EdgeType.get_iri()
+                        else EdgeType.NA.value
+                    ),
+                }
+            }
+        )
+        if self.object:
+            object_node_id = f"object_{object}"
+            # Component object node
+            elements.append(
+                {
+                    "data": {
+                        "id": object_node_id,
+                        "label": self.object_name,
+                        "type": NodeType.COMPONENT_PROCESS.value,
+                        "object_iri": object,
+                        "object_name": self.object_name,
+                    },
+                    "classes": "process-node",
+                }
+            )
+            # Edge from process to object
+            elements.append(
+                {
+                    "data": {
+                        "id": f"{ke}_{process_node_id}_{object_node_id}",
+                        "source": process_node_id,
+                        "target": object_node_id,
+                        "label": EdgeType.HAS_OBJECT.value,
+                        "type": EdgeType.HAS_OBJECT.value,
+                    }
+                }
+            )
+        return elements
+
+    def to_table_entry(self) -> Dict[str, str]:
+        """Convert to component table entry format"""
+        # Extract KE ID from URI
+        ke_id = self.ke_uri.split("/")[-1] if "/" in self.ke_uri else self.ke_uri
+
+        # Extract process ID from URI
+        process_id = self.process.split("/")[-1] if "/" in self.process else self.process
+
+        # Extract object ID from URI
+        object_id = self.object.split("/")[-1] if "/" in self.object else self.object
+
+        return {
+            "ke_id": f"aop.events_{ke_id}",
+            "ke_uri": self.ke_uri,
+            "process_id": process_id,
+            "process_name": self.process_name,
+            "process_iri": self.process,
+            "object_id": object_id if self.object else "N/A",
+            "object_name": self.object_name if self.object_name else "N/A", 
+            "object_iri": self.object if self.object else "N/A",
+            "action": self.action if self.action else "N/A",
+            "node_id": f"process_{process_id}",
+        }
+
+@dataclass
 class CompoundAssociation:
     """Represents compound associations with AOPs"""
 
@@ -272,6 +433,7 @@ class AOPNetwork:
     def __init__(self):
         self.key_events: Dict[str, AOPKeyEvent] = {}
         self.relationships: List[KeyEventRelationship] = []
+        self.component_associations: List[ComponentAssociation] = []
         self.gene_associations: List[GeneAssociation] = []
         self.compound_associations: List[CompoundAssociation] = []
         self.aop_info: Dict[str, AOPInfo] = {}
@@ -294,15 +456,19 @@ class AOPNetwork:
 
     def add_gene_association(self, association: GeneAssociation):
         """Add a gene association"""
-        self.gene_associations.append(association)
+        self.component_associations.append(association)
 
     def add_compound_association(self, association: CompoundAssociation):
         """Add a compound association"""
         self.compound_associations.append(association)
 
+    def add_component_association(self, association: ComponentAssociation):
+        """Add a compound association"""
+        self.component_associations.append(association)
+
     def get_genes_for_ke(self, ke_uri: str) -> List[GeneAssociation]:
         """Get all gene associations for a specific Key Event"""
-        return [assoc for assoc in self.gene_associations if assoc.ke_uri == ke_uri]
+        return [assoc for assoc in self.component_associations if assoc.ke_uri == ke_uri]
 
     def get_compounds_for_aop(self, aop_uri: str) -> List[CompoundAssociation]:
         """Get all compound associations for a specific AOP"""
@@ -331,7 +497,7 @@ class AOPNetwork:
             elements.append({"data": relationship.to_cytoscape_data()})
 
         # Add gene associations
-        for gene_assoc in self.gene_associations:
+        for gene_assoc in self.component_associations:
             elements.extend(gene_assoc.to_cytoscape_elements())
 
         # Add compound associations
@@ -359,7 +525,7 @@ class AOPNetwork:
             "ao_count": ao_count,
             "ke_count": ke_count,
             "ker_count": len(self.relationships),
-            "gene_associations": len(self.gene_associations),
+            "gene_associations": len(self.component_associations),
             "compound_associations": len(self.compound_associations),
             "total_aops": len(self.aop_info),
         }
@@ -496,7 +662,7 @@ class AOPNetworkBuilder:
             compound_name = result.get("compound_name", {}).get("value", "")
             cid = result.get("cid", {}).get("value", "")
             mie_uri = result.get("mie", {}).get("value", "")  # Get MIE directly from SPARQL
-            
+
             if aop_uri and chemical_uri and pubchem_compound:
                 association = CompoundAssociation(
                     aop_uri=aop_uri,
@@ -509,6 +675,19 @@ class AOPNetworkBuilder:
                 )
 
                 self.network.add_compound_association(association)
+
+    def add_component_associations(self, component_sparql_results: List[Dict[str, Any]]):
+        """Add component associations from compound SPARQL results"""
+        for result in component_sparql_results:
+            association = ComponentAssociation(
+                ke_uri=result.get("ke", {}).get("value", ""),
+                process=result.get("process", {}).get("value", ""),
+                process_name=result.get("processName", {}).get("value", ""),
+                object=result.get("object", {}).get("value", ""),
+                object_name=result.get("objectName", {}).get("value", ""),
+                action=result.get("action", {}).get("value", ""),
+            )
+            self.network.add_component_association(association)
 
     def build(self) -> AOPNetwork:
         """Return the constructed network"""
@@ -777,7 +956,7 @@ class AOPTableBuilder:
             "aop_string": aop_string,
             "aop_titles_string": aop_titles_string
         }
-    
+
 
 class GeneTableBuilder:
     """Builds gene table data from Cytoscape network"""
@@ -1052,3 +1231,258 @@ class CompoundTableBuilder:
 
         logger.info(f"Built compound table with {len(table_entries)} entries")
         return table_entries
+
+
+class ComponentTableBuilder:
+    """Builds component table data from component elements"""
+
+    def __init__(self, component_elements: List[Dict[str, Any]]):
+        self.component_elements = component_elements
+        self.component_nodes = self._get_component_nodes()
+        self.component_edges = self._get_component_edges()
+
+    def _get_component_nodes(self) -> List[Dict[str, Any]]:
+        """Get all component nodes (process and object nodes)"""
+        return [
+            element for element in self.component_elements
+            if element.get("data", {}).get("type") == "component_process"
+        ]
+
+    def _get_component_edges(self) -> List[Dict[str, Any]]:
+        """Get all component edges"""
+        return [
+            element for element in self.component_elements
+            if "source" in element.get("data", {}) and "target" in element.get("data", {})
+        ]
+
+    def build_component_table(self) -> List[Dict[str, str]]:
+        """Build component table from component elements"""
+        table_entries = []
+        seen_components = set()
+
+        # Group elements by KE
+        ke_components = self._group_by_ke()
+
+        for ke_id, components in ke_components.items():
+            processes = components.get("processes", [])
+            objects = components.get("objects", [])
+            actions = components.get("actions", [])
+
+            # Create entries for each process
+            for process in processes:
+                # Find associated objects and actions for this process
+                process_objects = self._find_objects_for_process(process["id"], objects, actions)
+                
+                if process_objects:
+                    for obj_data in process_objects:
+                        entry = self._create_component_entry(ke_id, process, obj_data)
+                        component_key = f"{ke_id}_{process['id']}_{obj_data.get('object_id', 'no_object')}"
+                        
+                        if component_key not in seen_components:
+                            table_entries.append(entry)
+                            seen_components.add(component_key)
+                else:
+                    # Process without object
+                    entry = self._create_component_entry(ke_id, process, {})
+                    component_key = f"{ke_id}_{process['id']}_no_object"
+                    
+                    if component_key not in seen_components:
+                        table_entries.append(entry)
+                        seen_components.add(component_key)
+
+        logger.info(f"Built component table with {len(table_entries)} entries")
+        return table_entries
+
+    def _group_by_ke(self) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+        """Group component elements by KE"""
+        ke_components = {}
+
+        # First, identify all KEs from edges - handle both URI formats
+        for edge in self.component_edges:
+            edge_data = edge.get("data", {})
+            source = edge_data.get("source", "")
+            target = edge_data.get("target", "")
+            
+            # KE→process edges (action edges)
+            ke_id = self._normalize_ke_id(source)
+            if ke_id and target.startswith("process_"):
+                if ke_id not in ke_components:
+                    ke_components[ke_id] = {"processes": [], "objects": [], "actions": []}
+
+        # Add processes, objects, and actions
+        for node in self.component_nodes:
+            node_data = node.get("data", {})
+            node_id = node_data.get("id", "")
+            
+            if node_id.startswith("process_"):
+                # Find which KE this process belongs to and get the action
+                ke_info = self._find_ke_and_action_for_process(node_id)
+                if ke_info and ke_info["ke_id"] in ke_components:
+                    process_info = {
+                        "id": node_id,
+                        "name": node_data.get("process_name", node_data.get("label", "")),
+                        "iri": node_data.get("process_iri", ""),
+                        "action": ke_info.get("action", "N/A")  # Action from KE→process edge
+                    }
+                    ke_components[ke_info["ke_id"]]["processes"].append(process_info)
+                    
+            elif node_id.startswith("object_"):
+                # Objects are connected to processes
+                object_info = {
+                    "id": node_id,
+                    "name": node_data.get("object_name", node_data.get("label", "")),
+                    "iri": node_data.get("object_iri", "")
+                }
+                # Find all KEs that have processes connected to this object
+                connected_kes = self._find_kes_for_object(node_id)
+                for ke_id in connected_kes:
+                    if ke_id in ke_components:
+                        ke_components[ke_id]["objects"].append(object_info)
+
+        # Process→object relationships (not actions, just "has object" relationships)
+        for edge in self.component_edges:
+            edge_data = edge.get("data", {})
+            source = edge_data.get("source", "")
+            target = edge_data.get("target", "")
+            label = edge_data.get("label", "")
+            
+            if source.startswith("process_") and target.startswith("object_"):
+                # Find KE for this process-object relationship
+                ke_id = self._find_ke_for_process_object_relation(source)
+                if ke_id and ke_id in ke_components:
+                    relationship_info = {
+                        "process_id": source,
+                        "object_id": target,
+                        "relationship": label  # "has object" or similar
+                    }
+                    ke_components[ke_id]["actions"].append(relationship_info)
+
+        return ke_components
+
+    def _normalize_ke_id(self, source: str) -> Optional[str]:
+        """Convert KE URI to normalized aop.events_ format"""
+        if source.startswith("aop.events_"):
+            return source
+        elif "aop.events/" in source:
+            # Extract from URI format like https://identifiers.org/aop.events/756
+            ke_number = source.split("aop.events/")[-1]
+            return f"aop.events_{ke_number}"
+        return None
+
+    def _find_ke_for_node(self, node_id: str) -> Optional[str]:
+        """Find the KE that a node belongs to"""
+        for edge in self.component_edges:
+            edge_data = edge.get("data", {})
+            source = edge_data.get("source", "")
+            target = edge_data.get("target", "")
+            
+            if target == node_id:
+                return self._normalize_ke_id(source)
+        return None
+
+    def _find_ke_for_process(self, process_id: str) -> Optional[str]:
+        """Find the KE that a process belongs to"""
+        for edge in self.component_edges:
+            edge_data = edge.get("data", {})
+            source = edge_data.get("source", "")
+            target = edge_data.get("target", "")
+            
+            if target == process_id:
+                return self._normalize_ke_id(source)
+        return None
+
+    def _find_kes_for_object(self, object_id: str) -> List[str]:
+        """Find all KEs connected to an object through processes"""
+        kes = set()
+        
+        # Find processes connected to this object
+        connected_processes = []
+        for edge in self.component_edges:
+            edge_data = edge.get("data", {})
+            source = edge_data.get("source", "")
+            target = edge_data.get("target", "")
+            
+            if target == object_id and source.startswith("process_"):
+                connected_processes.append(source)
+        
+        # Find KEs for these processes
+        for process_id in connected_processes:
+            ke_id = self._find_ke_for_process(process_id)
+            if ke_id:
+                kes.add(ke_id)
+        
+        return list(kes)
+
+    def _find_objects_for_process(self, process_id: str, objects: List[Dict[str, Any]], actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Find objects associated with a process"""
+        process_objects = []
+        
+        for relationship in actions:  # These are now process→object relationships
+            if relationship["process_id"] == process_id:
+                # Find the corresponding object
+                object_info = None
+                for obj in objects:
+                    if obj["id"] == relationship["object_id"]:
+                        object_info = obj
+                        break
+                
+                if object_info:
+                    process_objects.append({
+                        "object_id": object_info["id"],
+                        "object_name": object_info["name"],
+                        "object_iri": object_info["iri"],
+                        "relationship": relationship.get("relationship", "has object")
+                    })
+        
+        return process_objects
+
+    def _create_component_entry(self, ke_id: str, process: Dict[str, Any], object_data: Dict[str, Any]) -> Dict[str, str]:
+        """Create a component table entry"""
+        # Extract KE number from ke_id
+        ke_number = ke_id.replace("aop.events_", "") if ke_id.startswith("aop.events_") else ke_id
+        
+        # Extract process ID without prefix
+        process_id = process["id"].replace("process_", "") if process["id"].startswith("process_") else process["id"]
+        
+        # Extract object ID without prefix if object exists
+        object_id = "N/A"
+        if object_data.get("object_id"):
+            object_id = object_data["object_id"].replace("object_", "") if object_data["object_id"].startswith("object_") else object_data["object_id"]
+
+        return {
+            "ke_id": ke_id,
+            "ke_number": ke_number,
+            "ke_uri": f"https://identifiers.org/aop.events/{ke_number}",
+            "process_id": process_id,
+            "process_name": process.get("name", ""),
+            "process_iri": process.get("iri", ""),
+            "object_id": object_id,
+            "object_name": object_data.get("object_name", "N/A"),
+            "object_iri": object_data.get("object_iri", "N/A"),
+            "action": process.get("action", "N/A"),  # Action comes from KE→process edge
+            "relationship": object_data.get("relationship", "N/A"),  # Process→object relationship
+            "node_id": process["id"],
+        }
+
+    def _find_ke_and_action_for_process(self, process_id: str) -> Optional[Dict[str, str]]:
+        """Find the KE and action for a process from KE process edges"""
+        for edge in self.component_edges:
+            edge_data = edge.get("data", {})
+            source = edge_data.get("source", "")
+            target = edge_data.get("target", "")
+            label = edge_data.get("label", "")
+            
+            if target == process_id:
+                ke_id = self._normalize_ke_id(source)
+                if ke_id:
+                    return {
+                        "ke_id": ke_id,
+                        "action": label  # This is the action from KE→process edge
+                    }
+        return None
+
+    def _find_ke_for_process_object_relation(self, process_id: str) -> Optional[str]:
+        """Find the KE for a process-object relationship"""
+        # First find the KE that connects to this process
+        ke_info = self._find_ke_and_action_for_process(process_id)
+        return ke_info["ke_id"] if ke_info else None
