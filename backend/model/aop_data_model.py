@@ -456,7 +456,7 @@ class AOPNetwork:
 
     def add_gene_association(self, association: GeneAssociation):
         """Add a gene association"""
-        self.component_associations.append(association)
+        self.gene_associations.append(association)
 
     def add_compound_association(self, association: CompoundAssociation):
         """Add a compound association"""
