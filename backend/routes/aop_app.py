@@ -50,3 +50,9 @@ def load_and_show_compounds():
 @aop_app.route("/populate_compound_table", methods=["POST"])
 def populate_compound_table():
     return jsonify(aop_service.populate_compound_table(request)), 200
+
+
+## Get components associated with a specific KE
+@aop_app.route("/load_and_show_components", methods=["GET"])
+def load_and_show_components():
+    return aop_service.load_and_show_components(request)

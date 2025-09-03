@@ -14,6 +14,8 @@ class NodeType(Enum):
     UNIPROT = "uniprot"
     ENSEMBL = "ensembl"
     ORGAN = "organ"
+    COMPONENT_PROCESS = "component_process"
+    COMPONENT_OBJECT = "component_object"
     CUSTOM = "custom"
 
 
@@ -25,7 +27,60 @@ class EdgeType(Enum):
     EXPRESSION_IN = "expression_in"
     CUSTOM = "custom"
     IS_STRESSOR_OF = "is stressor of"
+    HAS_PROCESS = "has process"
+    NA = "na"
+    # Component actions https://pmc.ncbi.nlm.nih.gov/articles/PMC6060416/
+    INCREASED = {
+        "label": "increased process quality",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0002304",
+    }
+    DECREASED = {
+        "label": "decreased process quality",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0002301",
+    }
+    DELAYED = {
+        "label": "delayed",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000502",
+    }
+    OCCURRENCE = {
+        "label": "occurrence",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000057",
+    }
+    ABNORMAL = {
+        "label": "abnormal",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000460",
+    }
+    PREMATURE = {
+        "label": "premature",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0001028",
+    }
+    DISRUPTED = {
+        "label": "disrupted",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0001507",
+    }
+    FUNCTIONAL_CHANGE = {
+        "label": "functional change",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0001509",
+    }
+    MORPHOLOGICAL_CHANGE = {
+        "label": "morphological change",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000051",
+    }
+    PATHOLOGICAL = {
+        "label": "pathological",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0001869",
+    }
+    ARRESTED = {
+        "label": "arrested",
+        "iri": "http://purl.obolibrary.org/obo/PATO_0000297",
+    }
 
+    @classmethod
+    def get_iri(cls) -> Set[str]:
+        return {item.value["iri"] for item in cls if isinstance(item.value, dict) and "iri" in item.value}
+    @classmethod
+    def get_label(cls) -> Set[str]:
+        return {item.value["label"] for item in cls if isinstance(item.value, dict) and "label" in item.value}
 
 class DataSourceType(Enum):
     AOPWIKI = "aopwiki"
@@ -185,6 +240,79 @@ class GeneAssociation:
 
 
 @dataclass
+class ComponentAssociation:
+    """Represents component associations with KEs"""
+
+    ke_uri: str
+    process: str
+    process_name: str
+    object: str
+    object_name: str
+    action: str
+
+    def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
+        """Convert to Cytoscape elements (nodes and edges)"""
+        ke = "aop.events_" + self.ke_uri.split("/")[-1]
+        process = self.process.split("/")[-1] if "/" in self.process else self.process
+        object = self.object.split("/")[-1] if "/" in self.object else self.object
+        elements = []
+        process_node_id = f"process_{process}"
+        # Component process node
+        elements.append(
+            {
+                "data": {
+                    "id": process_node_id,
+                    "label": self.process_name,
+                    "type": NodeType.COMPONENT_PROCESS.value,
+                    "process_iri": self.process,
+                    "process_name": self.process_name,
+                },
+                "classes": "process-node",
+            }
+        )
+
+        # Edge from process to KE
+        elements.append(
+            {
+                "data": {
+                    "id": f"{ke}_{process_node_id}",
+                    "source": ke,
+                    "target": process_node_id,
+                    "label": EdgeType.HAS_PROCESS.value,
+                    "type": EdgeType.HAS_PROCESS.value,
+                }
+            }
+        )
+        if self.object:
+            object_node_id = f"object_{object}"
+            # Component object node
+            elements.append(
+                {
+                    "data": {
+                        "id": object_node_id,
+                        "label": self.object_name,
+                        "type": NodeType.COMPONENT_PROCESS.value,
+                        "object_iri": object,
+                        "object_name": self.object_name,
+                    },
+                    "classes": "process-node",
+                }
+            )
+            # Edge from process to object
+            elements.append(
+                {
+                    "data": {
+                        "id": f"{ke}_{process_node_id}_{object_node_id}",
+                        "source": process_node_id,
+                        "target": object_node_id,
+                        "label": self.action if self.action in EdgeType.get_label() else EdgeType.NA.value,
+                        "type": self.action if self.action in EdgeType.get_iri() else EdgeType.NA.value,
+                    }
+                }
+            )
+        return elements
+
+@dataclass
 class CompoundAssociation:
     """Represents compound associations with AOPs"""
 
@@ -272,6 +400,7 @@ class AOPNetwork:
     def __init__(self):
         self.key_events: Dict[str, AOPKeyEvent] = {}
         self.relationships: List[KeyEventRelationship] = []
+        self.component_associations: List[ComponentAssociation] = []
         self.gene_associations: List[GeneAssociation] = []
         self.compound_associations: List[CompoundAssociation] = []
         self.aop_info: Dict[str, AOPInfo] = {}
@@ -294,15 +423,19 @@ class AOPNetwork:
 
     def add_gene_association(self, association: GeneAssociation):
         """Add a gene association"""
-        self.gene_associations.append(association)
+        self.component_associations.append(association)
 
     def add_compound_association(self, association: CompoundAssociation):
         """Add a compound association"""
         self.compound_associations.append(association)
 
+    def add_component_association(self, association: ComponentAssociation):
+        """Add a compound association"""
+        self.component_associations.append(association)
+
     def get_genes_for_ke(self, ke_uri: str) -> List[GeneAssociation]:
         """Get all gene associations for a specific Key Event"""
-        return [assoc for assoc in self.gene_associations if assoc.ke_uri == ke_uri]
+        return [assoc for assoc in self.component_associations if assoc.ke_uri == ke_uri]
 
     def get_compounds_for_aop(self, aop_uri: str) -> List[CompoundAssociation]:
         """Get all compound associations for a specific AOP"""
@@ -331,7 +464,7 @@ class AOPNetwork:
             elements.append({"data": relationship.to_cytoscape_data()})
 
         # Add gene associations
-        for gene_assoc in self.gene_associations:
+        for gene_assoc in self.component_associations:
             elements.extend(gene_assoc.to_cytoscape_elements())
 
         # Add compound associations
@@ -359,7 +492,7 @@ class AOPNetwork:
             "ao_count": ao_count,
             "ke_count": ke_count,
             "ker_count": len(self.relationships),
-            "gene_associations": len(self.gene_associations),
+            "gene_associations": len(self.component_associations),
             "compound_associations": len(self.compound_associations),
             "total_aops": len(self.aop_info),
         }
@@ -496,7 +629,7 @@ class AOPNetworkBuilder:
             compound_name = result.get("compound_name", {}).get("value", "")
             cid = result.get("cid", {}).get("value", "")
             mie_uri = result.get("mie", {}).get("value", "")  # Get MIE directly from SPARQL
-            
+
             if aop_uri and chemical_uri and pubchem_compound:
                 association = CompoundAssociation(
                     aop_uri=aop_uri,
@@ -509,6 +642,19 @@ class AOPNetworkBuilder:
                 )
 
                 self.network.add_compound_association(association)
+
+    def add_component_associations(self, component_sparql_results: List[Dict[str, Any]]):
+        """Add component associations from compound SPARQL results"""
+        for result in component_sparql_results:
+            association = ComponentAssociation(
+                ke_uri=result.get("ke", {}).get("value", ""),
+                process=result.get("process", {}).get("value", ""),
+                process_name=result.get("processName", {}).get("value", ""),
+                object=result.get("object", {}).get("value", ""),
+                object_name=result.get("objectName", {}).get("value", ""),
+                action=result.get("action", {}).get("value", ""),
+            )
+            self.network.add_component_association(association)
 
     def build(self) -> AOPNetwork:
         """Return the constructed network"""
@@ -777,7 +923,7 @@ class AOPTableBuilder:
             "aop_string": aop_string,
             "aop_titles_string": aop_titles_string
         }
-    
+
 
 class GeneTableBuilder:
     """Builds gene table data from Cytoscape network"""
