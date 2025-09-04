@@ -301,9 +301,9 @@ class ComponentAssociation:
                         "id": object_node_id,
                         "label": self.object_name,
                         "type": NodeType.COMPONENT_OBJECT.value,
-                        "object_iri": object,
+                        "object_iri": self.object,  # Keep full IRI here instead of truncated
                         "object_name": self.object_name,
-                        "object_id": object,
+                        "object_id": object,  # Keep short ID for other uses
                     },
                     "classes": "object-node",
                 }
@@ -1376,10 +1376,13 @@ class ComponentTableBuilder:
                 
                 if object_node:
                     node_data = object_node.get("data", {})
+                    # Preserve both the full IRI and the shortened ID
+                    full_object_iri = node_data.get("object_iri", "")
                     object_info = {
                         "object_id": target,
                         "object_name": node_data.get("object_name", node_data.get("label", "")),
-                        "object_iri": node_data.get("object_iri", ""),
+                        "object_iri": full_object_iri,  # Keep full IRI for href
+                        "object_iri_short": target.replace("object_", "") if target.startswith("object_") else target,  # Short ID for other uses
                         "relationship": label  # "has object" or similar
                     }
                     process_object_relationships[source].append(object_info)
@@ -1458,24 +1461,26 @@ class ComponentTableBuilder:
         # Extract process ID without prefix
         process_id = process["id"].replace("process_", "") if process["id"].startswith("process_") else process["id"]
         
-        # Extract object ID without prefix if object exists
+        # Extract object ID 
         object_id = "N/A"
+        object_iri = "N/A"
         if object_data.get("object_id"):
-            object_id = object_data["object_id"].replace("object_", "") if object_data["object_id"].startswith("object_") else object_data["object_id"]
+            object_id = object_data.get("object_iri_short", object_data["object_id"].replace("object_", ""))
+            object_iri = object_data.get("object_iri", "N/A")  # Use full IRI for href
 
         return {
             "ke_id": ke_id,
             "ke_number": ke_number,
             "ke_uri": f"https://identifiers.org/aop.events/{ke_number}",
-            "ke_name": ke_name or "N/A",  # NEW FIELD
+            "ke_name": ke_name or "N/A",
             "process_id": process_id,
             "process_name": process.get("name", ""),
             "process_iri": process.get("iri", ""),
             "object_id": object_id,
             "object_name": object_data.get("object_name", "N/A"),
-            "object_iri": object_data.get("object_iri", "N/A"),
-            "action": process.get("action", "N/A"),  # Action comes from KE→process edge
-            "relationship": object_data.get("relationship", "N/A"),  # Process→object relationship
+            "object_iri": object_iri,  # Full IRI preserved for href
+            "action": process.get("action", "N/A"),
+            "relationship": object_data.get("relationship", "N/A"),
             "node_id": process["id"],
         }
 
