@@ -1318,37 +1318,45 @@ class ComponentTableBuilder:
                 if ke_id not in ke_components:
                     ke_components[ke_id] = {"processes": [], "objects": [], "actions": []}
 
-        # Add processes, objects, and actions
-        for node in self.component_nodes:
-            node_data = node.get("data", {})
-            node_id = node_data.get("id", "")
+        # Add processes with their actions
+        for edge in self.component_edges:
+            edge_data = edge.get("data", {})
+            source = edge_data.get("source", "")
+            target = edge_data.get("target", "")
+            label = edge_data.get("label", "")
             
-            if node_id.startswith("process_"):
-                # Find which KE this process belongs to and get the action
-                ke_info = self._find_ke_and_action_for_process(node_id)
-                if ke_info and ke_info["ke_id"] in ke_components:
+            # KE→process edges
+            ke_id = self._normalize_ke_id(source)
+            if ke_id and target.startswith("process_") and ke_id in ke_components:
+                # Find the process node
+                process_node = None
+                for node in self.component_nodes:
+                    if node.get("data", {}).get("id") == target:
+                        process_node = node
+                        break
+                
+                if process_node:
+                    node_data = process_node.get("data", {})
                     process_info = {
-                        "id": node_id,
+                        "id": target,
                         "name": node_data.get("process_name", node_data.get("label", "")),
                         "iri": node_data.get("process_iri", ""),
-                        "action": ke_info.get("action", "N/A")  # Action from KE→process edge
+                        "action": label  # Action from KE→process edge
                     }
-                    ke_components[ke_info["ke_id"]]["processes"].append(process_info)
                     
-            elif node_id.startswith("object_"):
-                # Objects are connected to processes
-                object_info = {
-                    "id": node_id,
-                    "name": node_data.get("object_name", node_data.get("label", "")),
-                    "iri": node_data.get("object_iri", "")
-                }
-                # Find all KEs that have processes connected to this object
-                connected_kes = self._find_kes_for_object(node_id)
-                for ke_id in connected_kes:
-                    if ke_id in ke_components:
-                        ke_components[ke_id]["objects"].append(object_info)
+                    # Check if this process already exists
+                    existing_process = None
+                    for p in ke_components[ke_id]["processes"]:
+                        if p["id"] == target:
+                            existing_process = p
+                            break
+                    
+                    if not existing_process:
+                        ke_components[ke_id]["processes"].append(process_info)
 
-        # Process→object relationships (not actions, just "has object" relationships)
+        # Add process→object relationships
+        process_object_relationships = {}  # Maps process_id to list of objects
+        
         for edge in self.component_edges:
             edge_data = edge.get("data", {})
             source = edge_data.get("source", "")
@@ -1356,15 +1364,28 @@ class ComponentTableBuilder:
             label = edge_data.get("label", "")
             
             if source.startswith("process_") and target.startswith("object_"):
-                # Find KE for this process-object relationship
-                ke_id = self._find_ke_for_process_object_relation(source)
-                if ke_id and ke_id in ke_components:
-                    relationship_info = {
-                        "process_id": source,
+                if source not in process_object_relationships:
+                    process_object_relationships[source] = []
+                
+                # Find the object node
+                object_node = None
+                for node in self.component_nodes:
+                    if node.get("data", {}).get("id") == target:
+                        object_node = node
+                        break
+                
+                if object_node:
+                    node_data = object_node.get("data", {})
+                    object_info = {
                         "object_id": target,
+                        "object_name": node_data.get("object_name", node_data.get("label", "")),
+                        "object_iri": node_data.get("object_iri", ""),
                         "relationship": label  # "has object" or similar
                     }
-                    ke_components[ke_id]["actions"].append(relationship_info)
+                    process_object_relationships[source].append(object_info)
+
+        # Store the process-object relationships for later use
+        self._process_object_relationships = process_object_relationships
 
         return ke_components
 
@@ -1424,26 +1445,10 @@ class ComponentTableBuilder:
 
     def _find_objects_for_process(self, process_id: str, objects: List[Dict[str, Any]], actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Find objects associated with a process"""
-        process_objects = []
-        
-        for relationship in actions:  # These are now process→object relationships
-            if relationship["process_id"] == process_id:
-                # Find the corresponding object
-                object_info = None
-                for obj in objects:
-                    if obj["id"] == relationship["object_id"]:
-                        object_info = obj
-                        break
-                
-                if object_info:
-                    process_objects.append({
-                        "object_id": object_info["id"],
-                        "object_name": object_info["name"],
-                        "object_iri": object_info["iri"],
-                        "relationship": relationship.get("relationship", "has object")
-                    })
-        
-        return process_objects
+        # Use the stored process-object relationships
+        if hasattr(self, '_process_object_relationships'):
+            return self._process_object_relationships.get(process_id, [])
+        return []
 
     def _create_component_entry(self, ke_id: str, process: Dict[str, Any], object_data: Dict[str, Any], ke_name: str = "") -> Dict[str, str]:
         """Create a component table entry"""
