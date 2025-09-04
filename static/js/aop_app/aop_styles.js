@@ -187,6 +187,120 @@ function positionNodes(cy, fontSizeMultiplier = 0.5, animate = false) { // Chang
                 "transition-duration": transitionDuration,
                 "transition-timing-function": "ease-out"
             }
+        },
+        {
+            selector: ".process-node",
+            style: {
+                "shape": "roundrectangle",
+                "width": `${320 * fontSizeMultiplier}px`,
+                "height": `${140 * fontSizeMultiplier}px`,
+                "background-color": "#ffffff",
+                "border-width": `${1 * fontSizeMultiplier}px`,
+                "border-color": "#000000",
+                "label": ele => {
+                    const processId = ele.data("process_id") || "";
+                    const label = ele.data("label") || "";
+                    return `${processId}\n${label}`;
+                },
+                "text-valign": "center",
+                "text-halign": "center",
+                "font-size": `${32 * fontSizeMultiplier}px`,
+                "font-weight": "normal",
+                "color": "#2196f3",
+                "text-wrap": "wrap",
+                "text-max-width": `${300 * fontSizeMultiplier}px`,
+                "transition-property": "width, height, font-size, text-max-width, border-width",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
+            }
+        },
+        {
+            selector: ".object-node",
+            style: {
+                "shape": "roundrectangle",
+                "width": `${280 * fontSizeMultiplier}px`,
+                "height": `${280 * fontSizeMultiplier}px`,
+                "background-color": "#f3e5f5",
+                "border-width": `${2 * fontSizeMultiplier}px`,
+                "border-color": "#9c27b0",
+                "label": "data(label)",
+                "text-valign": "center",
+                "text-halign": "center",
+                "font-size": `${36 * fontSizeMultiplier}px`,
+                "font-weight": "bold",
+                "color": "#4a148c",
+                "text-wrap": "wrap",
+                "text-max-width": `${260 * fontSizeMultiplier}px`,
+                "transition-property": "width, height, font-size, text-max-width, border-width",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
+            }
+        },
+        {
+            selector: "edge[type='has process']",
+            style: {
+                "curve-style": "bezier",
+                "width": `${4 * fontSizeMultiplier}px`,
+                "line-color": "#4caf50",
+                "opacity": 0.7,
+                "target-arrow-shape": "triangle",
+                "target-arrow-color": "#4caf50",
+                "arrow-scale": 1.5,
+                "label": "data(label)",
+                "text-rotation": "autorotate",
+                "text-margin-y": `${-5 * fontSizeMultiplier}px`,
+                "font-size": `${30 * fontSizeMultiplier}px`,
+                "font-weight": "bold",
+                "color": "#2e7d32",
+                "transition-property": "width, font-size, text-margin-y",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
+            }
+        },
+        {
+            selector: "edge[type='has object']",
+            style: {
+                "curve-style": "bezier",
+                "width": `${3 * fontSizeMultiplier}px`,
+                "line-color": "#9c27b0",
+                "opacity": 0.8,
+                "target-arrow-shape": "triangle",
+                "target-arrow-color": "#9c27b0",
+                "arrow-scale": 1.2,
+                "line-style": "dashed",
+                "label": "data(label)",
+                "text-rotation": "autorotate",
+                "text-margin-y": `${-5 * fontSizeMultiplier}px`,
+                "font-size": `${26 * fontSizeMultiplier}px`,
+                "color": "#4a148c",
+                "transition-property": "width, font-size, text-margin-y",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
+            }
+        },
+        {
+            selector: "edge[label='increased process quality'], edge[label='decreased process quality'], edge[label='delayed'], edge[label='occurrence'], edge[label='abnormal'], edge[label='premature'], edge[label='disrupted'], edge[label='functional change'], edge[label='morphological change'], edge[label='pathological'], edge[label='arrested']",
+            style: {
+                "curve-style": "bezier",
+                "width": `${5 * fontSizeMultiplier}px`,
+                "line-color": "#4caf50",
+                "opacity": 0.6,
+                "target-arrow-shape": "triangle",
+                "target-arrow-color": "#4caf50",
+                "arrow-scale": 1.8,
+                "label": "data(label)",
+                "text-rotation": "autorotate",
+                "text-margin-y": `${-8 * fontSizeMultiplier}px`,
+                "font-size": `${28 * fontSizeMultiplier}px`,
+                "font-weight": "bold",
+                "color": "#1b5e20",
+                "text-background-color": "#e8f5e8",
+                "text-background-opacity": 0.8,
+                "text-background-padding": `${2 * fontSizeMultiplier}px`,
+                "transition-property": "width, font-size, text-margin-y, text-background-padding",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
+            }
         }
     ]).update();
 }
