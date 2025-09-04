@@ -245,6 +245,7 @@ class ComponentAssociation:
     """Represents component associations with KEs"""
 
     ke_uri: str
+    ke_name: str
     process: str
     process_name: str
     object: str
@@ -253,12 +254,14 @@ class ComponentAssociation:
 
     def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
         """Convert to Cytoscape elements (nodes and edges)"""
+        if not self.process:  # DROP components with empty process IRI
+            return []
         ke = "aop.events_" + self.ke_uri.split("/")[-1]
         process = self.process.split("/")[-1] if "/" in self.process else self.process
         object = self.object.split("/")[-1] if "/" in self.object else self.object
         elements = []
         process_node_id = f"process_{process}"
-        # Component process node
+        
         elements.append(
             {
                 "data": {
@@ -267,12 +270,12 @@ class ComponentAssociation:
                     "type": NodeType.COMPONENT_PROCESS.value,
                     "process_iri": self.process,
                     "process_name": self.process_name,
+                    "process_id": process,
                 },
                 "classes": "process-node",
             }
         )
 
-        # Edge from process to KE
         elements.append(
             {
                 "data": {
@@ -284,30 +287,28 @@ class ComponentAssociation:
                         if self.action in EdgeType.get_label()
                         else EdgeType.NA.value
                     ),
-                    "type": (
-                        self.action
-                        if self.action in EdgeType.get_iri()
-                        else EdgeType.NA.value
-                    ),
+                    "type": EdgeType.HAS_PROCESS.value,
                 }
             }
         )
+        
         if self.object:
             object_node_id = f"object_{object}"
-            # Component object node
+            
             elements.append(
                 {
                     "data": {
                         "id": object_node_id,
                         "label": self.object_name,
-                        "type": NodeType.COMPONENT_PROCESS.value,
+                        "type": NodeType.COMPONENT_OBJECT.value,
                         "object_iri": object,
                         "object_name": self.object_name,
+                        "object_id": object,
                     },
-                    "classes": "process-node",
+                    "classes": "object-node",
                 }
             )
-            # Edge from process to object
+            
             elements.append(
                 {
                     "data": {
@@ -325,7 +326,6 @@ class ComponentAssociation:
         """Convert to component table entry format"""
         # Extract KE ID from URI
         ke_id = self.ke_uri.split("/")[-1] if "/" in self.ke_uri else self.ke_uri
-
         # Extract process ID from URI
         process_id = self.process.split("/")[-1] if "/" in self.process else self.process
 
@@ -333,8 +333,9 @@ class ComponentAssociation:
         object_id = self.object.split("/")[-1] if "/" in self.object else self.object
 
         return {
-            "ke_id": f"aop.events_{ke_id}",
+            "ke_id": ke_id,
             "ke_uri": self.ke_uri,
+            "ke_label": self.ke_name if self.ke_name else "N/A",
             "process_id": process_id,
             "process_name": self.process_name,
             "process_iri": self.process,
@@ -679,9 +680,13 @@ class AOPNetworkBuilder:
     def add_component_associations(self, component_sparql_results: List[Dict[str, Any]]):
         """Add component associations from compound SPARQL results"""
         for result in component_sparql_results:
+            process_iri = result.get("process", {}).get("value", "")
+            if not process_iri:  # skip empty process iri (drop from network & table)
+                continue
             association = ComponentAssociation(
                 ke_uri=result.get("ke", {}).get("value", ""),
-                process=result.get("process", {}).get("value", ""),
+                ke_name=result.get("ke_name", {}).get("value", ""),
+                process=process_iri,
                 process_name=result.get("processName", {}).get("value", ""),
                 object=result.get("object", {}).get("value", ""),
                 object_name=result.get("objectName", {}).get("value", ""),
@@ -1245,7 +1250,7 @@ class ComponentTableBuilder:
         """Get all component nodes (process and object nodes)"""
         return [
             element for element in self.component_elements
-            if element.get("data", {}).get("type") == "component_process"
+            if element.get("data", {}).get("type") in ("component_process", "component_object")
         ]
 
     def _get_component_edges(self) -> List[Dict[str, Any]]:
@@ -1267,15 +1272,19 @@ class ComponentTableBuilder:
             processes = components.get("processes", [])
             objects = components.get("objects", [])
             actions = components.get("actions", [])
+            ke_name = self._get_ke_name(ke_id)  # NEW: resolve ke_name
 
             # Create entries for each process
             for process in processes:
+                # Skip processes lacking iri (cleanup safeguard)
+                if not process.get("iri"):
+                    continue
                 # Find associated objects and actions for this process
                 process_objects = self._find_objects_for_process(process["id"], objects, actions)
                 
                 if process_objects:
                     for obj_data in process_objects:
-                        entry = self._create_component_entry(ke_id, process, obj_data)
+                        entry = self._create_component_entry(ke_id, process, obj_data, ke_name)  # UPDATED
                         component_key = f"{ke_id}_{process['id']}_{obj_data.get('object_id', 'no_object')}"
                         
                         if component_key not in seen_components:
@@ -1283,7 +1292,7 @@ class ComponentTableBuilder:
                             seen_components.add(component_key)
                 else:
                     # Process without object
-                    entry = self._create_component_entry(ke_id, process, {})
+                    entry = self._create_component_entry(ke_id, process, {}, ke_name)  # UPDATED
                     component_key = f"{ke_id}_{process['id']}_no_object"
                     
                     if component_key not in seen_components:
@@ -1436,7 +1445,7 @@ class ComponentTableBuilder:
         
         return process_objects
 
-    def _create_component_entry(self, ke_id: str, process: Dict[str, Any], object_data: Dict[str, Any]) -> Dict[str, str]:
+    def _create_component_entry(self, ke_id: str, process: Dict[str, Any], object_data: Dict[str, Any], ke_name: str = "") -> Dict[str, str]:
         """Create a component table entry"""
         # Extract KE number from ke_id
         ke_number = ke_id.replace("aop.events_", "") if ke_id.startswith("aop.events_") else ke_id
@@ -1453,6 +1462,7 @@ class ComponentTableBuilder:
             "ke_id": ke_id,
             "ke_number": ke_number,
             "ke_uri": f"https://identifiers.org/aop.events/{ke_number}",
+            "ke_name": ke_name or "N/A",  # NEW FIELD
             "process_id": process_id,
             "process_name": process.get("name", ""),
             "process_iri": process.get("iri", ""),
@@ -1486,3 +1496,16 @@ class ComponentTableBuilder:
         # First find the KE that connects to this process
         ke_info = self._find_ke_and_action_for_process(process_id)
         return ke_info["ke_id"] if ke_info else None
+
+    def _get_ke_name(self, ke_id: str) -> str:
+        """Attempt to resolve the KE name (label) from provided elements"""
+        # Possible KE identifiers in elements: raw normalized id or full URI
+        candidates = {ke_id}
+        if ke_id.startswith("aop.events_"):
+            number = ke_id.replace("aop.events_", "")
+            candidates.add(f"https://identifiers.org/aop.events/{number}")
+        for element in self.component_elements:
+            data = element.get("data", {})
+            if data.get("id") in candidates:
+                return data.get("label") or data.get("ke_label") or ""
+        return ""

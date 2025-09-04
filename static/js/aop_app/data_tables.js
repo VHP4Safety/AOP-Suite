@@ -2434,7 +2434,7 @@ class ComponentTableManager extends DataTableManager {
     matchesFilter(row) {
         const searchFields = [
             row.ke_number,
-            row.ke_id,
+            row.ke_name,
             row.process_name,
             row.process_id,
             row.object_name,
@@ -2512,46 +2512,56 @@ class ComponentTableManager extends DataTableManager {
     }
 
     generateComponentRowHTML(row, index) {
-        // Get KE label from network node if available
-        let keDisplay = row.ke_id;
-        let keLabel = '';
-        
-        const cyNode = window.cy ? window.cy.getElementById(row.ke_id) : null;
+        // Use KE label from network if available
+        let keLabel = row.ke_name;
+        const cyNode = (window.cy && row.ke_id) ? window.cy.getElementById(row.ke_id) : null;
         if (cyNode && cyNode.length > 0) {
-            keLabel = cyNode.data('label') || cyNode.data('name') || '';
-            if (keLabel) {
-                keDisplay = keLabel;
-            }
+            const lbl = cyNode.data('label') || cyNode.data('name');
+            if (lbl) keLabel = lbl;
         }
-        
-        const keLink = `<a href="https://identifiers.org/aop.events/${row.ke_number}" target="_blank" class="ke-link" title="${row.ke_id}">${this.highlightMatch(keDisplay)}</a>`;
-        
-        const processLink = row.process_iri && row.process_iri !== 'N/A' ? 
-            `<a href="${row.process_iri}" target="_blank" class="process-link">${this.highlightMatch(row.process_name)}</a>` :
-            this.highlightMatch(row.process_name);
 
-        const actionDisplay = row.action !== 'N/A' ? 
-            `<span class="action-text">${this.highlightMatch(row.action)}</span>` : 
-            '<span class="text-muted">N/A</span>';
+        // Determine KE type for badge (mie / ao / ke)
+        const keType = this._getKEType(row.ke_id);
+        const keTypeClass = `node-type-${keType}`;
 
-        const objectDisplay = row.object_name !== 'N/A' ?
-            (row.object_iri && row.object_iri !== 'N/A' ?
-                `<a href="${row.object_iri}" target="_blank" class="object-link">${this.highlightMatch(row.object_name)}</a>` :
-                `<span class="object-text">${this.highlightMatch(row.object_name)}</span>`) :
-            '<span class="text-muted">N/A</span>';
+        const keNumberBlock = row.ke_number
+            ? `<small class="ke-number text-muted d-block">#${row.ke_number}</small>`
+            : '';
+
+        const keLink = `
+            <span class="node-type-badge ${keTypeClass}">${keType.toUpperCase()}</span>
+            <a href="https://identifiers.org/aop.events/${row.ke_number || ''}" 
+               target="_blank" 
+               class="ke-link" 
+               title="${row.ke_id}">${this.highlightMatch(keLabel)}</a>
+            ${keNumberBlock}
+        `;
+
+        const processLink = (row.process_iri && row.process_iri !== 'N/A')
+            ? `<a href="${row.process_iri}" target="_blank" class="process-link">${this.highlightMatch(row.process_name)}</a>`
+            : this.highlightMatch(row.process_name || 'N/A');
+
+        const actionDisplay = row.action && row.action !== 'N/A'
+            ? `<span class="action-text">${this.highlightMatch(row.action)}</span>`
+            : '<span class="text-muted">N/A</span>';
+
+        const objectDisplay = (row.object_name && row.object_name !== 'N/A')
+            ? (row.object_iri && row.object_iri !== 'N/A'
+                ? `<a href="${row.object_iri}" target="_blank" class="object-link">${this.highlightMatch(row.object_name)}</a>`
+                : `<span class="object-text">${this.highlightMatch(row.object_name)}</span>`)
+            : '<span class="text-muted">N/A</span>';
 
         return `
-            <tr data-ke-id="${row.ke_id}" 
+            <tr data-ke-id="${row.ke_id}"
                 data-process-id="${row.process_id}"
                 data-object-id="${row.object_id}"
                 data-node-id="${row.node_id}"
                 data-row-index="${index}"
-                class="component-row"
+                class="component-row clickable-row"
                 style="cursor: pointer;">
                 <td class="ke-cell">
                     <div class="ke-content">
                         ${keLink}
-                        ${row.ke_number ? `<small class="ke-number text-muted d-block">#${row.ke_number}</small>` : ''}
                     </div>
                 </td>
                 <td class="process-cell" data-node-id="${row.node_id}">
@@ -2571,6 +2581,17 @@ class ComponentTableManager extends DataTableManager {
                 </td>
             </tr>
         `;
+    }
+
+    _getKEType(keId) {
+        if (!window.cy || !keId) return 'ke';
+        const n = window.cy.getElementById(keId);
+        if (n && n.length > 0) {
+            const d = n.data();
+            if (d.is_mie || d.type === 'mie') return 'mie';
+            if (d.is_ao || d.type === 'ao') return 'ao';
+        }
+        return 'ke';
     }
 
     renderTable() {
@@ -2620,23 +2641,32 @@ class ComponentTableManager extends DataTableManager {
             const styles = document.createElement('style');
             styles.id = 'component-table-styles';
             styles.textContent = `
-                .component-row {
-                    border-left: 3px solid #17a2b8 !important;
-                    background-color: #f8fdff !important;
+                .component-table-container {
+                    max-height: 600px;
+                    overflow-y: auto;
                 }
-
-                .component-row:hover {
-                    background-color: #f8f9fa !important;
+                
+                .node-type-badge {
+                    display: inline-block;
+                    padding: 2px 6px;
+                    border-radius: 4px;
+                    font-size: 0.8em;
+                    font-weight: 500;
+                    margin-right: 4px;
                 }
+                
+                .node-type-mie { background-color: #ccffcc; color: rgb(139, 192, 155); }
+                .node-type-ao { background-color: #ffe6e6; color: #c62828; }
+                .node-type-ke { background-color: #ffff99; color: rgb(180, 180, 56); }
+                .node-type-unknown { background-color: #f5f5f5; color: #666; }
 
                 .ke-link, .process-link, .object-link {
-                    color: #0056b3 !important;
-                    font-weight: 600;
+                    color: #007bff;
                     text-decoration: none;
+                    font-weight: 500;
                 }
 
                 .ke-link:hover, .process-link:hover, .object-link:hover {
-                    color: #003d82 !important;
                     text-decoration: underline;
                 }
 
@@ -2669,6 +2699,10 @@ class ComponentTableManager extends DataTableManager {
                     transition: background-color 0.2s ease;
                 }
 
+                #component_table tbody tr:hover {
+                    background-color: #f8f9fa !important;
+                }
+
                 #component_table tbody td {
                     padding: 8px 12px;
                     vertical-align: middle;
@@ -2676,79 +2710,42 @@ class ComponentTableManager extends DataTableManager {
 
                 .ke-cell {
                     font-weight: 600;
+                    color: #155724;
                 }
 
-                .process-cell {
-                    font-weight: 500;
+                .process-cell, .object-cell {
+                    transition: all 0.2s ease;
+                    padding: 8px 12px;
+                    border-radius: 4px;
                 }
 
-                .component-table-panel .table-filter-container {
-                    background: #f8f9fa;
-                    padding: 10px;
-                    border-radius: 5px;
-                    margin-bottom: 10px;
+                .process-cell:hover, .object-cell:hover {
+                    background-color: #e7f3ff !important;
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                 }
 
-                .component-table-panel .input-group-text {
-                    background: #e9ecef;
-                    border-color: #ced4da;
+                .clickable-row {
+                    transition: all 0.2s ease;
+                }
+
+                .clickable-row:hover {
+                    background-color: #f8f9fa !important;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+
+                .table-selected {
+                    background-color: #e3f2fd !important;
+                    border-left: 4px solid #2196F3 !important;
+                }
+
+                .missing-label {
+                    color: #dc3545;
+                    font-style: italic;
                 }
             `;
             document.head.appendChild(styles);
         }
-    }
-
-    setupComponentTableEventHandlers() {
-        const tableBody = $("#component_table tbody");
-        if (!tableBody.length) return;
-
-        // Remove existing event handlers to prevent duplicates
-        tableBody.off("click", "tr");
-
-        // Add click handler for component rows
-        tableBody.on("click", "tr", (e) => {
-            // Don't trigger if clicking on a link
-            if ($(e.target).is('a') || $(e.target).closest('a').length) {
-                return;
-            }
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            const row = $(e.currentTarget);
-            const keId = row.data("ke-id");
-            const nodeId = row.data("node-id");
-            const rowIndex = row.data("row-index");
-
-            // Selection handling
-            if (e.ctrlKey || e.metaKey) {
-                this.toggleRowSelection(row[0], { component: keId });
-            } else {
-                this.clearTableSelection();
-                row.addClass('table-selected');
-                this.selectedRows.add(parseInt(rowIndex));
-            }
-
-            // Network highlighting
-            if (nodeId && window.cy) {
-                this.highlightNodeInNetwork(nodeId);
-            }
-
-            console.log(`Component clicked: ${keId}`);
-        });
-
-        // Process cell click handlers for network highlighting
-        tableBody.find('.process-cell').off('click').on('click', (e) => {
-            if (e.target.closest('a')) return;
-            
-            e.preventDefault();
-            e.stopPropagation();
-
-            const nodeId = $(e.currentTarget).data('node-id');
-            if (nodeId && nodeId !== 'N/A') {
-                this.highlightNodeInNetwork(nodeId);
-            }
-        });
     }
 
     async performTableUpdate() {
@@ -2895,6 +2892,56 @@ class ComponentTableManager extends DataTableManager {
                 </td>
             </tr>
         `);
+    }
+
+    // Added: row/event handlers for component table
+    setupComponentTableEventHandlers() {
+        const tableBody = $("#component_table tbody");
+        if (!tableBody.length) return;
+
+        // Remove previous handlers to avoid duplicates
+        tableBody.off('click', 'tr');
+
+        tableBody.on('click', 'tr', (e) => {
+            // Ignore clicks on links
+            if ($(e.target).is('a') || $(e.target).closest('a').length) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const rowEl = $(e.currentTarget);
+            const rowIndex = rowEl.data('row-index');
+            if (rowIndex === undefined || this.filteredData[rowIndex] === undefined) return;
+
+            // Selection logic
+            if (e.ctrlKey || e.metaKey) {
+                this.toggleRowSelection(rowEl[0], this.filteredData[rowIndex]);
+            } else {
+                this.clearTableSelection();
+                rowEl.addClass('table-selected');
+                this.selectedRows.add(parseInt(rowIndex));
+            }
+
+            // Network highlighting preference: KE node > process node > object node
+            const keId = rowEl.data('ke-id');
+            const processNodeId = rowEl.data('node-id');
+            const objectId = rowEl.data('object-id');
+
+            let targetId = null;
+            if (window.cy) {
+                if (keId && window.cy.getElementById(keId).length) {
+                    targetId = keId;
+                } else if (processNodeId && window.cy.getElementById(processNodeId).length) {
+                    targetId = processNodeId;
+                } else if (objectId && window.cy.getElementById(objectId).length) {
+                    targetId = objectId;
+                }
+            }
+
+            if (targetId) {
+                this.highlightNodeInNetwork(targetId);
+            }
+        });
     }
 }
 
