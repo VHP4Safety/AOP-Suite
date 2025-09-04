@@ -77,6 +77,44 @@ class ManualControls {
                 this.updateNodeDropdowns();
             });
         }
+
+        // Handle edge type changes to update label options
+        const edgeTypeSelect = document.getElementById('edge-type');
+        if (edgeTypeSelect) {
+            edgeTypeSelect.addEventListener('change', () => {
+                const sourceId = document.getElementById('source-node').value;
+                const targetId = document.getElementById('target-node').value;
+                
+                const sourceType = this.getNodeTypeFromDropdown(sourceId);
+                const targetType = this.getNodeTypeFromDropdown(targetId);
+                
+                this.updateEdgeLabelOptions(edgeTypeSelect.value, sourceType, targetType);
+            });
+        }
+
+        // Handle node selection changes to update edge label options
+        const sourceNodeSelect = document.getElementById('source-node');
+        const targetNodeSelect = document.getElementById('target-node');
+        
+        if (sourceNodeSelect) {
+            sourceNodeSelect.addEventListener('change', () => {
+                const edgeType = document.getElementById('edge-type').value;
+                const sourceType = this.getNodeTypeFromDropdown(sourceNodeSelect.value);
+                const targetType = this.getNodeTypeFromDropdown(targetNodeSelect.value);
+                
+                this.updateEdgeLabelOptions(edgeType, sourceType, targetType);
+            });
+        }
+        
+        if (targetNodeSelect) {
+            targetNodeSelect.addEventListener('change', () => {
+                const edgeType = document.getElementById('edge-type').value;
+                const sourceType = this.getNodeTypeFromDropdown(sourceNodeSelect.value);
+                const targetType = this.getNodeTypeFromDropdown(targetNodeSelect.value);
+                
+                this.updateEdgeLabelOptions(edgeType, sourceType, targetType);
+            });
+        }
     }
 
     setupSearchableDropdowns() {
@@ -169,7 +207,7 @@ class ManualControls {
         console.log(`Updated node dropdowns with ${nodes.length} nodes`);
     }
 
-    // Add a new node to the network
+    // Enhanced addNode to handle component node types
     addNode() {
         const nodeType = $("#node-type").val();
         const nodeLabels = $("#node-label").val().trim();
@@ -199,7 +237,7 @@ class ManualControls {
             if (!label) return;
             
             // Generate ID if not provided or use corresponding ID from list
-            const finalId = ids[index] || `${nodeType}_${label.replace(/\s+/g, '_')}_${Date.now()}_${index}`;
+            const finalId = ids[index] || this.generateNodeId(nodeType, label);
 
             // Check if node already exists
             if (window.cy.getElementById(finalId).length > 0) {
@@ -209,20 +247,44 @@ class ManualControls {
             }
 
             try {
-                // Create node data
+                // Create node data with type-specific properties and correct classes
                 const nodeData = {
                     data: {
                         id: finalId,
                         label: label,
                         type: nodeType
                     },
-                    classes: `${nodeType}-node`
+                    classes: this.getNodeClasses(nodeType)  // Use proper class assignment
                 };
+
+                // Add type-specific properties
+                if (nodeType === 'component_process') {
+                    nodeData.data.process_name = label;
+                    nodeData.data.process_id = finalId.replace('component_process_', '');
+                    nodeData.data.process_iri = `http://purl.obolibrary.org/obo/${finalId.replace('component_process_', '')}`;
+                } else if (nodeType === 'component_object') {
+                    nodeData.data.object_name = label;
+                    nodeData.data.object_id = finalId.replace('component_object_', '');
+                    nodeData.data.object_iri = `http://purl.obolibrary.org/obo/${finalId.replace('component_object_', '')}`;
+                } else if (nodeType === 'ke') {
+                    // Add KE-specific properties
+                    nodeData.data.is_mie = false;
+                    nodeData.data.is_ao = false;
+                } else if (nodeType === 'chemical') {
+                    nodeData.data.compound_name = label;
+                    nodeData.data.chemical_label = label;
+                } else if (nodeType === 'uniprot') {
+                    nodeData.data.uniprot_id = finalId.replace('uniprot_', '');
+                } else if (nodeType === 'ensembl') {
+                    nodeData.data.ensembl_id = finalId.replace('ensembl_', '');
+                } else if (nodeType === 'organ') {
+                    nodeData.data.organ_name = label;
+                }
 
                 nodesToAdd.push(nodeData);
                 addedCount++;
                 
-                console.log(`Prepared node: ${finalId} (type: ${nodeType})`);
+                console.log(`Prepared node: ${finalId} (type: ${nodeType}, classes: ${nodeData.classes})`);
 
             } catch (error) {
                 console.error(`Error preparing node ${label}:`, error);
@@ -265,6 +327,23 @@ class ManualControls {
         
         // Show status
         this.showStatus(message, addedCount > 0 ? 'success' : 'warning');
+    }
+
+    // Get the correct CSS classes for each node type
+    getNodeClasses(nodeType) {
+        const classMap = {
+            'ke': 'ke-node',
+            'mie': 'mie-node',
+            'ao': 'ao-node',
+            'chemical': 'chemical-node',
+            'uniprot': 'uniprot-node',
+            'ensembl': 'ensembl-node',
+            'component_process': 'process-node',
+            'component_object': 'object-node',
+            'organ': 'organ-node',
+            'custom': 'custom-node'
+        };
+        return classMap[nodeType] || `${nodeType}-node`;
     }
 
     parseMultipleValues(input) {
@@ -320,7 +399,13 @@ class ManualControls {
         const sourceId = $("#source-node").val();
         const targetId = $("#target-node").val();
         const edgeType = $("#edge-type").val();
-        const edgeLabel = $("#edge-label").val().trim();
+        let edgeLabel = $("#edge-label").val().trim();
+
+        // Check for edge label select (for component actions)
+        const edgeLabelSelect = document.getElementById('edge-label-select');
+        if (edgeLabelSelect && edgeLabelSelect.value) {
+            edgeLabel = edgeLabelSelect.value;
+        }
 
         if (!sourceId || !targetId) {
             alert("Please select both source and target nodes");
@@ -352,16 +437,32 @@ class ManualControls {
         }
 
         try {
-            // Create edge data
+            // Create edge data with type-specific properties
             const edgeData = {
                 data: {
                     id: edgeId,
                     source: sourceId,
                     target: targetId,
                     type: edgeType,
-                    label: edgeLabel || edgeType
+                    label: edgeLabel || this.getDefaultEdgeLabel(edgeType)
                 }
             };
+
+            // Handle component action edge types specially
+            if (this.isComponentActionEdgeType(edgeType)) {
+                // For component actions, use the action label directly
+                if (edgeType === 'has_process') {
+                    edgeData.data.type = 'has process';
+                } else if (edgeType === 'has_object') {
+                    edgeData.data.type = 'has object';
+                } else {
+                    // For direct component actions, use the full label
+                    edgeData.data.type = 'has process';  // Underlying type is has_process
+                    edgeData.data.label = this.getDefaultEdgeLabel(edgeType);  // Action label
+                }
+            } else if (edgeType === 'is_stressor_of') {
+                edgeData.data.type = 'is stressor of';
+            }
 
             // Add to network with smooth animation
             window.cy.add(edgeData);
@@ -381,20 +482,32 @@ class ManualControls {
             $("#target-node").val("");
             $("#edge-label").val("");
             
+            // Clear edge label select if it exists
+            if (edgeLabelSelect) {
+                edgeLabelSelect.value = '';
+            }
+            
             // Clear search boxes
             $("#source-node-search").val("");
             $("#target-node-search").val("");
 
-            // Manually trigger AOP table update
-            if (window.populateAopTable) {
+            // Update relevant tables based on the edge type
+            if (this.isComponentActionEdgeType(edgeType)) {
+                // Component edge - update component table
+                console.log("Manual component edge addition - triggering component table update");
+                if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
+                    setTimeout(() => {
+                        window.componentTableManager.performTableUpdate();
+                    }, 100);
+                }
+            } else {
+                // Regular edge - update AOP table
                 console.log("Manual edge addition - triggering AOP table update");
-                setTimeout(() => {
-                    window.populateAopTable();
-                }, 100);
-                
-                setTimeout(() => {
-                    window.populateAopTable();
-                }, 500);
+                if (window.populateAopTable) {
+                    setTimeout(() => {
+                        window.populateAopTable();
+                    }, 100);
+                }
             }
 
             console.log(`Added edge: ${edgeId}`);
@@ -450,9 +563,139 @@ class ManualControls {
             'ker': 'Key Event Relationship',
             'interaction': 'Interacts with',
             'part_of': 'Part of',
-            'translates_to': 'Translates to'
+            'translates_to': 'Translates to',
+            'has_process': 'Has process',
+            'has_object': 'Has object',
+            'is_stressor_of': 'Is stressor of',
+            'expression_in': 'Expression in',
+            'increased_process_quality': 'increased process quality',
+            'decreased_process_quality': 'decreased process quality',
+            'delayed': 'delayed',
+            'occurrence': 'occurrence',
+            'abnormal': 'abnormal',
+            'premature': 'premature',
+            'disrupted': 'disrupted',
+            'functional_change': 'functional change',
+            'morphological_change': 'morphological change',
+            'pathological': 'pathological',
+            'arrested': 'arrested',
+            'custom': 'Connection'
         };
         return labels[edgeType] || 'Connection';
+    }
+
+    // Get appropriate placeholder for edge label based on type
+    getEdgeLabelPlaceholder(edgeType) {
+        const placeholders = {
+            'ker': 'e.g., directly leads to, indirectly leads to',
+            'interaction': 'e.g., binds to, inhibits, activates',
+            'part_of': 'e.g., component of, member of',
+            'translates_to': 'e.g., codes for, produces',
+            'has_process': 'e.g., increased, decreased, abnormal',
+            'has_object': 'e.g., affects, targets',
+            'is_stressor_of': 'e.g., triggers, initiates',
+            'expression_in': 'e.g., expressed in, localized to',
+            'increased_process_quality': 'Increased process quality',
+            'decreased_process_quality': 'Decreased process quality',
+            'delayed': 'Delayed process',
+            'occurrence': 'Process occurrence',
+            'abnormal': 'Abnormal process',
+            'premature': 'Premature process',
+            'disrupted': 'Disrupted process',
+            'functional_change': 'Functional change in process',
+            'morphological_change': 'Morphological change in process',
+            'pathological': 'Pathological process',
+            'arrested': 'Arrested process',
+            'custom': 'Enter custom relationship'
+        };
+        return placeholders[edgeType] || 'Enter connection label';
+    }
+
+    // Check if edge type is a component action
+    isComponentActionEdgeType(edgeType) {
+        const componentActionTypes = [
+            'has_process', 'has_object', 'increased_process_quality', 'decreased_process_quality',
+            'delayed', 'occurrence', 'abnormal', 'premature', 'disrupted', 
+            'functional_change', 'morphological_change', 'pathological', 'arrested'
+        ];
+        return componentActionTypes.includes(edgeType);
+    }
+
+    // Get component action options for process edges
+    getComponentActionOptions() {
+        return [
+            { value: 'increased process quality', label: 'Increased process quality' },
+            { value: 'decreased process quality', label: 'Decreased process quality' },
+            { value: 'delayed', label: 'Delayed' },
+            { value: 'occurrence', label: 'Occurrence' },
+            { value: 'abnormal', label: 'Abnormal' },
+            { value: 'premature', label: 'Premature' },
+            { value: 'disrupted', label: 'Disrupted' },
+            { value: 'functional change', label: 'Functional change' },
+            { value: 'morphological change', label: 'Morphological change' },
+            { value: 'pathological', label: 'Pathological' },
+            { value: 'arrested', label: 'Arrested' }
+        ];
+    }
+
+    // Update edge label options based on edge type and nodes
+    updateEdgeLabelOptions(edgeType, sourceNodeType, targetNodeType) {
+        const edgeLabelInput = document.getElementById('edge-label');
+        const edgeLabelSelect = document.getElementById('edge-label-select');
+        
+        // Remove existing select if present
+        if (edgeLabelSelect) {
+            edgeLabelSelect.remove();
+        }
+
+        // For KE -> process edges, show component action dropdown
+        if (edgeType === 'has_process' && 
+            (sourceNodeType === 'ke' || sourceNodeType === 'mie' || sourceNodeType === 'ao') &&
+            targetNodeType === 'component_process') {
+            
+            // Create dropdown for component actions
+            const select = document.createElement('select');
+            select.id = 'edge-label-select';
+            select.className = 'form-control';
+            
+            // Add default option
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = 'Select action...';
+            select.appendChild(defaultOption);
+            
+            // Add component action options
+            this.getComponentActionOptions().forEach(action => {
+                const option = document.createElement('option');
+                option.value = action.value;  // Use the actual edge label value
+                option.textContent = action.label;
+                select.appendChild(option);
+            });
+            
+            // Replace input with select
+            edgeLabelInput.style.display = 'none';
+            edgeLabelInput.parentNode.appendChild(select);
+            
+            // Update input value when select changes
+            select.addEventListener('change', () => {
+                edgeLabelInput.value = select.value;
+            });
+        } else {
+            // Show regular input
+            edgeLabelInput.style.display = 'block';
+            edgeLabelInput.placeholder = this.getEdgeLabelPlaceholder(edgeType);
+        }
+    }
+
+    // Get node type from dropdown selection
+    getNodeTypeFromDropdown(nodeId) {
+        if (!window.cy || !nodeId) return 'unknown';
+        
+        const node = window.cy.getElementById(nodeId);
+        if (node.length > 0) {
+            return node.data('type') || 'unknown';
+        }
+        return 'unknown';
     }
 }
 

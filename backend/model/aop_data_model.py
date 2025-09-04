@@ -30,58 +30,46 @@ class EdgeType(Enum):
     HAS_PROCESS = "has process"
     HAS_OBJECT = "has object"
     NA = "na"
-    # Component actions https://pmc.ncbi.nlm.nih.gov/articles/PMC6060416/
-    INCREASED = {
-        "label": "increased process quality",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0002304",
-    }
-    DECREASED = {
-        "label": "decreased process quality",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0002301",
-    }
-    DELAYED = {
-        "label": "delayed",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000502",
-    }
-    OCCURRENCE = {
-        "label": "occurrence",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000057",
-    }
-    ABNORMAL = {
-        "label": "abnormal",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000460",
-    }
-    PREMATURE = {
-        "label": "premature",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0001028",
-    }
-    DISRUPTED = {
-        "label": "disrupted",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0001507",
-    }
-    FUNCTIONAL_CHANGE = {
-        "label": "functional change",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0001509",
-    }
-    MORPHOLOGICAL_CHANGE = {
-        "label": "morphological change",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000051",
-    }
-    PATHOLOGICAL = {
-        "label": "pathological",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0001869",
-    }
-    ARRESTED = {
-        "label": "arrested",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000297",
-    }
+    
+    # Component action edge types - these are actual edge labels/types
+    INCREASED = "increased process quality"
+    DECREASED = "decreased process quality"
+    DELAYED = "delayed"
+    OCCURRENCE = "occurrence"
+    ABNORMAL = "abnormal"
+    PREMATURE = "premature"
+    DISRUPTED = "disrupted"
+    FUNCTIONAL_CHANGE = "functional change"
+    MORPHOLOGICAL_CHANGE = "morphological change"
+    PATHOLOGICAL = "pathological"
+    ARRESTED = "arrested"
+
+    @classmethod
+    def get_component_actions(cls) -> Set[str]:
+        """Get all component action labels"""
+        return {
+            cls.INCREASED.value,
+            cls.DECREASED.value,
+            cls.DELAYED.value,
+            cls.OCCURRENCE.value,
+            cls.ABNORMAL.value,
+            cls.PREMATURE.value,
+            cls.DISRUPTED.value,
+            cls.FUNCTIONAL_CHANGE.value,
+            cls.MORPHOLOGICAL_CHANGE.value,
+            cls.PATHOLOGICAL.value,
+            cls.ARRESTED.value,
+        }
 
     @classmethod
     def get_iri(cls) -> Set[str]:
         return {item.value["iri"] for item in cls if isinstance(item.value, dict) and "iri" in item.value}
+    
     @classmethod
     def get_label(cls) -> Set[str]:
-        return {item.value["label"] for item in cls if isinstance(item.value, dict) and "label" in item.value}
+        # For component actions, return the action labels directly
+        component_actions = cls.get_component_actions()
+        return {item.value["label"] for item in cls if isinstance(item.value, dict) and "label" in item.value} | component_actions
 
 class DataSourceType(Enum):
     AOPWIKI = "aopwiki"
@@ -272,9 +260,13 @@ class ComponentAssociation:
                     "process_name": self.process_name,
                     "process_id": process,
                 },
-                "classes": "process-node",
+                "classes": "process-node component-node",
             }
         )
+
+        # Determine edge label - use action if it's a valid component action, otherwise use has_process
+        edge_label = self.action if self.action in EdgeType.get_component_actions() else EdgeType.HAS_PROCESS.value
+        edge_type = EdgeType.HAS_PROCESS.value  # Always use has_process as the type
 
         elements.append(
             {
@@ -282,12 +274,8 @@ class ComponentAssociation:
                     "id": f"{ke}_{process_node_id}",
                     "source": self.ke_uri,
                     "target": process_node_id,
-                    "label": (
-                        self.action
-                        if self.action in EdgeType.get_label()
-                        else EdgeType.NA.value
-                    ),
-                    "type": EdgeType.HAS_PROCESS.value,
+                    "label": edge_label,
+                    "type": edge_type,
                 }
             }
         )
@@ -305,7 +293,7 @@ class ComponentAssociation:
                         "object_name": self.object_name,
                         "object_id": object,  # Keep short ID for other uses
                     },
-                    "classes": "object-node",
+                    "classes": "object-node component-node",
                 }
             )
             
@@ -856,6 +844,7 @@ class CytoscapeNetworkParser:
     def get_gene_relationships(self) -> List[CytoscapeEdge]:
         """Get all gene-related edges"""
         return [edge for edge in self.edges if edge.is_gene_relationship()]
+
 
 
 class AOPTableBuilder:
