@@ -30,58 +30,46 @@ class EdgeType(Enum):
     HAS_PROCESS = "has process"
     HAS_OBJECT = "has object"
     NA = "na"
-    # Component actions https://pmc.ncbi.nlm.nih.gov/articles/PMC6060416/
-    INCREASED = {
-        "label": "increased process quality",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0002304",
-    }
-    DECREASED = {
-        "label": "decreased process quality",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0002301",
-    }
-    DELAYED = {
-        "label": "delayed",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000502",
-    }
-    OCCURRENCE = {
-        "label": "occurrence",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000057",
-    }
-    ABNORMAL = {
-        "label": "abnormal",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000460",
-    }
-    PREMATURE = {
-        "label": "premature",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0001028",
-    }
-    DISRUPTED = {
-        "label": "disrupted",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0001507",
-    }
-    FUNCTIONAL_CHANGE = {
-        "label": "functional change",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0001509",
-    }
-    MORPHOLOGICAL_CHANGE = {
-        "label": "morphological change",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000051",
-    }
-    PATHOLOGICAL = {
-        "label": "pathological",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0001869",
-    }
-    ARRESTED = {
-        "label": "arrested",
-        "iri": "http://purl.obolibrary.org/obo/PATO_0000297",
-    }
+    
+    # Component action edge types - these are actual edge labels/types
+    INCREASED = "increased process quality"
+    DECREASED = "decreased process quality"
+    DELAYED = "delayed"
+    OCCURRENCE = "occurrence"
+    ABNORMAL = "abnormal"
+    PREMATURE = "premature"
+    DISRUPTED = "disrupted"
+    FUNCTIONAL_CHANGE = "functional change"
+    MORPHOLOGICAL_CHANGE = "morphological change"
+    PATHOLOGICAL = "pathological"
+    ARRESTED = "arrested"
+
+    @classmethod
+    def get_component_actions(cls) -> Set[str]:
+        """Get all component action labels"""
+        return {
+            cls.INCREASED.value,
+            cls.DECREASED.value,
+            cls.DELAYED.value,
+            cls.OCCURRENCE.value,
+            cls.ABNORMAL.value,
+            cls.PREMATURE.value,
+            cls.DISRUPTED.value,
+            cls.FUNCTIONAL_CHANGE.value,
+            cls.MORPHOLOGICAL_CHANGE.value,
+            cls.PATHOLOGICAL.value,
+            cls.ARRESTED.value,
+        }
 
     @classmethod
     def get_iri(cls) -> Set[str]:
         return {item.value["iri"] for item in cls if isinstance(item.value, dict) and "iri" in item.value}
+    
     @classmethod
     def get_label(cls) -> Set[str]:
-        return {item.value["label"] for item in cls if isinstance(item.value, dict) and "label" in item.value}
+        # For component actions, return the action labels directly
+        component_actions = cls.get_component_actions()
+        return {item.value["label"] for item in cls if isinstance(item.value, dict) and "label" in item.value} | component_actions
 
 class DataSourceType(Enum):
     AOPWIKI = "aopwiki"
@@ -272,9 +260,13 @@ class ComponentAssociation:
                     "process_name": self.process_name,
                     "process_id": process,
                 },
-                "classes": "process-node",
+                "classes": "process-node component-node",
             }
         )
+
+        # Determine edge label - use action if it's a valid component action, otherwise use has_process
+        edge_label = self.action if self.action in EdgeType.get_component_actions() else EdgeType.HAS_PROCESS.value
+        edge_type = EdgeType.HAS_PROCESS.value  # Always use has_process as the type
 
         elements.append(
             {
@@ -282,12 +274,8 @@ class ComponentAssociation:
                     "id": f"{ke}_{process_node_id}",
                     "source": self.ke_uri,
                     "target": process_node_id,
-                    "label": (
-                        self.action
-                        if self.action in EdgeType.get_label()
-                        else EdgeType.NA.value
-                    ),
-                    "type": EdgeType.HAS_PROCESS.value,
+                    "label": edge_label,
+                    "type": edge_type,
                 }
             }
         )
@@ -301,11 +289,11 @@ class ComponentAssociation:
                         "id": object_node_id,
                         "label": self.object_name,
                         "type": NodeType.COMPONENT_OBJECT.value,
-                        "object_iri": object,
+                        "object_iri": self.object,  # Keep full IRI here instead of truncated
                         "object_name": self.object_name,
-                        "object_id": object,
+                        "object_id": object,  # Keep short ID for other uses
                     },
-                    "classes": "object-node",
+                    "classes": "object-node component-node",
                 }
             )
             
@@ -858,6 +846,7 @@ class CytoscapeNetworkParser:
         return [edge for edge in self.edges if edge.is_gene_relationship()]
 
 
+
 class AOPTableBuilder:
     """Builds AOP table data"""
 
@@ -1318,37 +1307,45 @@ class ComponentTableBuilder:
                 if ke_id not in ke_components:
                     ke_components[ke_id] = {"processes": [], "objects": [], "actions": []}
 
-        # Add processes, objects, and actions
-        for node in self.component_nodes:
-            node_data = node.get("data", {})
-            node_id = node_data.get("id", "")
+        # Add processes with their actions
+        for edge in self.component_edges:
+            edge_data = edge.get("data", {})
+            source = edge_data.get("source", "")
+            target = edge_data.get("target", "")
+            label = edge_data.get("label", "")
             
-            if node_id.startswith("process_"):
-                # Find which KE this process belongs to and get the action
-                ke_info = self._find_ke_and_action_for_process(node_id)
-                if ke_info and ke_info["ke_id"] in ke_components:
+            # KE→process edges
+            ke_id = self._normalize_ke_id(source)
+            if ke_id and target.startswith("process_") and ke_id in ke_components:
+                # Find the process node
+                process_node = None
+                for node in self.component_nodes:
+                    if node.get("data", {}).get("id") == target:
+                        process_node = node
+                        break
+                
+                if process_node:
+                    node_data = process_node.get("data", {})
                     process_info = {
-                        "id": node_id,
+                        "id": target,
                         "name": node_data.get("process_name", node_data.get("label", "")),
                         "iri": node_data.get("process_iri", ""),
-                        "action": ke_info.get("action", "N/A")  # Action from KE→process edge
+                        "action": label  # Action from KE→process edge
                     }
-                    ke_components[ke_info["ke_id"]]["processes"].append(process_info)
                     
-            elif node_id.startswith("object_"):
-                # Objects are connected to processes
-                object_info = {
-                    "id": node_id,
-                    "name": node_data.get("object_name", node_data.get("label", "")),
-                    "iri": node_data.get("object_iri", "")
-                }
-                # Find all KEs that have processes connected to this object
-                connected_kes = self._find_kes_for_object(node_id)
-                for ke_id in connected_kes:
-                    if ke_id in ke_components:
-                        ke_components[ke_id]["objects"].append(object_info)
+                    # Check if this process already exists
+                    existing_process = None
+                    for p in ke_components[ke_id]["processes"]:
+                        if p["id"] == target:
+                            existing_process = p
+                            break
+                    
+                    if not existing_process:
+                        ke_components[ke_id]["processes"].append(process_info)
 
-        # Process→object relationships (not actions, just "has object" relationships)
+        # Add process→object relationships
+        process_object_relationships = {}  # Maps process_id to list of objects
+        
         for edge in self.component_edges:
             edge_data = edge.get("data", {})
             source = edge_data.get("source", "")
@@ -1356,15 +1353,31 @@ class ComponentTableBuilder:
             label = edge_data.get("label", "")
             
             if source.startswith("process_") and target.startswith("object_"):
-                # Find KE for this process-object relationship
-                ke_id = self._find_ke_for_process_object_relation(source)
-                if ke_id and ke_id in ke_components:
-                    relationship_info = {
-                        "process_id": source,
+                if source not in process_object_relationships:
+                    process_object_relationships[source] = []
+                
+                # Find the object node
+                object_node = None
+                for node in self.component_nodes:
+                    if node.get("data", {}).get("id") == target:
+                        object_node = node
+                        break
+                
+                if object_node:
+                    node_data = object_node.get("data", {})
+                    # Preserve both the full IRI and the shortened ID
+                    full_object_iri = node_data.get("object_iri", "")
+                    object_info = {
                         "object_id": target,
+                        "object_name": node_data.get("object_name", node_data.get("label", "")),
+                        "object_iri": full_object_iri,  # Keep full IRI for href
+                        "object_iri_short": target.replace("object_", "") if target.startswith("object_") else target,  # Short ID for other uses
                         "relationship": label  # "has object" or similar
                     }
-                    ke_components[ke_id]["actions"].append(relationship_info)
+                    process_object_relationships[source].append(object_info)
+
+        # Store the process-object relationships for later use
+        self._process_object_relationships = process_object_relationships
 
         return ke_components
 
@@ -1424,26 +1437,10 @@ class ComponentTableBuilder:
 
     def _find_objects_for_process(self, process_id: str, objects: List[Dict[str, Any]], actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Find objects associated with a process"""
-        process_objects = []
-        
-        for relationship in actions:  # These are now process→object relationships
-            if relationship["process_id"] == process_id:
-                # Find the corresponding object
-                object_info = None
-                for obj in objects:
-                    if obj["id"] == relationship["object_id"]:
-                        object_info = obj
-                        break
-                
-                if object_info:
-                    process_objects.append({
-                        "object_id": object_info["id"],
-                        "object_name": object_info["name"],
-                        "object_iri": object_info["iri"],
-                        "relationship": relationship.get("relationship", "has object")
-                    })
-        
-        return process_objects
+        # Use the stored process-object relationships
+        if hasattr(self, '_process_object_relationships'):
+            return self._process_object_relationships.get(process_id, [])
+        return []
 
     def _create_component_entry(self, ke_id: str, process: Dict[str, Any], object_data: Dict[str, Any], ke_name: str = "") -> Dict[str, str]:
         """Create a component table entry"""
@@ -1453,24 +1450,26 @@ class ComponentTableBuilder:
         # Extract process ID without prefix
         process_id = process["id"].replace("process_", "") if process["id"].startswith("process_") else process["id"]
         
-        # Extract object ID without prefix if object exists
+        # Extract object ID 
         object_id = "N/A"
+        object_iri = "N/A"
         if object_data.get("object_id"):
-            object_id = object_data["object_id"].replace("object_", "") if object_data["object_id"].startswith("object_") else object_data["object_id"]
+            object_id = object_data.get("object_iri_short", object_data["object_id"].replace("object_", ""))
+            object_iri = object_data.get("object_iri", "N/A")  # Use full IRI for href
 
         return {
             "ke_id": ke_id,
             "ke_number": ke_number,
             "ke_uri": f"https://identifiers.org/aop.events/{ke_number}",
-            "ke_name": ke_name or "N/A",  # NEW FIELD
+            "ke_name": ke_name or "N/A",
             "process_id": process_id,
             "process_name": process.get("name", ""),
             "process_iri": process.get("iri", ""),
             "object_id": object_id,
             "object_name": object_data.get("object_name", "N/A"),
-            "object_iri": object_data.get("object_iri", "N/A"),
-            "action": process.get("action", "N/A"),  # Action comes from KE→process edge
-            "relationship": object_data.get("relationship", "N/A"),  # Process→object relationship
+            "object_iri": object_iri,  # Full IRI preserved for href
+            "action": process.get("action", "N/A"),
+            "relationship": object_data.get("relationship", "N/A"),
             "node_id": process["id"],
         }
 

@@ -430,6 +430,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const scopeMessage = hasSelection ? "selected elements" : "network";
                 console.log(`No Key Events found in ${scopeMessage} for component loading`);
                 $("#get-components-table-btn").text("Remove components");
+                $("#sidebar_toggle_components").text("Remove components");
                 window.componentsVisible = true;
                 return;
             }
@@ -513,6 +514,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Update button state
                     $("#get-components-table-btn").text("Remove components");
+                    $("#sidebar_toggle_components").text("Remove components");
                     window.componentsVisible = true;
 
                     // Update component table
@@ -539,7 +541,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 const selectedNodes = window.cy.$(':selected').nodes();
                 const componentsToHide = window.cy.collection();
                 selectedNodes.forEach(node => {
-                    const connectedComponents = node.connectedEdges().connectedNodes('.process-node, [type="component_process"]');
+                    const connectedComponents = node.connectedEdges().connectedNodes('.process-node, .object-node, [type="component_process"], [type="component_object"]');
                     componentsToHide.merge(connectedComponents);
                 });
                 componentsToHide.remove();
@@ -547,7 +549,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.log(`Removed ${componentsToHide.length} components connected to selected nodes`);
             } else {
                 // Hide all components
-                const allComponents = window.cy.elements(".process-node, [type='component_process']");
+                const allComponents = window.cy.elements(".process-node, .object-node, [type='component_process'], [type='component_object']");
                 allComponents.remove();
                 allComponents.connectedEdges().remove();
 
@@ -558,6 +560,7 @@ document.addEventListener("DOMContentLoaded", function () {
             window.resetNetworkLayout();
             window.componentsVisible = false;
             $("#get-components-table-btn").text("Get components");
+            $("#sidebar_toggle_components").text("Get components");
             setTimeout(() => {
                 if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
                     window.componentTableManager.performTableUpdate();
@@ -807,9 +810,13 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         window.cy.on("remove", "node", function (evt) {
+            // Skip auto-updates during user-initiated deletion
+            if (window.userDeletionInProgress) {
+                return;
+            }
+            
             const node = evt.target;
             console.debug(`Node removed: ${node.id()}`);
-
             // Auto-update tables based on node type
             autoUpdateTables(node, 'removed');
             // Always use smooth animation when nodes are removed
@@ -824,9 +831,43 @@ document.addEventListener("DOMContentLoaded", function () {
         window.cy.on("add", "edge", function (evt) {
             const edge = evt.target;
             console.debug(`Edge added: ${edge.id()}`);
-            // Use debounced update for edge additions
-            if (window.populateAopTable) {
-                window.populateAopTable(false); // false = debounced
+            
+            // Check if it's a component edge
+            const edgeData = edge.data();
+            const edgeType = edgeData.type;
+            const edgeLabel = edgeData.label;
+            const sourceNode = edge.source();
+            const targetNode = edge.target();
+            
+            // Determine if this is a component-related edge
+            const isComponentEdge = (
+                edgeType === 'has process' ||
+                edgeType === 'has object' ||
+                sourceNode.hasClass('process-node') ||
+                sourceNode.hasClass('object-node') ||
+                targetNode.hasClass('process-node') ||
+                targetNode.hasClass('object-node') ||
+                sourceNode.data('type') === 'component_process' ||
+                sourceNode.data('type') === 'component_object' ||
+                targetNode.data('type') === 'component_process' ||
+                targetNode.data('type') === 'component_object' ||
+                ['increased process quality', 'decreased process quality', 'delayed', 'occurrence', 
+                 'abnormal', 'premature', 'disrupted', 'functional change', 
+                 'morphological change', 'pathological', 'arrested'].includes(edgeLabel)
+            );
+            
+            if (isComponentEdge) {
+                console.log("Component edge detected - updating component table");
+                if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
+                    setTimeout(() => {
+                        window.componentTableManager.performTableUpdate();
+                    }, 100);
+                }
+            } else {
+                // Use debounced update for regular edge additions
+                if (window.populateAopTable) {
+                    window.populateAopTable(false); // false = debounced
+                }
             }
 
             // Smooth animation for edge additions
@@ -838,6 +879,11 @@ document.addEventListener("DOMContentLoaded", function () {
         });
 
         window.cy.on("remove", "edge", function (evt) {
+            // Skip auto-updates during user-initiated deletion
+            if (window.userDeletionInProgress) {
+                return;
+            }
+            
             const edge = evt.target;
             console.debug(`Edge removed: ${edge.id()}`);
 
@@ -845,6 +891,14 @@ document.addEventListener("DOMContentLoaded", function () {
             if (window.populateAopTable) {
                 window.populateAopTable(false); // false = debounced
             }
+            
+            // Also update component table in case it was a component edge
+            if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
+                setTimeout(() => {
+                    window.componentTableManager.performTableUpdate();
+                }, 100);
+            }
+            
             // Smooth animation for edge removals
             const fontSlider = document.getElementById('font-size-slider');
             const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
@@ -1006,54 +1060,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function createSelectionControls() {
-        // Check if selection controls already exist
-        if (document.getElementById('selection-controls')) return;
-
-        // Find a suitable container or create one
-        let container = document.querySelector('.main-content') || document.querySelector('#cy').parentElement;
-        const selectionControlsHtml = `
-            <div id="selection-controls" style="
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                background: rgba(255, 255, 255, 0.95);
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                padding: 10px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                z-index: 1000;
-                display: none;
-                align-items: center;
-                gap: 10px;
-                font-size: 14px;
-            ">
-                <span id="selection-info" style="margin-right: 10px; font-weight: 500; color: #333;"></span>
-                <button id="delete_selected" class="btn btn-sm btn-danger" style="
-                    background-color: #dc3545;
-                    border-color: #dc3545;
-                    color: white;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    border: none;
-                    cursor: pointer;
-                ">
-                    <i class="fas fa-trash"></i> Delete
-                </button>
-                <button id="clear_selection" class="btn btn-sm btn-secondary" style="
-                    background-color: #6c757d;
-                    border-color: #6c757d;
-                    color: white;
-                    padding: 4px 8px;
-                    border-radius: 4px;
-                    border: none;
-                    cursor: pointer;
-                ">
-                    <i class="fas fa-times"></i> Clear
-                </button>
-            </div>
-        `;
-        container.insertAdjacentHTML('beforeend', selectionControlsHtml);
-        console.log('Selection controls created');
+        // Selection controls are now created in the HTML template
+        // This function is kept for compatibility but does nothing
+        console.log('Selection controls managed by template');
     }
 
     function highlightSelectedElements(selected) {
@@ -1085,6 +1094,52 @@ document.addEventListener("DOMContentLoaded", function () {
             return;
         }
 
+        const elementCount = selected.length + tableSelected;
+        const deleteMessage = document.getElementById('delete-message');
+        const deleteModal = document.getElementById('delete-confirmation-modal');
+        const confirmButton = document.getElementById('confirm-delete-btn');
+
+        // Update modal message
+        deleteMessage.textContent = `Are you sure you want to delete ${elementCount} selected element(s)?`;
+
+        // Remove any existing event listeners to prevent duplicates
+        const newConfirmButton = confirmButton.cloneNode(true);
+        confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
+
+        // Set up one-time event listener for confirmation
+        newConfirmButton.addEventListener('click', () => {
+            // Perform deletion
+            performDeletion(selected, tableSelected);
+            
+            // Hide modal
+            if (typeof $ !== 'undefined' && $.fn.modal) {
+                $('#delete-confirmation-modal').modal('hide');
+            } else {
+                deleteModal.style.display = 'none';
+                deleteModal.classList.remove('show');
+            }
+        });
+
+        // Show modal
+        if (typeof $ !== 'undefined' && $.fn.modal) {
+            $('#delete-confirmation-modal').modal('show');
+        } else {
+            deleteModal.style.display = 'block';
+            deleteModal.classList.add('show');
+        }
+    }
+
+    function showDeletionConfirmationModal(elementCount, onConfirm) {
+        // This function is no longer needed - remove it
+        console.log('showDeletionConfirmationModal is deprecated - using template modal');
+    }
+
+    function performDeletion(selected, tableSelectedCount) {
+        console.log("Performing confirmed deletion");
+        
+        // Set flag to prevent auto-updates during deletion
+        window.userDeletionInProgress = true;
+
         // Store element data for table updates
         const deletedNodes = selected.nodes().map(node => ({
             id: node.id(),
@@ -1111,6 +1166,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Update selection controls
         updateSelectionControls();
+
+        // Clear the deletion flag
+        window.userDeletionInProgress = false;
 
         // Trigger layout update with smooth animation
         setTimeout(() => {
@@ -1169,6 +1227,22 @@ document.addEventListener("DOMContentLoaded", function () {
             }, 100);
         }
 
+        // Update component table if components were deleted
+        const deletedComponents = deletedNodes.filter(node =>
+            node.classes.includes("process-node") ||
+            node.classes.includes("object-node") ||
+            node.data.type === "component_process" ||
+            node.data.type === "component_object"
+        );
+        if (deletedComponents.length > 0) {
+            console.log(`Updating component table after deleting ${deletedComponents.length} components`);
+            setTimeout(() => {
+                if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
+                    window.componentTableManager.performTableUpdate();
+                }
+            }, 100);
+        }
+
         // Update AOP table for any network changes
         console.log("Updating AOP table after element deletion");
         setTimeout(() => {
@@ -1178,14 +1252,21 @@ document.addEventListener("DOMContentLoaded", function () {
         }, 100);
     }
 
-    // New function to automatically update tables based on network changes
+    // automatically update tables based on network changes
     function autoUpdateTables(node, action) {
+        // Skip auto-updates during user-initiated deletion
+        if (window.userDeletionInProgress) {
+            console.log("Skipping auto-update during user deletion");
+            return;
+        }
+
         const nodeData = node.data();
         const nodeClasses = node.classes();
         const nodeType = nodeData.type;
         const nodeId = nodeData.id;
 
-        console.log(`Network change detected: ${action} - ${nodeId}`);
+        console.log(`Network change detected: ${action} - ${nodeId} (type: ${nodeType}, classes: ${nodeClasses})`);
+        
         // Check if it's a gene node (Ensembl)
         if (nodeClasses.includes("ensembl-node") ||
             nodeType === "ensembl" ||
@@ -1201,7 +1282,24 @@ document.addEventListener("DOMContentLoaded", function () {
             populateCompoundTable();
         }
 
-        // Use debounced AOP table update for network changes
+        // Check if it's a component node (Process or Object)
+        if (nodeClasses.includes("process-node") ||
+            nodeClasses.includes("object-node") ||
+            nodeType === "component_process" ||
+            nodeType === "component_object" ||
+            nodeId.startsWith("process_") ||
+            nodeId.startsWith("object_")) {
+            console.log(`Component node ${action}: ${nodeData.label || nodeId}`);
+            if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
+                setTimeout(() => {
+                    window.componentTableManager.performTableUpdate();
+                }, 100);
+            }
+            // Don't trigger AOP table update for component nodes
+            return;
+        }
+
+        // Use debounced AOP table update for network changes (only for non-component nodes)
         console.log("Triggering debounced AOP table update");
         if (window.populateAopTable) {
             window.populateAopTable(false); // false = use debounced version
@@ -1215,29 +1313,20 @@ document.addEventListener("DOMContentLoaded", function () {
         $("#toggle_bounding_boxes").off("click");
         $("#toggle_compounds").off("click");
         $("#sidebar_toggle_compounds").off("click");
+        $("#sidebar_toggle_components").off("click");
         $("#see_genes").off("click");
         $("#reset_layout").off("click");
         $("#download_network").off("click");
-        $("#toggle_go_processes").off("click");
-        $("#show_go_hierarchy").off("click");
 
-        // Selection control handlers
-        $(document).on('click', '#delete_selected', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            deleteSelectedElements();
-        });
-
-        $(document).on('click', '#clear_selection', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            clearSelection();
-        });
-
-        // Keyboard shortcuts
+        // Keyboard shortcuts (TODO: move to template? New js?)
         $(document).on('keydown', function (e) {
             // Only process shortcuts if we're not in an input field
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // Skip if modal is open
+            if (document.querySelector('.modal.show')) {
                 return;
             }
 
@@ -1297,6 +1386,15 @@ document.addEventListener("DOMContentLoaded", function () {
             e.stopPropagation();
             if (window.toggleCompounds) {
                 window.toggleCompounds();
+            }
+        });
+
+        // Toggle components (sidebar button)
+        $("#sidebar_toggle_components").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.toggleComponents) {
+                window.toggleComponents();
             }
         });
                 
@@ -1391,6 +1489,19 @@ document.addEventListener("DOMContentLoaded", function () {
                 window.toggleComponents();
             }
         });
+
+        // Set up selection control handlers using event delegation to avoid conflicts
+        $(document).off('click', '#delete_selected').on('click', '#delete_selected', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            deleteSelectedElements();
+        });
+
+        $(document).off('click', '#clear_selection').on('click', '#clear_selection', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            clearSelection();
+        });
     }
 
     // Enhanced function to handle sidebar toggles with smooth transitions
@@ -1415,7 +1526,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
                 }, 50);
             }
-        }, 300); // Match the CSS transition duration
+        }, 300);
     }
 
     // ===== LAYOUT AND DOWNLOAD FUNCTIONS =====
@@ -1441,7 +1552,7 @@ document.addEventListener("DOMContentLoaded", function () {
         URL.revokeObjectURL(url);
     }
 
-    // New function to reset network layout with smooth animation
+    // reset network layout with smooth animation
     function resetNetworkLayout() {
         if (!window.cy) {
             console.warn("Cytoscape not available for layout reset");
@@ -1457,7 +1568,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Add a slight delay to allow resize to complete, then animate layout
         setTimeout(() => {
-            // Use the animated layout approach
+            
             const layout = window.cy.layout({
                 name: 'breadthfirst',
                 directed: true,
@@ -2107,7 +2218,7 @@ $(document).ready(function () {
     setTimeout(() => {
         console.log("DOM ready - triggering initial AOP table population");
         if (window.aopTableManager && window.aopTableManager.performTableUpdate) {
-            // Use the enhanced table manager if available
+            
             window.aopTableManager.performTableUpdate();
         } else if (window.populateAopTable) {
             window.populateAopTable(true); // true = immediate, not debounced

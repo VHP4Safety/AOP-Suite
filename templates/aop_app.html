@@ -283,11 +283,14 @@
                                 <!-- Genes and compound cards -->
                                 <div class="querygc-card" id="genes-compound-card">
                                     <h4 class="enhance-card-title"> Genes and Compounds</h4>
-                                    <button id="see_genes" class="btn btn-primary btn-sm w-100" type="button">
-                                        <i class="fas fa-dna"></i> Get gene sets for Key Events
+                                    <button id="see_genes" class="btn btn-info btn-block mt-2">
+                                        <i class="fas fa-dna"></i> Get gene sets
                                     </button>
-                                    <button id="sidebar_toggle_compounds" class="btn btn-primary btn-sm">
-                                        <i class="fas fa-flask"></i> Get chemical stressors for the network
+                                    <button id="sidebar_toggle_compounds" class="btn btn-info btn-block mt-2">
+                                        <i class="fas fa-flask"></i> Get chemical stressors
+                                    </button>
+                                    <button id="sidebar_toggle_components" class="btn btn-info btn-block mt-2">
+                                        <i class="fas fa-cogs"></i> Get components
                                     </button>
                                 </div>
                             </div>
@@ -309,6 +312,10 @@
                                         <option value="chemical">Chemical</option>
                                         <option value="uniprot">UniProt</option>
                                         <option value="ensembl">Ensembl</option>
+                                        <option value="component_process">Component Process</option>
+                                        <option value="component_object">Component Object</option>
+                                        <option value="organ">Organ</option>
+                                        <option value="custom">Custom</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -363,6 +370,22 @@
                                         <option value="interaction">Interaction</option>
                                         <option value="part_of">Part Of</option>
                                         <option value="translates_to">Translates To</option>
+                                        <option value="has_process">Has Process</option>
+                                        <option value="has_object">Has Object</option>
+                                        <option value="is_stressor_of">Is Stressor Of</option>
+                                        <option value="expression_in">Expression In</option>
+                                        <option value="increased_process_quality">Increased Process Quality</option>
+                                        <option value="decreased_process_quality">Decreased Process Quality</option>
+                                        <option value="delayed">Delayed</option>
+                                        <option value="occurrence">Occurrence</option>
+                                        <option value="abnormal">Abnormal</option>
+                                        <option value="premature">Premature</option>
+                                        <option value="disrupted">Disrupted</option>
+                                        <option value="functional_change">Functional Change</option>
+                                        <option value="morphological_change">Morphological Change</option>
+                                        <option value="pathological">Pathological</option>
+                                        <option value="arrested">Arrested</option>
+                                        <option value="custom">Custom</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -492,6 +515,10 @@
                                 <option value="chemical">Chemical</option>
                                 <option value="uniprot">UniProt</option>
                                 <option value="ensembl">Ensembl</option>
+                                <option value="component_process">Component Process</option>
+                                <option value="component_object">Component Object</option>
+                                <option value="organ">Organ</option>
+                                <option value="custom">Custom</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -517,6 +544,22 @@
                                 <option value="interaction">Interaction</option>
                                 <option value="part_of">Part Of</option>
                                 <option value="translates_to">Translates To</option>
+                                <option value="has_process">Has Process</option>
+                                <option value="has_object">Has Object</option>
+                                <option value="is_stressor_of">Is Stressor Of</option>
+                                <option value="expression_in">Expression In</option>
+                                <option value="increased_process_quality">Increased Process Quality</option>
+                                <option value="decreased_process_quality">Decreased Process Quality</option>
+                                <option value="delayed">Delayed</option>
+                                <option value="occurrence">Occurrence</option>
+                                <option value="abnormal">Abnormal</option>
+                                <option value="premature">Premature</option>
+                                <option value="disrupted">Disrupted</option>
+                                <option value="functional_change">Functional Change</option>
+                                <option value="morphological_change">Morphological Change</option>
+                                <option value="pathological">Pathological</option>
+                                <option value="arrested">Arrested</option>
+                                <option value="custom">Custom</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -674,37 +717,35 @@
     }
 
     function deleteSelectedElements() {
-        if (!window.cy || selectedElements.length === 0) return;
+        if (!window.cy) return;
+
+        const selected = window.cy.$(':selected');
+        const selectedElements = selected.map(ele => ele.id());
+
+        if (selectedElements.length === 0) return;
 
         // Update modal message with count
         const deleteMessage = document.getElementById('delete-message');
-        const deleteModal = document.getElementById('delete-confirmation-modal');
         const confirmButton = document.getElementById('confirm-delete-btn');
 
         deleteMessage.textContent = `Are you sure you want to delete ${selectedElements.length} selected element(s)?`;
 
-        // Show modal
-        if (typeof $ !== 'undefined' && $.fn.modal) {
-            $('#delete-confirmation-modal').modal('show');
-        } else {
-            // Fallback for non-Bootstrap environments
-            deleteModal.style.display = 'block';
-            deleteModal.classList.add('show');
-        }
+        // Remove any existing event listeners to prevent duplicates
+        const newConfirmButton = confirmButton.cloneNode(true);
+        confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
 
         // Set up one-time event listener for confirmation
-        const handleConfirm = function () {
-            const elementsToRemove = window.cy.getElementById(selectedElements);
+        newConfirmButton.addEventListener('click', function() {
+            const elementsToRemove = window.cy.$(':selected');
 
             // Remove elements from the network
             elementsToRemove.remove();
 
-            // Clear selection tracking
-            selectedElements = [];
-            updateSelectionControls();
-
             // Update network stats
             updateNetworkStats();
+
+            // Update selection controls
+            updateSelectionControls();
 
             // Update any related tables/data if needed
             if (window.updateTables) {
@@ -712,19 +753,13 @@
             }
 
             // Hide modal
-            if (typeof $ !== 'undefined' && $.fn.modal) {
-                $('#delete-confirmation-modal').modal('hide');
-            } else {
-                deleteModal.style.display = 'none';
-                deleteModal.classList.remove('show');
-            }
+            $('#delete-confirmation-modal').modal('hide');
 
-            // Remove this event listener
-            confirmButton.removeEventListener('click', handleConfirm);
-        };
+            console.log(`Deleted ${selectedElements.length} elements from network`);
+        });
 
-        // Add event listener for this deletion
-        confirmButton.addEventListener('click', handleConfirm);
+        // Show modal
+        $('#delete-confirmation-modal').modal('show');
     }
 
     function clearSelection() {
@@ -737,13 +772,24 @@
 
     // Initialize selection event handlers
     function initializeSelectionHandlers() {
-        document.getElementById('delete_selected')?.addEventListener('click', deleteSelectedElements);
-        document.getElementById('clear_selection')?.addEventListener('click', clearSelection);
+        // Use event delegation to avoid conflicts with dynamically created elements
+        $(document).off('click', '#delete_selected').on('click', '#delete_selected', deleteSelectedElements);
+        $(document).off('click', '#clear_selection').on('click', '#clear_selection', clearSelection);
 
         // Add keyboard shortcuts
         document.addEventListener('keydown', function (e) {
+            // Only process shortcuts if we're not in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // Skip if modal is open
+            if (document.querySelector('.modal.show')) {
+                return;
+            }
+
             // Delete key to remove selected elements
-            if (e.key === 'Delete' && selectedElements.length > 0) {
+            if (e.key === 'Delete' && window.cy && window.cy.$(':selected').length > 0) {
                 e.preventDefault();
                 deleteSelectedElements();
             }
