@@ -1,5 +1,5 @@
 # AOP Network Builder
-<img src="https://github.com/user-attachments/assets/a0f99c2b-a29a-40b1-b5c4-14d4d733be07" width="850px"/>
+<img src="https://github.com/VHP4Safety/AOP-app/blob/aop_app/static/images/app_screenshot.png" width="850px"/>
 
 This repository contains a web-based tool for building, visualizing, and analyzing Adverse Outcome Pathway (AOP) networks. It serves as an extended user interface for the [AOP-Wiki RDF SPARQL endpoint](https://aopwiki.rdf.bigcat-bioinformatics.org/sparql/).
 
