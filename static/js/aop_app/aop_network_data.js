@@ -294,6 +294,7 @@ class AOPNetworkDataManager {
         console.log('Existing element IDs:', existingIds.size);
 
         const newElements = [];
+        const seenIds = new Set(); // Track IDs within this batch
         const validNodes = new Set();
         const skippedEdges = [];
 
@@ -306,7 +307,8 @@ class AOPNetworkDataManager {
                 return;
             }
             
-            if (existingIds.has(elementId)) {
+            // Check both existing network and current batch for duplicates
+            if (existingIds.has(elementId) || seenIds.has(elementId)) {
                 if (index < 5) {
                     console.log(`Skipping duplicate element ${index}:`, elementId);
                 }
@@ -316,6 +318,7 @@ class AOPNetworkDataManager {
             // If it's a node (no source/target) or has group 'nodes'
             if (!element.data?.source && !element.data?.target || element.group === 'nodes') {
                 newElements.push(element);
+                seenIds.add(elementId);
                 validNodes.add(elementId);
                 if (index < 5) {
                     console.log(`New node element ${index}:`, element);
@@ -332,7 +335,7 @@ class AOPNetworkDataManager {
         elements.forEach((element, index) => {
             const elementId = element.data?.id;
             
-            if (!elementId || existingIds.has(elementId)) {
+            if (!elementId || existingIds.has(elementId) || seenIds.has(elementId)) {
                 return;
             }
 
@@ -354,6 +357,7 @@ class AOPNetworkDataManager {
                 }
                 
                 newElements.push(element);
+                seenIds.add(elementId);
                 if (index < 5) {
                     console.log(`New edge element ${index}:`, element);
                 }
@@ -368,8 +372,13 @@ class AOPNetworkDataManager {
         if (newElements.length > 0) {
             try {
                 window.cy.batch(() => {
-                    newElements.forEach(element => {
-                        window.cy.add(element);
+                    newElements.forEach((element, index) => {
+                        try {
+                            window.cy.add(element);
+                        } catch (addError) {
+                            console.error(`Error adding individual element ${index} (${element.data?.id}):`, addError);
+                            // Continue with other elements
+                        }
                     });
                 });
 
