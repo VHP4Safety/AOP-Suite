@@ -157,9 +157,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
             const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
-            console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for gene loading:`, keyEventUris);
-            // Call the load_and_show_genes endpoint with the extracted KEs
-            fetch(`/load_and_show_genes?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
+            
+            // Check if proteins should be included
+            const includeProteins = document.getElementById('include-proteins-checkbox')?.checked ?? true;
+            
+            console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for gene loading (include proteins: ${includeProteins}):`, keyEventUris);
+            // Call the load_and_show_genes endpoint with the extracted KEs and include_proteins parameter
+            fetch(`/load_and_show_genes?kes=${encodeURIComponent(keyEventUris.join(' '))}&include_proteins=${includeProteins}`, {
                 method: 'GET'
             })
                 .then(response => {
@@ -224,7 +228,8 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
 
                     // Update button and state - set to hide mode when showing genes
-                    $("#see_genes").text("Remove gene sets");
+                    const buttonText = includeProteins ? "Remove gene sets" : "Remove genes";
+                    $("#see_genes").html(`<i class="fas fa-dna"></i> ${buttonText}`);
                     window.genesVisible = true;
 
                     // Update gene table

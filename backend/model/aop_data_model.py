@@ -287,7 +287,7 @@ class GeneAssociation:
             }
         )
 
-        # UniProt node (if available)
+        # UniProt node and relationships (only if proteins are included)
         if self.uniprot_id and self.uniprot_id != "NA":
             uniprot_node_id = f"uniprot_{self.uniprot_id}"
             elements.append(
@@ -328,7 +328,7 @@ class GeneAssociation:
                 }
             )
         else:
-            # Direct gene to KE connection if no protein
+            # Direct gene to KE connection when no protein is included
             elements.append(
                 {
                     "data": {
@@ -922,20 +922,29 @@ class AOPNetworkBuilder:
 
         self.network.add_organ_association(association)
 
-    def add_gene_associations(self, gene_sparql_results: List[Dict[str, Any]]):
-        """Add gene associations from gene SPARQL results"""
-        for result in gene_sparql_results:
-            ke_uri = result.get("ke", {}).get("value", "")
-            ensembl_id = result.get("ensembl", {}).get("value", "")
-            uniprot_id = result.get("uniprot", {}).get("value", "")
+    def add_gene_associations(self, gene_bindings: List[Dict], include_proteins: bool = True):
+        """Add gene associations from SPARQL bindings"""
+        for binding in gene_bindings:
+            try:
+                ke_uri = binding.get("ke", {}).get("value", "")
+                ensembl_id = binding.get("ensembl", {}).get("value", "")
+                
+                if include_proteins:
+                    uniprot_id = binding.get("uniprot", {}).get("value", "")
+                else:
+                    uniprot_id = None
 
-            if ke_uri and ensembl_id:
-                association = GeneAssociation(
-                    ke_uri=ke_uri,
-                    ensembl_id=ensembl_id,
-                    uniprot_id=uniprot_id if uniprot_id else None,
-                )
-                self.network.add_gene_association(association)
+                if ke_uri and ensembl_id:
+                    gene_assoc = GeneAssociation(
+                        ke_uri=ke_uri,
+                        ensembl_id=ensembl_id,
+                        uniprot_id=uniprot_id if include_proteins else None
+                    )
+                    self.network.gene_associations.append(gene_assoc)
+
+            except Exception as e:
+                logger.warning(f"Failed to process gene binding: {e}")
+                continue
 
     def add_compound_associations(self, compound_sparql_results: List[Dict[str, Any]]):
         """Add compound associations from compound SPARQL results"""

@@ -93,10 +93,12 @@ class AOPNetworkService:
         """Load genes for KEs using the AOP data model"""
         try:
             kes = request_data.args.get("kes", "")
+            include_proteins = request_data.args.get("include_proteins", "true").lower() == "true"
+            
             if not kes:
                 return {"error": "kes parameter is required"}, 400
 
-            logger.info(f"Loading genes for KEs")
+            logger.info(f"Loading genes for KEs (include_proteins={include_proteins})")
 
             # Create a temporary network with the provided KEs
             temp_network = AOPNetwork()
@@ -113,15 +115,15 @@ class AOPNetworkService:
                 )
                 temp_network.add_key_event(key_event)
 
-            # Query genes for this network
-            enriched_network, query = aop_query_service.query_genes_for_network(temp_network)
+            # Query genes for this network with include_proteins parameter
+            enriched_network, query = aop_query_service.query_genes_for_network(temp_network, include_proteins)
 
             # Convert gene associations to Cytoscape elements
             gene_elements = []
             for association in enriched_network.gene_associations:
                 gene_elements.extend(association.to_cytoscape_elements())
 
-            logger.info(f"Retrieved {len(gene_elements)} gene elements using data model")
+            logger.info(f"Retrieved {len(gene_elements)} gene elements using data model (proteins included: {include_proteins})")
             return {"gene_elements": gene_elements, "sparql_query": query}, 200
 
         except Exception as e:

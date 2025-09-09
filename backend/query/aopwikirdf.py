@@ -58,7 +58,7 @@ class AOPQueryService:
             logger.error(f"Failed to query AOP network: {e}")
             raise AOPDataError(str(e))
 
-    def query_genes_for_network(self, network: AOPNetwork) -> AOPNetwork:
+    def query_genes_for_network(self, network: AOPNetwork, include_proteins: bool = True) -> AOPNetwork:
         """Query gene associations for all KEs in the network"""
         try:
             ke_uris = network.get_ke_uris()
@@ -76,12 +76,12 @@ class AOPQueryService:
             builder = AOPNetworkBuilder()
             builder.network = network  # Use existing network
             builder.add_gene_associations(
-                gene_results.get("results", {}).get("bindings", [])
+                gene_results.get("results", {}).get("bindings", []), include_proteins
             )
 
             updated_network = builder.build()
             logger.info(
-                f"Added gene associations: {len(updated_network.component_associations)} genes"
+                f"Added gene associations: {len(updated_network.gene_associations)} genes (include_proteins: {include_proteins})"
             )
 
             return updated_network, gene_query
@@ -213,21 +213,31 @@ class AOPQueryService:
 
         return final_query
 
-    def _build_gene_sparql_query(self, ke_uris: str) -> str:
+    def _build_gene_sparql_query(self, ke_uris: str, include_proteins: bool = True) -> str:
         """Build SPARQL query for gene data"""
-        return f"""
-            SELECT DISTINCT ?ke ?ensembl ?uniprot WHERE {{
-                VALUES ?ke {{ {ke_uris} }}
-                ?ke a aopo:KeyEvent; edam:data_1025 ?object .
-                ?object skos:exactMatch ?id .
-                ?id a edam:data_1033; edam:data_1033 ?ensembl .
-                OPTIONAL {{
-                    ?object skos:exactMatch ?prot .
-                    ?prot a edam:data_2291 ;
-                          edam:data_2291 ?uniprot .
+        if include_proteins:
+            return f"""
+                SELECT DISTINCT ?ke ?ensembl ?uniprot WHERE {{
+                    VALUES ?ke {{ {ke_uris} }}
+                    ?ke a aopo:KeyEvent; edam:data_1025 ?object .
+                    ?object skos:exactMatch ?id .
+                    ?id a edam:data_1033; edam:data_1033 ?ensembl .
+                    OPTIONAL {{
+                        ?object skos:exactMatch ?prot .
+                        ?prot a edam:data_2291 ;
+                              edam:data_2291 ?uniprot .
+                    }}
                 }}
-            }}
-        """
+            """
+        else:
+            return f"""
+                SELECT DISTINCT ?ke ?ensembl WHERE {{
+                    VALUES ?ke {{ {ke_uris} }}
+                    ?ke a aopo:KeyEvent; edam:data_1025 ?object .
+                    ?object skos:exactMatch ?id .
+                    ?id a edam:data_1033; edam:data_1033 ?ensembl .
+                }}
+            """
 
     def _build_compound_sparql_query(self, aop_uris: str) -> str:
         """Build SPARQL query for compound data"""
