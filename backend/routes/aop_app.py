@@ -46,6 +46,11 @@ def load_network_state():
 def load_and_show_compounds():
     return aop_service.load_and_show_compounds(request)
 
+## Get gene expressions associated with genes
+@aop_app.route("/load_and_show_gene_expressions", methods=["POST"])
+def load_and_show_gene_expressions():
+    return aop_service.get_gene_expressions_for_current_network(request)
+
 ### Populate the compound table
 @aop_app.route("/populate_compound_table", methods=["POST"])
 def populate_compound_table():
@@ -60,3 +65,44 @@ def load_and_show_components():
 @aop_app.route("/populate_component_table", methods=["POST"])
 def populate_component_table():
     return jsonify(aop_service.populate_component_table(request)), 200
+
+@aop_app.route("/load_and_show_organs", methods=["GET"])
+def load_and_show_organs():
+    return aop_service.load_and_show_organs(request)
+
+# Bgee Expression Routes
+@aop_app.route("/query_bgee_expression", methods=["POST"])
+def query_bgee_expression():
+    """Query Bgee for gene expression data"""
+    try:
+        result, status_code = aop_service.query_bgee_expression(request)
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({"error": "Internal server error"}), 500
+
+@aop_app.route("/query_bgee_anatomical", methods=["POST"])
+def query_bgee_anatomical():
+    """Query Bgee for anatomical expression data"""
+    try:
+        result, status_code = aop_service.query_bgee_anatomical(request)
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({"error": "Internal server error"}), 500
+
+@aop_app.route("/query_bgee_developmental", methods=["POST"])
+def query_bgee_developmental():
+    """Query Bgee for developmental expression data"""
+    try:
+        result, status_code = aop_service.query_bgee_developmental(request)
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({"error": "Internal server error"}), 500
+
+@aop_app.route("/populate_gene_expression_table", methods=["POST"])
+def populate_gene_expression_table():
+    """Populate gene expression table from network elements"""
+    try:
+        result, status_code = aop_service.populate_gene_expression_table(request)
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({"error": "Internal server error"}), 500

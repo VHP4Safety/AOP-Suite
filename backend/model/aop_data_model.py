@@ -1,9 +1,125 @@
 from dataclasses import dataclass, field
+from pandas import DataFrame
 from typing import Dict, List, Optional, Any, Set
 from enum import Enum
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CytoscapeEdge:
+    """Represents an edge in Cytoscape format"""
+
+    id: str
+    source: str
+    target: str
+    label: str
+    properties: Dict[str, Any]
+
+    @classmethod
+    def from_cytoscape_element(
+        cls, element: Dict[str, Any]
+    ) -> Optional["CytoscapeEdge"]:
+        """Create an edge from a Cytoscape element"""
+        if element.get("group") != "edges":
+            return None
+
+        data = element.get("data", {})
+
+        source = data.get("source", "")
+        target = data.get("target", "")
+
+        if not source or not target:
+            return None
+
+        return cls(
+            id=data.get("id", f"{source}_{target}"),
+            source=source,
+            target=target,
+            label=data.get("label", ""),
+            properties=data,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary format for Cytoscape"""
+        return {
+            "id": self.id,
+            "source": self.source,
+            "target": self.target,
+            "label": self.label,
+            **self.properties
+        }
+
+    def is_gene_relationship(self) -> bool:
+        """Check if this is a gene-related relationship"""
+        return self.label in ["translates to", "part of"]
+
+
+@dataclass
+class CytoscapeNode:
+    """Represents a node in Cytoscape format"""
+
+    id: str
+    label: str
+    node_type: str
+    classes: str
+    properties: Dict[str, Any]
+
+    @classmethod
+    def from_cytoscape_element(
+        cls, element: Dict[str, Any]
+    ) -> Optional["CytoscapeNode"]:
+        """Create a node from a Cytoscape element"""
+        if element.get("group") == "edges":
+            return None
+
+        data = element.get("data", {})
+        node_id = data.get("id", "")
+
+        if not node_id:
+            return None
+
+        return cls(
+            id=node_id,
+            label=data.get("label", ""),
+            node_type=data.get("type", ""),
+            classes=element.get("classes", ""),
+            properties=data,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary format for Cytoscape"""
+        return {
+            "id": self.id,
+            "label": self.label,
+            "type": self.node_type,
+            **self.properties
+        }
+
+    def is_ensembl_node(self) -> bool:
+        """Check if this is an Ensembl gene node"""
+        return (
+            self.classes == "ensembl-node"
+            or self.node_type == "ensembl"
+            or self.id.startswith("ensembl_")
+        )
+
+    def is_uniprot_node(self) -> bool:
+        """Check if this is a UniProt protein node"""
+        return (
+            self.classes == "uniprot-node"
+            or self.node_type == "uniprot"
+            or self.id.startswith("uniprot_")
+        )
+
+    def is_organ_node(self) -> bool:
+        """Check if this is an organ node"""
+        return (
+            self.classes == "organ-node"
+            or self.node_type == "organ"
+            or self.id.startswith("organ_")
+        )
 
 
 class NodeType(Enum):
@@ -399,10 +515,10 @@ class CompoundAssociation:
             if "/" in self.pubchem_compound
             else self.pubchem_compound
         )
-        
+
         # Extract AOP ID from URI
         aop_id = self.aop_uri.split("/")[-1] if "/" in self.aop_uri else self.aop_uri
-        
+
         return {
             "compound_name": self.compound_name or self.chemical_label,
             "chemical_label": self.chemical_label,
@@ -416,6 +532,97 @@ class CompoundAssociation:
         }
 
 
+@dataclass
+class GeneExpressionAssociation:
+    """Represents gene expression associations with organs"""
+
+    def __init__(
+        self,
+        ensembl_id: str,
+        anatomical_id: str,
+        anatomical_name: str,
+        expression_level: str,
+        confidence_id: str,
+        confidence_level_name: str,
+        developmental_id: str,
+        developmental_stage_name: str,
+        expr: str,
+    ):
+        self.ensembl_id = ensembl_id
+        self.anatomical_id = anatomical_id
+        self.anatomical_name = anatomical_name
+        self.expression_level = expression_level
+        self.confidence_id = confidence_id
+        self.confidence_level_name = confidence_level_name
+        self.developmental_id = developmental_id
+        self.developmental_stage_name = developmental_stage_name
+        self.expr = expr
+
+    def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
+        """Convert to Cytoscape elements (nodes and edges)"""
+        elements = []
+        
+        # Organ node
+        organ_node_id = f"organ_{self.anatomical_id}"
+        elements.append(
+            {
+                "data": {
+                    "id": organ_node_id,
+                    "label": self.anatomical_name,
+                    "type": NodeType.ORGAN.value,
+                    "anatomical_id": self.anatomical_id,
+                    "anatomical_name": self.anatomical_name,
+                },
+                "classes": "organ-node",
+            }
+        )
+
+        # Expression edge from gene to organ
+        gene_node_id = f"ensembl_{self.ensembl_id}"
+        expression_edge_id = f"{gene_node_id}_{organ_node_id}_expression"
+        elements.append(
+            {
+                "data": {
+                    "id": expression_edge_id,
+                    "source": gene_node_id,
+                    "target": organ_node_id,
+                    "label": f"expressed in ({self.expression_level})",
+                    "type": EdgeType.EXPRESSION_IN.value,
+                    "expression_level": self.expression_level,
+                    "confidence_level": self.confidence_level_name,
+                    "developmental_stage": self.developmental_stage_name,
+                }
+            }
+        )
+
+        return elements
+
+    def to_table_entry(self) -> Dict[str, str]:
+        """Convert to gene expression table entry format"""
+        return {
+            "gene_id": self.ensembl_id,
+            "organ": self.anatomical_name,
+            "expression_level": self.expression_level,
+            "confidence": self.confidence_level_name,
+            "developmental_stage": self.developmental_stage_name,
+        }
+
+
+@dataclass
+class OrganAssociation:
+    """Represents an organ-key event association"""
+    ke_uri: str
+    organ_data: CytoscapeNode
+    edge_data: CytoscapeEdge
+
+    def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
+        """Convert to Cytoscape elements"""
+        return [
+            {"data": self.organ_data.to_dict()},
+            {"data": self.edge_data.to_dict()}
+        ]
+
+
 class AOPNetwork:
     """Main AOP Network model representing a complete AOP query result"""
 
@@ -425,7 +632,10 @@ class AOPNetwork:
         self.component_associations: List[ComponentAssociation] = []
         self.gene_associations: List[GeneAssociation] = []
         self.compound_associations: List[CompoundAssociation] = []
+        self.organ_associations: List[OrganAssociation] = []
         self.aop_info: Dict[str, AOPInfo] = {}
+        self.node_list: List[CytoscapeNode] = []
+        self.gene_expression_associations: List[GeneExpressionAssociation] = []
 
     def add_key_event(self, key_event: AOPKeyEvent):
         """Add a key event to the network"""
@@ -447,6 +657,10 @@ class AOPNetwork:
         """Add a gene association"""
         self.gene_associations.append(association)
 
+    def add_gene_expression_association(self, association: GeneExpressionAssociation):
+        """Add a gene expression association"""
+        self.gene_expression_associations.append(association)
+
     def add_compound_association(self, association: CompoundAssociation):
         """Add a compound association"""
         self.compound_associations.append(association)
@@ -454,6 +668,10 @@ class AOPNetwork:
     def add_component_association(self, association: ComponentAssociation):
         """Add a compound association"""
         self.component_associations.append(association)
+
+    def add_organ_association(self, association: OrganAssociation):
+        """Add an organ association"""
+        self.organ_associations.append(association)
 
     def get_genes_for_ke(self, ke_uri: str) -> List[GeneAssociation]:
         """Get all gene associations for a specific Key Event"""
@@ -472,6 +690,21 @@ class AOPNetwork:
     def get_aop_uris(self) -> List[str]:
         """Get all AOP URIs in the network"""
         return list(self.aop_info.keys())
+    
+    def get_ensembl_ids(self) -> List[str]:
+        """Retrieve all nodes with class Ensembl"""
+        ensembl_ids = []
+        for gene_assoc in self.gene_associations:
+            ensembl_ids.append(gene_assoc.data.id)
+        return ensembl_ids
+
+    def get_organ_ids(self) -> List[str]:
+        """Retrieve all nodes with class organ"""
+        organ_ids = []
+        for node in self.node_list:
+            if node.is_organ_node():
+                organ_ids.append(node.id)
+        return organ_ids
 
     def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
         """Convert entire network to Cytoscape elements"""
@@ -492,6 +725,10 @@ class AOPNetwork:
         # Add compound associations
         for compound_assoc in self.compound_associations:
             elements.extend(compound_assoc.to_cytoscape_elements())
+
+        # Add organ associations
+        for organ_assoc in self.organ_associations:
+            elements.extend(organ_assoc.to_cytoscape_elements())
 
         logger.info(f"Generated {len(elements)} Cytoscape elements")
         return elements
@@ -515,6 +752,7 @@ class AOPNetwork:
             "ke_count": ke_count,
             "ker_count": len(self.relationships),
             "gene_associations": len(self.component_associations),
+            "gene_expression_associations": len(self.gene_expression_associations),
             "compound_associations": len(self.compound_associations),
             "total_aops": len(self.aop_info),
         }
@@ -583,6 +821,15 @@ class AOPNetworkBuilder:
             if ker_uri and upstream_uri and downstream_uri:
                 self._process_relationship(ker_uri, upstream_uri, downstream_uri)
 
+            # Process organ associations for both upstream and downstream KEs
+            for ke in ["upstream", "downstream"]:
+                ke_uri = binding.get(f"KE_{ke}", {}).get("value", "")
+                organ_uri = binding.get(f"KE_{ke}_organ", {}).get("value", "")
+                organ_name = binding.get(f"KE_{ke}_organ_name", {}).get("value", "")
+                if ke_uri and organ_uri:
+                    self._process_organ_association(
+                        ke_uri, organ_uri, organ_name
+                    )
         except Exception as e:
             logger.warning(f"Failed to process SPARQL binding: {e}")
 
@@ -626,6 +873,35 @@ class AOPNetworkBuilder:
             )
 
             self.network.add_relationship(relationship)
+
+    def _process_organ_association(
+        self, ke_uri: str, organ_uri: str, organ_name: str
+    ):
+        """Process an organ association"""
+        if not ke_uri or not organ_uri:
+            return
+
+        organ_node = CytoscapeNode(
+            id=organ_uri,
+            label=organ_name if organ_name else organ_uri.split("/")[-1],
+            node_type=NodeType.ORGAN.value,
+            classes="organ-node",
+            properties={"anatomical_id": organ_uri, "anatomical_name": organ_name},
+        )
+
+        edge = CytoscapeEdge(
+            id=f"{ke_uri}_{organ_uri}",
+            source=ke_uri,
+            target=organ_uri,
+            label="associated with",
+            properties={"type": "associated_with"},
+        )
+
+        association = OrganAssociation(
+            ke_uri=ke_uri, organ_data=organ_node, edge_data=edge
+        )
+
+        self.network.add_organ_association(association)
 
     def add_gene_associations(self, gene_sparql_results: List[Dict[str, Any]]):
         """Add gene associations from gene SPARQL results"""
@@ -682,97 +958,69 @@ class AOPNetworkBuilder:
             )
             self.network.add_component_association(association)
 
+    def add_gene_expression_association(self, gene_expression_results: List[Dict[str, Any]]):
+        """Add bgee gene expression associations from biodatafuse query results"""
+        for result in gene_expression_results:
+            ensembl_id = result.get("ensembl_id", {}).get("value", "")
+            if not ensembl_id:  # skip empty ensembl id
+                continue
+            association = GeneExpressionAssociation(
+                ensembl_id=ensembl_id,
+                anatomical_id=result.get("anatomical_entity_id", {}).get("value", ""),
+                anatomical_name=result.get("anatomical_entity_name", {}).get("value", ""),
+                expression_level=result.get("expression_level", {}).get("value", ""),
+                confidence_id=result.get("confidence_level_id", {}).get("value", ""),
+                confidence_level_name=result.get("confidence_level_name", {}).get("value", ""),
+                developmental_id=result.get("developmental_stage_id", {}).get("value", ""),
+                developmental_stage_name=result.get("developmental_stage_name", {}).get("value", ""),
+                expr=result.get("expr", {}).get("value", ""),
+            )
+            self.network.add_gene_expression_association(association)
+
+    def add_organ_associations_from_sparql(self, sparql_results: List[Dict[str, Any]]):
+        """Add organ associations from SPARQL results"""
+        for result in sparql_results:
+            ke_uri = result.get("ke", {}).get("value", "")
+            organ_uri = result.get("organ", {}).get("value", "")
+            organ_name = result.get("organ_name", {}).get("value", "")
+            
+            if ke_uri and organ_uri:
+                # Create organ node
+                organ_node = CytoscapeNode(
+                    id=f"organ_{organ_uri.split('/')[-1] if '/' in organ_uri else organ_uri}",
+                    label=organ_name if organ_name else organ_uri.split('/')[-1],
+                    node_type=NodeType.ORGAN.value,
+                    classes="organ-node",
+                    properties={
+                        "anatomical_id": organ_uri.split('/')[-1] if '/' in organ_uri else organ_uri,
+                        "anatomical_name": organ_name,
+                        "organ_uri": organ_uri
+                    }
+                )
+                
+                # Create edge from KE to organ
+                edge = CytoscapeEdge(
+                    id=f"{ke_uri}_{organ_node.id}",
+                    source=ke_uri,
+                    target=organ_node.id,
+                    label="associated with",
+                    properties={
+                        "type": "associated_with",
+                        "edge_type": "ke_organ_association"
+                    }
+                )
+                
+                association = OrganAssociation(
+                    ke_uri=ke_uri,
+                    organ_data=organ_node,
+                    edge_data=edge
+                )
+                
+                self.network.add_organ_association(association)
+
     def build(self) -> AOPNetwork:
         """Return the constructed network"""
         return self.network
-
-
-@dataclass
-class CytoscapeNode:
-    """Represents a node in Cytoscape format"""
-
-    id: str
-    label: str
-    node_type: str
-    classes: str
-    properties: Dict[str, Any]
-
-    @classmethod
-    def from_cytoscape_element(
-        cls, element: Dict[str, Any]
-    ) -> Optional["CytoscapeNode"]:
-        """Create a node from a Cytoscape element"""
-        if element.get("group") == "edges":
-            return None
-
-        data = element.get("data", {})
-        node_id = data.get("id", "")
-
-        if not node_id:
-            return None
-
-        return cls(
-            id=node_id,
-            label=data.get("label", ""),
-            node_type=data.get("type", ""),
-            classes=element.get("classes", ""),
-            properties=data,
-        )
-
-    def is_ensembl_node(self) -> bool:
-        """Check if this is an Ensembl gene node"""
-        return (
-            self.classes == "ensembl-node"
-            or self.node_type == "ensembl"
-            or self.id.startswith("ensembl_")
-        )
-
-    def is_uniprot_node(self) -> bool:
-        """Check if this is a UniProt protein node"""
-        return (
-            self.classes == "uniprot-node"
-            or self.node_type == "uniprot"
-            or self.id.startswith("uniprot_")
-        )
-
-
-@dataclass
-class CytoscapeEdge:
-    """Represents an edge in Cytoscape format"""
-
-    id: str
-    source: str
-    target: str
-    label: str
-    properties: Dict[str, Any]
-
-    @classmethod
-    def from_cytoscape_element(
-        cls, element: Dict[str, Any]
-    ) -> Optional["CytoscapeEdge"]:
-        """Create an edge from a Cytoscape element"""
-        if element.get("group") != "edges":
-            return None
-
-        data = element.get("data", {})
-
-        source = data.get("source", "")
-        target = data.get("target", "")
-
-        if not source or not target:
-            return None
-
-        return cls(
-            id=data.get("id", f"{source}_{target}"),
-            source=source,
-            target=target,
-            label=data.get("label", ""),
-            properties=data,
-        )
-
-    def is_gene_relationship(self) -> bool:
-        """Check if this is a gene-related relationship"""
-        return self.label in ["translates to", "part of"]
 
 
 @dataclass
@@ -845,7 +1093,11 @@ class CytoscapeNetworkParser:
         """Get all gene-related edges"""
         return [edge for edge in self.edges if edge.is_gene_relationship()]
 
-
+    def get_organ_nodes(self) -> List[CytoscapeNode]:
+        """Get all organ nodes from the network"""
+        return [
+            node for node in self.nodes if node.is_organ_node()
+        ]
 
 class AOPTableBuilder:
     """Builds AOP table data"""
@@ -960,21 +1212,47 @@ class GeneTableBuilder:
         self.ensembl_nodes = {node.id: node for node in parser.get_ensembl_nodes()}
         self.uniprot_nodes = {node.id: node for node in parser.get_uniprot_nodes()}
         self.gene_relationships = parser.get_gene_relationships()
+        self.expression_edges = self._get_expression_edges()
+
+    def _get_expression_edges(self) -> List[CytoscapeEdge]:
+        """Get all expression edges from the network"""
+        return [
+            edge for edge in self.parser.edges
+            if edge.properties.get("type") == "expression_in"
+        ]
 
     def build_gene_table(self) -> List[Dict[str, str]]:
-        """Build complete gene table with many-to-many relationships"""
+        """Build complete gene table with expression data"""
         gene_pairs = self._create_gene_protein_pairs()
         orphaned_genes = self._get_orphaned_genes(gene_pairs)
         orphaned_proteins = self._get_orphaned_proteins(gene_pairs)
 
         all_pairs = gene_pairs + orphaned_genes + orphaned_proteins
 
-        # Convert to table entries and remove duplicates
+        # Convert to table entries and add expression data
         table_entries = []
         seen_pairs = set()
 
         for pair in all_pairs:
             entry = pair.to_table_entry()
+            
+            # Add expression data
+            expression_data = self._get_expression_data_for_gene(pair.ensembl_node_id)
+            if expression_data:
+                entry.update({
+                    "expression_organs": "; ".join([exp["organ"] for exp in expression_data]),
+                    "expression_levels": "; ".join([exp["level"] for exp in expression_data]),
+                    "expression_confidence": "; ".join([exp["confidence"] for exp in expression_data]),
+                    "expression_ids": "; ".join([exp["expr_id"] for exp in expression_data])
+                })
+            else:
+                entry.update({
+                    "expression_organs": "N/A",
+                    "expression_levels": "N/A", 
+                    "expression_confidence": "N/A",
+                    "expression_ids": "N/A"
+                })
+
             pair_key = f"{entry['gene']}_{entry['protein']}_{entry['uniprot_id']}"
 
             if pair_key not in seen_pairs:
@@ -983,6 +1261,29 @@ class GeneTableBuilder:
 
         logger.info(f"Built gene table with {len(table_entries)} entries")
         return table_entries
+
+    def _get_expression_data_for_gene(self, gene_node_id: str) -> List[Dict[str, str]]:
+        """Get expression data for a specific gene"""
+        expression_data = []
+        
+        for edge in self.expression_edges:
+            if edge.source == gene_node_id:
+                # Find the target organ node
+                target_node = None
+                for node in self.parser.nodes:
+                    if node.id == edge.target:
+                        target_node = node
+                        break
+                
+                if target_node:
+                    expression_data.append({
+                        "organ": target_node.label,
+                        "level": edge.properties.get("expression_level", "N/A"),
+                        "confidence": edge.properties.get("confidence_level", "N/A"),
+                        "expr_id": edge.properties.get("expr", "N/A")
+                    })
+        
+        return expression_data
 
     def _create_gene_protein_pairs(self) -> List[GeneProteinPair]:
         """Create gene-protein pairs from relationships"""
@@ -1173,7 +1474,6 @@ class AOPRelationshipEntry:
 
         return {"aop_ids": aop_ids, "aop_titles": aop_titles}
 
-
 class CompoundTableBuilder:
     """Builds compound table data from Cytoscape network"""
 
@@ -1301,7 +1601,7 @@ class ComponentTableBuilder:
             source = edge_data.get("source", "")
             target = edge_data.get("target", "")
             
-            # KE→process edges (action edges)
+            # KE-process edges (action edges)
             ke_id = self._normalize_ke_id(source)
             if ke_id and target.startswith("process_"):
                 if ke_id not in ke_components:
@@ -1314,7 +1614,7 @@ class ComponentTableBuilder:
             target = edge_data.get("target", "")
             label = edge_data.get("label", "")
             
-            # KE→process edges
+            # KE-process edges
             ke_id = self._normalize_ke_id(source)
             if ke_id and target.startswith("process_") and ke_id in ke_components:
                 # Find the process node
@@ -1330,7 +1630,7 @@ class ComponentTableBuilder:
                         "id": target,
                         "name": node_data.get("process_name", node_data.get("label", "")),
                         "iri": node_data.get("process_iri", ""),
-                        "action": label  # Action from KE→process edge
+                        "action": label  # Action from KE-process edge
                     }
                     
                     # Check if this process already exists
@@ -1343,7 +1643,7 @@ class ComponentTableBuilder:
                     if not existing_process:
                         ke_components[ke_id]["processes"].append(process_info)
 
-        # Add process→object relationships
+        # Add process-object relationships
         process_object_relationships = {}  # Maps process_id to list of objects
         
         for edge in self.component_edges:
@@ -1486,7 +1786,7 @@ class ComponentTableBuilder:
                 if ke_id:
                     return {
                         "ke_id": ke_id,
-                        "action": label  # This is the action from KE→process edge
+                        "action": label  # This is the action from KE-process edge
                     }
         return None
 
@@ -1508,3 +1808,39 @@ class ComponentTableBuilder:
             if data.get("id") in candidates:
                 return data.get("label") or data.get("ke_label") or ""
         return ""
+
+class GeneExpressionTableBuilder:
+    """Builds gene expression table data from Cytoscape network"""
+
+    def __init__(self, parser: CytoscapeNetworkParser):
+        self.parser = parser
+        self.ensembl_nodes = {node.id: node for node in parser.get_ensembl_nodes()}
+        self.gene_expression_edges = self._get_gene_expression_edges()
+        self._get_organ_nodes = self.parser.get_organ_nodes()
+    def _get_gene_expression_edges(self) -> List[CytoscapeEdge]:
+        """Get all gene expression edges from the network"""
+        return [
+            edge for edge in self.parser.edges
+            if edge.label == EdgeType.EXPRESSION_IN
+        ]
+
+    def build_gene_expression_table(self) -> List[Dict[str, str]]:
+        """Build gene expression table from gene expression edges"""
+        table_entries = []
+        seen_entries = set()
+
+        for edge in self.gene_expression_edges:
+            source_node = self.ensembl_nodes.get(edge.source)
+            target_node = self.ensembl_nodes.get(edge.target)
+
+            if source_node and target_node:
+                entry_key = f"{source_node.id}_{target_node.id}"
+                if entry_key not in seen_entries:
+                    entry = {
+                        # todo
+                    }
+                    table_entries.append(entry)
+                    seen_entries.add(entry_key)
+
+        logger.info(f"Built gene expression table with {len(table_entries)} entries")
+        return table_entries

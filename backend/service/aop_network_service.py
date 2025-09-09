@@ -4,9 +4,11 @@ from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 
 from backend.query.aopwikirdf import aop_query_service
+from backend.query.bgee import bgee_query_service
 from backend.model.aop_data_model import (
     CytoscapeNetworkParser, 
     GeneTableBuilder,
+    GeneExpressionTableBuilder,
     AOPNetwork,
     AOPKeyEvent,
     NodeType,
@@ -124,6 +126,104 @@ class AOPNetworkService:
 
         except Exception as e:
             logger.error(f"Error in load_and_show_genes: {e}")
+            return {"error": str(e)}, 500
+
+    def query_bgee_expression(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Query Bgee for gene expression data from Cytoscape elements"""
+        try:
+            data = request_data.get_json(silent=True)
+            if not data or "cy_elements" not in data:
+                return {"error": "Cytoscape elements required"}, 400
+
+            confidence_level = data.get("confidence_level", None)
+            logger.info(f"Querying Bgee expression for {len(data['cy_elements'])} elements with confidence {confidence_level}")
+
+            # Parse elements to find genes
+            parser = CytoscapeNetworkParser(data["cy_elements"])
+            ensembl_nodes = parser.get_ensembl_nodes()
+            
+            if not ensembl_nodes:
+                return {"expression_data": []}, 200
+
+            # Query Bgee for expression data with confidence level
+            expression_data = bgee_query_service.query_gene_expression_data(ensembl_nodes, confidence_level)
+
+            logger.info(f"Retrieved expression data for {len(expression_data)} genes")
+            return {"expression_data": expression_data}, 200
+
+        except Exception as e:
+            logger.error(f"Error in query_bgee_expression: {e}")
+            return {"error": str(e)}, 500
+
+    def query_bgee_anatomical(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Query Bgee for anatomical expression data from Cytoscape elements"""
+        try:
+            data = request_data.get_json(silent=True)
+            if not data or "cy_elements" not in data:
+                return {"error": "Cytoscape elements required"}, 400
+
+            confidence_level = data.get("confidence_level", None)
+            logger.info(f"Querying Bgee anatomical for {len(data['cy_elements'])} elements with confidence {confidence_level}")
+
+            parser = CytoscapeNetworkParser(data["cy_elements"])
+            ensembl_nodes = parser.get_ensembl_nodes()
+            
+            if not ensembl_nodes:
+                return {"anatomical_data": []}, 200
+
+            anatomical_data = bgee_query_service.query_anatomical_expression_data(ensembl_nodes, confidence_level)
+
+            logger.info(f"Retrieved anatomical data for {len(anatomical_data)} genes")
+            return {"anatomical_data": anatomical_data}, 200
+
+        except Exception as e:
+            logger.error(f"Error in query_bgee_anatomical: {e}")
+            return {"error": str(e)}, 500
+
+    def query_bgee_developmental(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Query Bgee for developmental expression data from Cytoscape elements"""
+        try:
+            data = request_data.get_json(silent=True)
+            if not data or "cy_elements" not in data:
+                return {"error": "Cytoscape elements required"}, 400
+
+            logger.info(f"Querying Bgee developmental for {len(data['cy_elements'])} elements")
+
+            # Parse elements to find genes
+            parser = CytoscapeNetworkParser(data["cy_elements"])
+            ensembl_nodes = parser.get_ensembl_nodes()
+            
+            if not ensembl_nodes:
+                return {"developmental_data": []}, 200
+
+            # Query Bgee for developmental expression data
+            developmental_data = bgee_query_service.query_developmental_expression_data(ensembl_nodes)
+
+            logger.info(f"Retrieved developmental data for {len(developmental_data)} genes")
+            return {"developmental_data": developmental_data}, 200
+
+        except Exception as e:
+            logger.error(f"Error in query_bgee_developmental: {e}")
+            return {"error": str(e)}, 500
+
+    def populate_gene_expression_table(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Populate gene expression table from Cytoscape elements"""
+        try:
+            data = request_data.get_json(silent=True)
+            if not data or "cy_elements" not in data:
+                return {"error": "Cytoscape elements required"}, 400
+
+            logger.info(f"Populating gene expression table from {len(data['cy_elements'])} elements")
+
+            parser = CytoscapeNetworkParser(data["cy_elements"])
+            builder = GeneExpressionTableBuilder(parser)
+            expression_data = builder.build_gene_expression_table()
+
+            logger.info(f"Generated {len(expression_data)} gene expression entries")
+            return {"expression_data": expression_data}, 200
+
+        except Exception as e:
+            logger.error(f"Error in populate_gene_expression_table: {e}")
             return {"error": str(e)}, 500
 
     def populate_gene_table(self, request_data) -> Tuple[Dict[str, Any], int]:
@@ -311,6 +411,45 @@ class AOPNetworkService:
 
         except Exception as e:
             logger.error(f"Error in populate_component_table: {e}")
+            return {"error": str(e)}, 500
+
+    def load_and_show_organs(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Load organs for KEs using the AOP data model"""
+        try:
+            kes = request_data.args.get("kes", "")
+            if not kes:
+                return {"error": "kes parameter is required"}, 400
+
+            logger.info(f"Loading organs for KEs")
+
+            # Create a temporary network with the provided KEs
+            temp_network = AOPNetwork()
+
+            # Parse KE URIs and add them as key events
+            ke_uris = [uri.strip('<>') for uri in kes.split()]
+            for ke_uri in ke_uris:
+                ke_id = ke_uri.split("/")[-1] if "/" in ke_uri else ke_uri
+                key_event = AOPKeyEvent(
+                    ke_id=ke_id,
+                    uri=ke_uri,
+                    title="Temporary KE",
+                    ke_type=NodeType.KE
+                )
+                temp_network.add_key_event(key_event)
+
+            # Query organs for this network
+            enriched_network, query = aop_query_service.query_organs_for_network(temp_network)
+
+            # Convert organ associations to Cytoscape elements
+            organ_elements = []
+            for association in enriched_network.organ_associations:
+                organ_elements.extend(association.to_cytoscape_elements())
+
+            logger.info(f"Retrieved {len(organ_elements)} organ elements using data model")
+            return {"organ_elements": organ_elements, "sparql_query": query}, 200
+
+        except Exception as e:
+            logger.error(f"Error in load_and_show_organs: {e}")
             return {"error": str(e)}, 500
 
 @dataclass

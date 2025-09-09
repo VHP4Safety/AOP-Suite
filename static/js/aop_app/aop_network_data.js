@@ -399,6 +399,22 @@ class AOPNetworkDataManager {
                     }, 200);
                 }
 
+                // Hide organs by default after adding AOP network elements
+                setTimeout(() => {
+                    if (window.cy) {
+                        window.cy.nodes('[type="organ"]').style('display', 'none');
+                        window.cy.edges('[type="associated_with"], [type="expression_in"]').style('display', 'none');
+                        window.organsVisible = false;
+                        
+                        // Update button state
+                        const button = document.getElementById('toggle-organs-btn');
+                        if (button) {
+                            button.textContent = 'Show Organs';
+                            button.classList.remove('active');
+                        }
+                    }
+                }, 100);
+
                 // Hide loading overlay if network has elements
                 const loadingOverlay = document.querySelector(".loading-overlay");
                 if (loadingOverlay && window.cy.elements().length > 0) {

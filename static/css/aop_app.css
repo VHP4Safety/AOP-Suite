@@ -1503,3 +1503,294 @@ edge[type="go_hierarchy"] {
 #toggle-workspace-sidebar {
     display: inline-flex;
 }
+
+/* Gene Expression Table Styling */
+.gene-expression-table-panel .table {
+    font-size: 0.8rem;
+}
+
+.gene-expression-table-panel .table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    color: #495057;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.gene-expression-table-panel .table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.gene-expression-table-panel .table tbody tr:hover {
+    background-color: #f8f9fa !important;
+}
+
+.gene-expression-cell, .organ-cell, .expression-level-cell {
+    transition: all 0.2s ease;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.gene-expression-cell:hover, .organ-cell:hover, .expression-level-cell:hover {
+    background-color: #e7f3ff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+/* Expression level badges */
+.expression-level-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.expression-level-high {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.expression-level-medium {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.expression-level-low {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Confidence level indicators */
+.confidence-indicator {
+    display: inline-block;
+    width: 20px;
+    height: 8px;
+    border-radius: 4px;
+    margin-left: 5px;
+}
+
+.confidence-high {
+    background-color: #28a745;
+}
+
+.confidence-medium {
+    background-color: #ffc107;
+}
+
+.confidence-low {
+    background-color: #dc3545;
+}
+
+/* Network styling for expression edges */
+.cy-container edge[type="expression_in"] {
+    line-color: #e74c3c !important;
+    target-arrow-color: #e74c3c !important;
+    target-arrow-shape: triangle !important;
+    curve-style: bezier !important;
+    arrow-scale: 1.2 !important;
+    width: 2px !important;
+    opacity: 0.8 !important;
+}
+
+.cy-container edge[type="expression_in"]:selected {
+    line-color: #c0392b !important;
+    target-arrow-color: #c0392b !important;
+    width: 4px !important;
+    opacity: 1 !important;
+}
+
+/* Organ nodes styling */
+.cy-container node[type="organ"] {
+    background-color: #9b59b6 !important;
+    border-color: #8e44ad !important;
+    border-width: 2px !important;
+    color: white !important;
+    font-weight: bold !important;
+    shape: octagon !important;
+}
+
+.cy-container .organ-node {
+    background-color: #9b59b6 !important;
+    border-color: #8e44ad !important;
+    border-width: 2px !important;
+}
+
+/* Bgee controls styling */
+.slider-container {
+    position: relative;
+    margin: 10px 0;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+.slider-labels span:nth-child(2) {
+    font-weight: bold;
+    color: #495057;
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #dee2e6;
+}
+
+#bgee-status {
+    min-height: 20px;
+    font-size: 0.8rem;
+}
+
+/* Gene expression filter */
+.gene-expression-table-panel .table-filter-container {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+/* Gene table expression styling */
+.gene-table-panel .expression-cell,
+.gene-table-panel .expression-level-cell,
+.gene-table-panel .expression-id-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.gene-table-panel .expression-cell:hover,
+.gene-table-panel .expression-level-cell:hover,
+.gene-table-panel .expression-id-cell:hover {
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.gene-table-panel .expression-id-cell {
+    font-family: monospace;
+    font-size: 0.8em;
+    color: #495057;
+}
+
+/* Gene table expression styling */
+.gene-table-panel .expression-cell,
+.gene-table-panel .expression-level-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.gene-table-panel .expression-cell:hover,
+.gene-table-panel .expression-level-cell:hover {
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* Bgee confidence slider styling */
+.confidence-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 5px;
+    position: relative;
+}
+
+.confidence-label {
+    flex: 1;
+    text-align: center;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.confidence-label:first-child {
+    text-align: left;
+}
+
+.confidence-label:last-child {
+    text-align: right;
+}
+
+.confidence-label.active {
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
+}
+
+.confidence-current {
+    text-align: center;
+    margin-top: 5px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: #495057;
+    background: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+#bgee-confidence-slider {
+    background: linear-gradient(to right, #ffc107 0%, #fd7e14 50%, #28a745 100%);
+    height: 8px;
+    border-radius: 4px;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+#bgee-confidence-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+#bgee-confidence-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Organ toggle button styling - match other buttons in genes/compounds section */
+#toggle-organs-btn {
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+    /* Remove custom colors to match btn-info styling */
+}
+
+/* Remove custom organ button styling to use default btn-info class */
+#toggle-organs-btn:hover {
+    /* Let Bootstrap btn-info handle hover state */
+}
+
+#toggle-organs-btn.active {
+    /* Let Bootstrap btn-info handle active state */
+}
+
+/* Button container styling for consistent spacing */
+.querygc-card .btn {
+    margin-bottom: 8px;
+}

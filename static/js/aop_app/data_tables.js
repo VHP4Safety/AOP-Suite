@@ -920,6 +920,315 @@ class AOPTableManager extends DataTableManager {
 }
 
 /**
+ * Gene Expression Table Manager - extends base functionality for gene expression features
+ */
+class GeneExpressionTableManager extends DataTableManager {
+    constructor() {
+        super('gene-expression-table', '#gene-expression-table-container');
+        this.init();
+        this.setupNetworkListeners();
+    }
+
+    getTableDisplayName() {
+        return 'Gene Expression';
+    }
+
+    getFilterHelpText() {
+        return 'Filter by gene symbols, organs/tissues, expression levels, or developmental stages.';
+    }
+
+    getVisibleNodeIds() {
+        const visibleNodeIds = new Set();
+        this.filteredData.forEach(row => {
+            if (row.gene_id && row.gene_id !== 'N/A') visibleNodeIds.add(`ensembl_${row.gene_id}`);
+            if (row.organ_id && row.organ_id !== 'N/A') visibleNodeIds.add(`organ_${row.organ_id}`);
+        });
+        return visibleNodeIds;
+    }
+
+    matchesFilter(row) {
+        const searchFields = [
+            row.gene_id,
+            row.gene_symbol,
+            row.organ,
+            row.expression_level,
+            row.confidence,
+            row.developmental_stage
+        ].join(' ').toLowerCase();
+        
+        return searchFields.includes(this.filterText);
+    }
+
+    generateTableHTML() {
+        if (!this.filteredData || this.filteredData.length === 0) {
+            return '<tr><td colspan="5" style="text-align: center; padding: 20px; color: #6c757d; font-style: italic;">No gene expression data available. Query Bgee to populate with expression patterns.</td></tr>';
+        }
+
+        const headers = ['Gene', 'Organ/Tissue', 'Expression Level', 'Confidence', 'Development Stage'];
+
+        let html = '<thead><tr>';
+        headers.forEach(header => {
+            html += `<th>${header}</th>`;
+        });
+        html += '</tr></thead><tbody>';
+
+        this.filteredData.forEach((row, index) => {
+            const expressionBadgeClass = this._getExpressionBadgeClass(row.expression_level);
+            const confidenceIndicatorClass = this._getConfidenceIndicatorClass(row.confidence);
+            
+            html += `
+                <tr data-gene-id="${row.gene_id}" 
+                    data-organ-id="${row.organ_id || ''}"
+                    data-expression-level="${row.expression_level}"
+                    data-row-index="${index}"
+                    style="cursor: pointer;">
+                    <td class="gene-expression-cell clickable-cell" data-node-id="ensembl_${row.gene_id}" style="cursor: pointer;">
+                        <strong>${this.highlightMatch(row.gene_symbol || row.gene_id)}</strong>
+                        <br><small class="text-muted">${row.gene_id}</small>
+                    </td>
+                    <td class="organ-cell clickable-cell" data-node-id="organ_${row.organ_id || ''}" style="cursor: pointer;">
+                        ${this.highlightMatch(row.organ)}
+                    </td>
+                    <td class="expression-level-cell">
+                        <span class="expression-level-badge ${expressionBadgeClass}">
+                            ${this.highlightMatch(row.expression_level)}
+                        </span>
+                    </td>
+                    <td>
+                        ${this.highlightMatch(row.confidence)}
+                        <span class="confidence-indicator ${confidenceIndicatorClass}"></span>
+                    </td>
+                    <td>
+                        ${this.highlightMatch(row.developmental_stage)}
+                    </td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody>';
+
+        // Add summary
+        const totalRows = this.currentData.length;
+        const filteredRows = this.filteredData.length;
+        
+        html += `<tfoot><tr><td colspan="5" class="text-muted small">
+            Showing ${filteredRows} of ${totalRows} expression patterns
+            ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
+        </td></tr></tfoot>`;
+
+        return html;
+    }
+
+    _getExpressionBadgeClass(level) {
+        if (!level) return '';
+        const levelLower = level.toLowerCase();
+        if (levelLower.includes('high') || levelLower.includes('strong')) return 'expression-level-high';
+        if (levelLower.includes('medium') || levelLower.includes('moderate')) return 'expression-level-medium';
+        if (levelLower.includes('low') || levelLower.includes('weak')) return 'expression-level-low';
+        return '';
+    }
+
+    _getConfidenceIndicatorClass(confidence) {
+        if (!confidence) return '';
+        const confLower = confidence.toLowerCase();
+        if (confLower.includes('high')) return 'confidence-high';
+        if (confLower.includes('medium') || confLower.includes('moderate')) return 'confidence-medium';
+        if (confLower.includes('low')) return 'confidence-low';
+        return '';
+    }
+
+    renderTable() {
+        const tableContainer = document.querySelector('#gene_expression_table')?.closest('.table-responsive') || 
+                              document.querySelector('#gene_expression_table')?.parentElement ||
+                              document.querySelector(this.containerSelector);
+        
+        if (!tableContainer) {
+            console.warn("Gene expression table container not found");
+            return;
+        }
+
+        let table = document.querySelector('#gene_expression_table');
+        if (!table) {
+            console.warn("Gene expression table not found");
+            return;
+        }
+
+        if (this.filteredData.length === 0) {
+            this.showEmptyTable();
+            return;
+        }
+
+        const html = this.generateTableHTML();
+        table.innerHTML = html;
+        this.setupGeneExpressionTableEventHandlers();
+    }
+
+    setupGeneExpressionTableEventHandlers() {
+        const table = document.querySelector('#gene_expression_table');
+        if (!table) return;
+
+        // Remove existing listeners
+        const tbody = table.querySelector('tbody');
+        const newTbody = tbody.cloneNode(true);
+        tbody.parentNode.replaceChild(newTbody, tbody);
+
+        // Gene/organ cell click handlers
+        newTbody.querySelectorAll('.gene-expression-cell, .organ-cell').forEach(cell => {
+            cell.addEventListener('click', (e) => {
+                if (e.target.closest('a')) return;
+                
+                e.preventDefault();
+                e.stopPropagation();
+
+                const nodeId = cell.getAttribute('data-node-id');
+                if (!nodeId || nodeId === 'N/A') return;
+
+                this.highlightNodeInNetwork(nodeId);
+
+                // Visual feedback
+                document.querySelectorAll('.gene-expression-cell, .organ-cell').forEach(c => 
+                    c.classList.remove('highlighted-cell'));
+                cell.classList.add('highlighted-cell');
+
+                setTimeout(() => {
+                    cell.classList.remove('highlighted-cell');
+                }, 3000);
+            });
+        });
+
+        // Row click handlers
+        newTbody.querySelectorAll('tr').forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('a') || e.target.closest('.gene-expression-cell, .organ-cell')) return;
+
+                const geneId = row.dataset.geneId;
+                const organId = row.dataset.organId;
+                
+                if (!geneId) return;
+                
+                // Selection handling
+                if (e.ctrlKey || e.metaKey) {
+                    this.toggleRowSelection(row, { gene: geneId, organ: organId });
+                } else {
+                    this.clearTableSelection();
+                    row.classList.add('table-selected');
+                    this.selectedRows.add(parseInt(row.dataset.rowIndex));
+                }
+                
+                // Network highlighting
+                if (window.cy) {
+                    window.cy.elements().removeClass('highlighted');
+                    
+                    const geneNode = window.cy.getElementById(`ensembl_${geneId}`);
+                    const organNode = organId ? window.cy.getElementById(`organ_${organId}`) : null;
+                    
+                    if (geneNode.length > 0) {
+                        geneNode.addClass('highlighted');
+                        window.cy.center(geneNode);
+                    }
+                    
+                    if (organNode && organNode.length > 0) {
+                        organNode.addClass('highlighted');
+                    }
+                }
+            });
+        });
+    }
+
+    setupNetworkListeners() {
+        if (!window.cy) {
+            console.log('Cytoscape not ready, will setup gene expression table listeners later');
+            return;
+        }
+        
+        console.log('Setting up gene expression table network listeners');
+        
+        window.cy.on('add remove', (event) => {
+            console.log('Network changed, updating gene expression table');
+            this.debouncedUpdateTable();
+        });
+    }
+
+    debouncedUpdateTable(delay = 500) {
+        if (this.updateTimeout) {
+            clearTimeout(this.updateTimeout);
+        }
+
+        this.updateTimeout = setTimeout(() => {
+            if (!this.isUpdating) {
+                this.performTableUpdate();
+            }
+        }, delay);
+    }
+
+    async performTableUpdate() {
+        if (this.isUpdating) {
+            console.log('Gene expression table update already in progress, skipping');
+            return;
+        }
+
+        if (!window.cy) {
+            console.warn("Cytoscape not available for gene expression table update");
+            return;
+        }
+
+        this.isUpdating = true;
+
+        try {
+            const response = await fetch('/populate_gene_expression_table', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
+            });
+
+            const data = await response.json();
+
+            if (data.expression_data && data.expression_data.length > 0) {
+                this.updateTable(data.expression_data);
+                console.log(`Gene expression table updated with ${data.expression_data.length} patterns.`);
+            } else {
+                this.currentData = [];
+                this.filteredData = [];
+                this.showEmptyTable();
+                console.log("No gene expression data found in network");
+            }
+        } catch (error) {
+            console.error('Error updating gene expression table:', error);
+            this.showEmptyTable();
+        } finally {
+            this.isUpdating = false;
+        }
+    }
+
+    showEmptyTable() {
+        const tableBody = document.querySelector("#gene_expression_table tbody");
+        if (!tableBody) return;
+
+        tableBody.innerHTML = `
+            <tr id="default-gene-expression-row">
+                <td colspan="5" style="text-align: center; padding: 30px;">
+                    <div style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
+                        <i class="fas fa-chart-bar" style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
+                        No gene expression data in network. Query Bgee to add organ-specific expression patterns.
+                    </div>
+                    <button id="get-gene-expression-table-btn" class="btn btn-primary btn-lg">
+                        <i class="fas fa-chart-bar"></i> Query Gene Expression
+                    </button>
+                </td>
+            </tr>
+        `;
+        
+        document.getElementById("get-gene-expression-table-btn")?.addEventListener("click", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.queryBgeeExpression) {
+                window.queryBgeeExpression();
+            }
+        });
+    }
+}
+
+/**
  * Gene Table Manager - extends base functionality for gene-specific features
  */
 class GeneTableManager extends DataTableManager {
@@ -1025,7 +1334,7 @@ class GeneTableManager extends DataTableManager {
     }
 
     generateTableHTML() {
-        const headers = ['Gene Symbol', 'Protein Name'];
+        const headers = ['Gene Symbol', 'Protein Name', 'Expression Organs', 'Expression Levels', 'Expression IDs'];
 
         let html = '<thead><tr>';
         headers.forEach(header => {
@@ -1042,6 +1351,10 @@ class GeneTableManager extends DataTableManager {
                 `<a href="https://identifiers.org/ensembl:${gene.gene}" target="_blank">${this.highlightMatch(gene.gene)}</a>` :
                 "N/A";
 
+            const expressionOrgans = gene.expression_organs || "N/A";
+            const expressionLevels = gene.expression_levels || "N/A";
+            const expressionIds = gene.expression_ids || "N/A";
+
             html += `
                 <tr data-gene="${gene.gene}" 
                     data-uniprot-id="${gene.uniprot_id}" 
@@ -1055,6 +1368,15 @@ class GeneTableManager extends DataTableManager {
                     <td class="protein-cell clickable-cell" data-node-id="${gene.uniprot_node_id}" style="cursor: pointer;">
                         ${proteinDisplay}
                     </td>
+                    <td class="expression-cell" title="${expressionOrgans}">
+                        ${this.highlightMatch(expressionOrgans)}
+                    </td>
+                    <td class="expression-level-cell" title="${expressionLevels}">
+                        ${this.highlightMatch(expressionLevels)}
+                    </td>
+                    <td class="expression-id-cell" title="${expressionIds}">
+                        ${this.highlightMatch(expressionIds)}
+                    </td>
                 </tr>
             `;
         });
@@ -1065,7 +1387,7 @@ class GeneTableManager extends DataTableManager {
         const totalRows = this.currentData.length;
         const filteredRows = this.filteredData.length;
         
-        html += `<tfoot><tr><td colspan="2" class="text-muted small">
+        html += `<tfoot><tr><td colspan="5" class="text-muted small">
             Showing ${filteredRows} of ${totalRows} genes
             ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
         </td></tr></tfoot>`;
@@ -1667,6 +1989,7 @@ class CompoundTableManager extends DataTableManager {
     }
 }
 
+
 /**
  * History Table Manager - tracks query history across all operations
  */
@@ -1696,7 +2019,7 @@ class HistoryTableManager extends DataTableManager {
             row.content,
             row.elementsSummary ? Object.keys(row.elementsSummary.types).join(' ') : ''
         ].join(' ').toLowerCase();
-        
+
         return searchFields.includes(this.filterText);
     }
 
@@ -1751,17 +2074,17 @@ class HistoryTableManager extends DataTableManager {
 
         // Add to current data
         this.currentData.unshift(entry); // Add to beginning for newest first
-        
+
         // Update filtered data properly based on current filter
         if (!this.filterText) {
             this.filteredData = [...this.currentData];
         } else {
             this.filteredData = this.currentData.filter(row => this.matchesFilter(row));
         }
-        
+
         // Re-render table
         this.renderTable();
-        
+
         console.log(`Added ${type} query to history:`, entry);
     }
 
@@ -1777,7 +2100,7 @@ class HistoryTableManager extends DataTableManager {
 
         elements.forEach(element => {
             const group = element.group || (element.data ? (element.data.source ? 'edges' : 'nodes') : 'unknown');
-            
+
             if (group === 'nodes') {
                 summary.nodes++;
                 const nodeType = element.data?.type || element.data?.node_type || 'unknown';
@@ -1809,8 +2132,8 @@ class HistoryTableManager extends DataTableManager {
         const color = typeColors[row.type] || '#6c757d';
 
         // Truncate long queries for display
-        const truncatedContent = row.content.length > 150 
-            ? row.content.substring(0, 150) + '...' 
+        const truncatedContent = row.content.length > 150
+            ? row.content.substring(0, 150) + '...'
             : row.content;
 
         // Generate elements summary display
@@ -1840,7 +2163,7 @@ class HistoryTableManager extends DataTableManager {
         }
 
         const { total, nodes, edges, types } = elementsSummary;
-        
+
         // Create type badges
         const typeBadges = Object.entries(types)
             .filter(([type, count]) => count > 0)
@@ -1862,10 +2185,10 @@ class HistoryTableManager extends DataTableManager {
     }
 
     renderTable() {
-        
+
         const tableBody = $("#history_table tbody");
         const table = document.querySelector('#history_table');
-        
+
         if (!tableBody.length || !table) {
             console.warn("History table not found");
             return;
@@ -1888,7 +2211,7 @@ class HistoryTableManager extends DataTableManager {
         const tfoot = table.querySelector('tfoot') || table.createTFoot();
         const totalRows = this.currentData.length;
         const filteredRows = this.filteredData.length;
-        
+
         tfoot.innerHTML = `
             <tr>
                 <td colspan="5" class="text-muted small">
@@ -1922,7 +2245,7 @@ class HistoryTableManager extends DataTableManager {
 
             const row = $(e.currentTarget);
             const rowIndex = row.data("row-index");
-            
+
             if (rowIndex !== undefined && this.filteredData[rowIndex]) {
                 this.showFullQuery(this.filteredData[rowIndex]);
             }
@@ -1934,7 +2257,7 @@ class HistoryTableManager extends DataTableManager {
             e.stopPropagation();
 
             const rowIndex = $(e.target).closest('.view-elements-btn').data("row-index");
-            
+
             if (rowIndex !== undefined && this.filteredData[rowIndex]) {
                 this.showElementsModal(this.filteredData[rowIndex]);
             }
@@ -2002,11 +2325,11 @@ class HistoryTableManager extends DataTableManager {
         // Add event listeners after modal is created
         const modal = document.getElementById('queryModal');
         const entryIndex = parseInt(modal.querySelector('[data-entry-index]').dataset.entryIndex);
-        
+
         modal.querySelector('.show-elements-btn').addEventListener('click', () => {
             this.showElementsModal(entry);
         });
-        
+
         modal.querySelector('.copy-query-btn').addEventListener('click', () => {
             navigator.clipboard.writeText(entry.content).then(() => {
                 // Visual feedback for copy success
@@ -2038,7 +2361,7 @@ class HistoryTableManager extends DataTableManager {
         }
 
         const { total, nodes, edges, types } = elementsSummary;
-        
+
         let html = `
             <div class="alert alert-info">
                 <p><strong>Total Elements:</strong> ${total}</p>
@@ -2121,7 +2444,7 @@ class HistoryTableManager extends DataTableManager {
 
         // Add event listeners after modal is created
         const modal = document.getElementById('elementsModal');
-        
+
         modal.querySelector('.copy-elements-btn').addEventListener('click', () => {
             navigator.clipboard.writeText(JSON.stringify(entry.elements, null, 2)).then(() => {
                 // Visual feedback for copy success
@@ -2137,7 +2460,7 @@ class HistoryTableManager extends DataTableManager {
                 }, 2000);
             });
         });
-        
+
         modal.querySelector('.restore-elements-modal-btn').addEventListener('click', () => {
             this.restoreElements(entry.elements);
         });
@@ -2160,9 +2483,9 @@ class HistoryTableManager extends DataTableManager {
     }
 
     getEntryIndex(entry) {
-        return this.currentData.findIndex(item => 
-            item.timestamp === entry.timestamp && 
-            item.type === entry.type && 
+        return this.currentData.findIndex(item =>
+            item.timestamp === entry.timestamp &&
+            item.type === entry.type &&
             item.content === entry.content
         );
     }
@@ -2175,49 +2498,49 @@ class HistoryTableManager extends DataTableManager {
 
         try {
             // Separate nodes and edges for proper order of addition
-            const nodes = elements.filter(el => 
-                el.group === 'nodes' || 
+            const nodes = elements.filter(el =>
+                el.group === 'nodes' ||
                 (!el.group && !el.data?.source && !el.data?.target)
             );
-            const edges = elements.filter(el => 
-                el.group === 'edges' || 
+            const edges = elements.filter(el =>
+                el.group === 'edges' ||
                 (!el.group && (el.data?.source || el.data?.target))
             );
-            
+
             console.log(`Restoring ${nodes.length} nodes and ${edges.length} edges`);
-            
+
             // Track existing element IDs to avoid duplicates
             const existingIds = new Set();
             window.cy.elements().forEach(element => {
                 existingIds.add(element.id());
             });
-            
+
             // Filter out elements that already exist
             const newNodes = nodes.filter(node => !existingIds.has(node.data?.id));
             const newEdges = edges.filter(edge => !existingIds.has(edge.data?.id));
-            
+
             let addedNodesCount = 0;
             let addedEdgesCount = 0;
-            
+
             // Add new nodes first
             if (newNodes.length > 0) {
                 window.cy.add(newNodes);
                 addedNodesCount = newNodes.length;
                 console.log(`Added ${newNodes.length} new nodes successfully`);
             }
-            
+
             // Then add new edges (only those with valid source/target)
             if (newEdges.length > 0) {
                 const validEdges = [];
                 const skippedEdges = [];
-                
+
                 newEdges.forEach(edge => {
                     const source = edge.data?.source;
                     const target = edge.data?.target;
-                    
+
                     // Verify both source and target nodes exist
-                    if (source && target && 
-                        window.cy.getElementById(source).length > 0 && 
+                    if (source && target &&
+                        window.cy.getElementById(source).length > 0 &&
                         window.cy.getElementById(target).length > 0) {
                         validEdges.push(edge);
                     } else {
@@ -2229,34 +2552,34 @@ class HistoryTableManager extends DataTableManager {
                         });
                     }
                 });
-                
+
                 if (validEdges.length > 0) {
                     window.cy.add(validEdges);
                     addedEdgesCount = validEdges.length;
                     console.log(`Added ${validEdges.length} new edges successfully`);
                 }
-                
+
                 if (skippedEdges.length > 0) {
                     console.warn('Skipped edges due to missing nodes:', skippedEdges);
                 }
             }
-            
+
             // Fit to viewport only if we added elements
             if (addedNodesCount > 0 || addedEdgesCount > 0) {
                 window.resetNetworkLayout();
             }
-            
+
             // Update all table managers
             if (window.aopTableManager) window.aopTableManager.performTableUpdate();
             if (window.geneTableManager) window.geneTableManager.performTableUpdate();
             if (window.compoundTableManager) window.compoundTableManager.performTableUpdate();
-            
+
             // Close modal
             $('#elementsModal').modal('hide');
-            
+
             const totalRestored = addedNodesCount + addedEdgesCount;
             const skippedCount = (nodes.length - addedNodesCount) + (edges.length - addedEdgesCount);
-            
+
             if (totalRestored > 0) {
                 let message = `Successfully added ${totalRestored} elements to the network!`;
                 if (skippedCount > 0) {
@@ -2266,13 +2589,13 @@ class HistoryTableManager extends DataTableManager {
             } else {
                 this.showModal('Information', 'All elements from this query are already present in the network.', 'info');
             }
-            
-            console.log('Restored elements to network:', { 
-                newNodes: addedNodesCount, 
+
+            console.log('Restored elements to network:', {
+                newNodes: addedNodesCount,
                 newEdges: addedEdgesCount,
-                skipped: skippedCount 
+                skipped: skippedCount
             });
-            
+
         } catch (error) {
             console.error('Error restoring elements:', error);
             this.showModal('Error', 'Error restoring elements to network. Check console for details.', 'error');
@@ -2342,7 +2665,7 @@ class HistoryTableManager extends DataTableManager {
     showEmptyTable() {
         const tableBody = $("#history_table tbody");
         const table = document.querySelector('#history_table');
-        
+
         if (!tableBody.length) return;
 
         tableBody.empty();
@@ -2362,7 +2685,7 @@ class HistoryTableManager extends DataTableManager {
     // Add CSS styles for the new elements column
     setupTableStyles() {
         super.setupTableStyles();
-        
+
         if (!document.querySelector('#history-table-styles')) {
             const styles = document.createElement('style');
             styles.id = 'history-table-styles';
@@ -2441,15 +2764,15 @@ class ComponentTableManager extends DataTableManager {
             row.object_id,
             row.action
         ].join(' ').toLowerCase();
-        
+
         return searchFields.includes(this.filterText);
     }
 
     setupFilterInput() {
         // Find the correct container for the component table
-        const componentTableWrapper = document.querySelector('#component_table')?.closest('.table-wrapper') || 
-                                     document.querySelector('.component-table-panel .table-wrapper');
-        
+        const componentTableWrapper = document.querySelector('#component_table')?.closest('.table-wrapper') ||
+            document.querySelector('.component-table-panel .table-wrapper');
+
         if (componentTableWrapper && !document.querySelector(`#${this.tableId}-filter`)) {
             const filterContainer = document.createElement('div');
             filterContainer.className = 'table-filter-container mb-3';
@@ -2470,14 +2793,14 @@ class ComponentTableManager extends DataTableManager {
                     ${this.getFilterHelpText()}
                 </small>
             `;
-            
+
             componentTableWrapper.insertBefore(filterContainer, componentTableWrapper.firstChild);
-            
+
             // Add event listeners
             document.getElementById(`${this.tableId}-filter`).addEventListener('input', (e) => {
                 this.handleFilter(e.target.value);
             });
-            
+
             document.getElementById(`clear-${this.tableId}-filter`).addEventListener('click', () => {
                 document.getElementById(`${this.tableId}-filter`).value = '';
                 this.handleFilter('');
@@ -2490,9 +2813,9 @@ class ComponentTableManager extends DataTableManager {
             console.log('Cytoscape not ready, will setup component table listeners later');
             return;
         }
-        
+
         console.log('Setting up component table network listeners');
-        
+
         window.cy.on('add remove', (event) => {
             console.log('Network changed, updating component table');
             this.debouncedUpdateTable();
@@ -2597,7 +2920,7 @@ class ComponentTableManager extends DataTableManager {
     renderTable() {
         const tableBody = $("#component_table tbody");
         const table = document.querySelector('#component_table');
-        
+
         if (!tableBody.length || !table) {
             console.warn("Component table not found");
             return;
@@ -2620,7 +2943,7 @@ class ComponentTableManager extends DataTableManager {
         const tfoot = table.querySelector('tfoot') || table.createTFoot();
         const totalRows = this.currentData.length;
         const filteredRows = this.filteredData.length;
-        
+
         tfoot.innerHTML = `
             <tr>
                 <td colspan="4" class="text-muted small">
@@ -2636,7 +2959,7 @@ class ComponentTableManager extends DataTableManager {
 
     setupTableStyles() {
         super.setupTableStyles();
-        
+
         if (!document.querySelector('#component-table-styles')) {
             const styles = document.createElement('style');
             styles.id = 'component-table-styles';
@@ -2764,7 +3087,7 @@ class ComponentTableManager extends DataTableManager {
         try {
             // Get component elements from the load_and_show_components endpoint
             const keyEventUris = this.getKeyEventsFromNetwork();
-            
+
             if (keyEventUris.length === 0) {
                 this.currentData = [];
                 this.filteredData = [];
@@ -2773,7 +3096,7 @@ class ComponentTableManager extends DataTableManager {
             }
 
             const cyElements = window.cy.elements().jsons();
-            
+
             const response = await fetch('/populate_component_table', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -2785,7 +3108,7 @@ class ComponentTableManager extends DataTableManager {
             }
 
             const responseData = await response.json();
-            
+
             // Get component data
             const data = Array.isArray(responseData) ? responseData[0] : responseData;
             console.log("data component table", data);
@@ -2794,7 +3117,7 @@ class ComponentTableManager extends DataTableManager {
                 this.currentData = [];
                 this.filteredData = [];
                 this.showEmptyTable();
-              return;
+                return;
             }
 
             if (data.component_data && data.component_data.length > 0) {
@@ -2818,7 +3141,7 @@ class ComponentTableManager extends DataTableManager {
         if (!window.cy) return [];
 
         const keyEventUris = [];
-        
+
         window.cy.nodes().forEach(node => {
             const nodeData = node.data();
             const nodeId = nodeData.id || node.id();
@@ -2841,7 +3164,7 @@ class ComponentTableManager extends DataTableManager {
     showEmptyTable() {
         const tableBody = $("#component_table tbody");
         const table = document.querySelector('#component_table');
-        
+
         if (!tableBody.length) return;
 
         tableBody.empty();
@@ -2945,6 +3268,7 @@ class ComponentTableManager extends DataTableManager {
     }
 }
 
+
 // Initialize the managers with proper delay to ensure DOM is ready
 console.log('Initializing Data Table Managers...');
 window.aopTableManager = new AOPTableManager();
@@ -2954,14 +3278,6 @@ setTimeout(() => {
     if (!window.geneTableManager) {
         window.geneTableManager = new GeneTableManager();
         console.log('Gene Table Manager initialized with filtering');
-    }
-}, 100);
-
-// Initialize Compound Table Manager with delay to ensure DOM is ready
-setTimeout(() => {
-    if (!window.compoundTableManager) {
-        window.compoundTableManager = new CompoundTableManager();
-        console.log('Compound Table Manager initialized with filtering');
     }
 }, 100);
 
@@ -2978,6 +3294,23 @@ setTimeout(() => {
     if (!window.componentTableManager) {
         window.componentTableManager = new ComponentTableManager();
         console.log('Component Table Manager initialized with filtering');
+    }
+}, 100);
+
+
+// Initialize Compound Table Manager with delay to ensure DOM is ready
+setTimeout(() => {
+    if (!window.compoundTableManager) {
+        window.compoundTableManager = new CompoundTableManager();
+        console.log('Compound Table Manager initialized with filtering');
+    }
+}, 100);
+
+// Initialize Gene Expression Table Manager with delay to ensure DOM is ready
+setTimeout(() => {
+    if (!window.geneExpressionTableManager) {
+        window.geneExpressionTableManager = new GeneExpressionTableManager();
+        console.log('Gene Expression Table Manager initialized with filtering');
     }
 }, 100);
 
@@ -3037,6 +3370,13 @@ window.populateCompoundTable = function () {
     return Promise.resolve();
 };
 
+window.populateGeneExpressionTable = function () {
+    if (window.geneExpressionTableManager) {
+        return window.geneExpressionTableManager.performTableUpdate();
+    }
+    return Promise.resolve();
+};
+
 // Document ready initialization
 $(document).ready(function() {
     if (!window.aopTableManager) {
@@ -3052,6 +3392,9 @@ $(document).ready(function() {
         }
         if (!window.compoundTableManager) {
             window.compoundTableManager = new CompoundTableManager();
+        }
+        if (!window.geneExpressionTableManager) {
+            window.geneExpressionTableManager = new GeneExpressionTableManager();
         }
         if (!window.historyTableManager) {
             window.historyTableManager = new HistoryTableManager();

@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.compoundsVisible = false;
     window.componentsVisible = false;
     window.goProcessesVisible = false;
+    window.organsVisible = false; // Add organ visibility tracking
     window.fetched_preds = false;
     window.compound_data = {};
     window.modelToProteinInfo = {};
@@ -568,6 +569,50 @@ document.addEventListener("DOMContentLoaded", function () {
             }, 100);
         }
     }
+
+    // ===== ORGAN VISIBILITY FUNCTIONS =====
+    
+    // Add organ visibility control functions
+    function hideOrgans() {
+        if (window.cy) {
+            window.cy.nodes('[type="organ"]').style('display', 'none');
+            window.cy.edges('[type="associated_with"], [type="expression_in"]').style('display', 'none');
+            window.organsVisible = false;
+            updateOrganToggleButton();
+        }
+    }
+
+    function showOrgans() {
+        if (window.cy) {
+            window.cy.nodes('[type="organ"]').style('display', 'element');
+            window.cy.edges('[type="associated_with"], [type="expression_in"]').style('display', 'element');
+            window.organsVisible = true;
+            updateOrganToggleButton();
+        }
+    }
+
+    function toggleOrgans() {
+        if (window.organsVisible) {
+            hideOrgans();
+            resetNetworkLayout();
+        } else {
+            showOrgans();
+            resetNetworkLayout();
+        }
+    }
+
+    function updateOrganToggleButton() {
+        const button = document.getElementById('toggle-organs-btn');
+        if (button) {
+            button.textContent = window.organsVisible ? 'Hide Organs' : 'Show Organs';
+            button.classList.toggle('active', window.organsVisible);
+        }
+    }
+
+    // Make toggleOrgans available globally
+    window.toggleOrgans = toggleOrgans;
+
+    // ===== EXISTING TOGGLE FUNCTIONS =====
 
     // ===== CORE NETWORK FUNCTIONS =====
     function renderAOPNetwork(elements) {
@@ -1462,23 +1507,48 @@ document.addEventListener("DOMContentLoaded", function () {
             queryOpenTargetsDiseases();
         });
 
-        // Bgee dropdown handlers
+        // Bgee confidence level selector (replace slider handler)
+        $(".confidence-btn").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Remove active class from all buttons
+            $(".confidence-btn").removeClass("active");
+            // Add active class to clicked button
+            $(this).addClass("active");
+            
+            // Update hidden input value
+            const confidenceLevel = $(this).data("confidence");
+            $("#bgee-confidence-level").val(confidenceLevel);
+            
+            console.log("Bgee confidence level set to:", confidenceLevel);
+        });
+
+        // Bgee dropdown handlers - remove developmental
         $("#bgee_query_expression").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
             queryBgeeExpression();
         });
 
-        $("#bgee_query_developmental").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            queryBgeeDevelopmental();
-        });
-
         $("#bgee_query_anatomical").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
             queryBgeeAnatomical();
+        });
+
+        // Populate gene expression table
+        $("#populate_gene_expression_table").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            populateGeneExpressionTable();
+        });
+
+        // Gene expression table button handler
+        $("#get-gene-expression-table-btn").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            queryBgeeExpression();
         });
 
         // Setup component table button handler
@@ -1998,12 +2068,17 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const currentElements = window.cy.elements().jsons();
+        const confidenceLevel = document.getElementById('bgee-confidence-level')?.value || 70;
+        
         showBgeeStatus("Querying Bgee for gene expression data...", "loading");
 
         fetch('/query_bgee_expression', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: currentElements })
+            body: JSON.stringify({ 
+                cy_elements: currentElements,
+                confidence_level: parseInt(confidenceLevel)
+            })
         })
             .then(response => response.json())
             .then(data => {
@@ -2013,23 +2088,60 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
 
                 if (data.expression_data && data.expression_data.length > 0) {
-                    // Update existing gene nodes with expression data
+                    // Add expression data as new network elements
                     data.expression_data.forEach(expr => {
-                        const geneNode = window.cy.getElementById(expr.gene_id);
-                        if (geneNode.length > 0) {
-                            geneNode.data('expression_level', expr.expression_level);
-                            geneNode.data('anatomical_entity', expr.anatomical_entity);
-                            geneNode.data('developmental_stage', expr.developmental_stage);
-                            geneNode.data('expression_score', expr.expression_score);
+                        // Add organ node if it doesn't exist
+                        const organNodeId = `organ_${expr.anatomical_entity_id || 'unknown'}`;
+                        if (!window.cy.getElementById(organNodeId).length) {
+                            window.cy.add({
+                                data: {
+                                    id: organNodeId,
+                                    label: expr.anatomical_entity || 'Unknown Organ',
+                                    type: 'organ',
+                                    anatomical_id: expr.anatomical_entity_id,
+                                    anatomical_name: expr.anatomical_entity
+                                },
+                                classes: 'organ-node'
+                            });
+                        }
+
+                        // Add expression edge
+                        const geneNodeId = expr.gene_id;
+                        const edgeId = `${geneNodeId}_${organNodeId}_expression`;
+                        if (!window.cy.getElementById(edgeId).length) {
+                            window.cy.add({
+                                data: {
+                                    id: edgeId,
+                                    source: geneNodeId,
+                                    target: organNodeId,
+                                    label: `expressed in (${expr.expression_level})`,
+                                    type: 'expression_in',
+                                    expression_level: expr.expression_level,
+                                    confidence_level: expr.confidence,
+                                    developmental_stage: expr.developmental_stage,
+                                    expr: expr.expression_score || expr.expr || edgeId  // Use expr from data or fallback to ID
+                                }
+                            });
                         }
                     });
 
-                    showBgeeStatus(`Updated ${data.expression_data.length} genes with Bgee expression data`, "success");
+                    showBgeeStatus(`Added ${data.expression_data.length} expression patterns to network`, "success");
 
-                    // Update gene table to show new expression data
+                    // Update gene expression table
                     setTimeout(() => {
-                        populateGeneTable();
+                        if (window.geneExpressionTableManager) {
+                            window.geneExpressionTableManager.performTableUpdate();
+                        }
                     }, 200);
+
+                    // Layout update
+                    setTimeout(() => {
+                        const fontSlider = document.getElementById('font-size-slider');
+                        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                        if (window.positionNodes) {
+                            window.positionNodes(window.cy, fontSizeMultiplier, true);
+                        }
+                    }, 300);
                 } else {
                     showBgeeStatus("No expression data found in Bgee", "warning");
                 }
@@ -2040,53 +2152,6 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 
-    function queryBgeeDevelopmental() {
-        if (!window.cy) {
-            showBgeeStatus("Network not initialized", "error");
-            return;
-        }
-
-        const currentElements = window.cy.elements().jsons();
-        showBgeeStatus("Querying Bgee for developmental stage data...", "loading");
-
-        fetch('/query_bgee_developmental', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: currentElements })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showBgeeStatus(`Error: ${data.error}`, "error");
-                    return;
-                }
-
-                if (data.developmental_data && data.developmental_data.length > 0) {
-                    // Update existing gene nodes with developmental data
-                    data.developmental_data.forEach(dev => {
-                        const geneNode = window.cy.getElementById(dev.gene_id);
-                        if (geneNode.length > 0) {
-                            const currentStages = geneNode.data('developmental_stages') || [];
-                            currentStages.push({
-                                stage: dev.stage,
-                                stage_name: dev.stage_name,
-                                expression_score: dev.expression_score
-                            });
-                            geneNode.data('developmental_stages', currentStages);
-                        }
-                    });
-
-                    showBgeeStatus(`Updated genes with developmental stage data from Bgee`, "success");
-                } else {
-                    showBgeeStatus("No developmental data found in Bgee", "warning");
-                }
-            })
-            .catch(error => {
-                console.error("Error querying Bgee developmental:", error);
-                showBgeeStatus("Error querying Bgee developmental data", "error");
-            });
-    }
-
     function queryBgeeAnatomical() {
         if (!window.cy) {
             showBgeeStatus("Network not initialized", "error");
@@ -2094,12 +2159,17 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const currentElements = window.cy.elements().jsons();
+        const confidenceLevel = document.getElementById('bgee-confidence-level')?.value || 50;
+        
         showBgeeStatus("Querying Bgee for organ-specific expression...", "loading");
 
         fetch('/query_bgee_anatomical', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: currentElements })
+            body: JSON.stringify({ 
+                cy_elements: currentElements,
+                confidence_level: parseInt(confidenceLevel)
+            })
         })
             .then(response => response.json())
             .then(data => {
@@ -2109,22 +2179,60 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
 
                 if (data.anatomical_data && data.anatomical_data.length > 0) {
-                    // Update existing gene nodes with organ-specific expression
+                    // Add organ nodes and expression edges
                     data.anatomical_data.forEach(anat => {
-                        const geneNode = window.cy.getElementById(anat.gene_id);
-                        if (geneNode.length > 0) {
-                            const currentOrgans = geneNode.data('organ_expression') || [];
-                            currentOrgans.push({
-                                organ: anat.organ,
-                                organ_name: anat.organ_name,
-                                expression_level: anat.expression_level,
-                                confidence: anat.confidence
+                        // Add organ node if it doesn't exist
+                        const organNodeId = `organ_${anat.organ_id || 'unknown'}`;
+                        if (!window.cy.getElementById(organNodeId).length) {
+                            window.cy.add({
+                                data: {
+                                    id: organNodeId,
+                                    label: anat.organ || 'Unknown Organ',
+                                    type: 'organ',
+                                    anatomical_id: anat.organ_id,
+                                    anatomical_name: anat.organ
+                                },
+                                classes: 'organ-node'
                             });
-                            geneNode.data('organ_expression', currentOrgans);
+                        }
+
+                        // Add expression edge
+                        const geneNodeId = anat.gene_id;
+                        const edgeId = `${geneNodeId}_${organNodeId}_expression`;
+                        if (!window.cy.getElementById(edgeId).length) {
+                            window.cy.add({
+                                data: {
+                                    id: edgeId,
+                                    source: geneNodeId,
+                                    target: organNodeId,
+                                    label: `expressed in (${anat.expression_level})`,
+                                    type: 'expression_in',
+                                    expression_level: anat.expression_level,
+                                    confidence_level: anat.confidence,
+                                    developmental_stage: anat.developmental_stage,
+                                    expr: anat.expression_score || anat.expr || edgeId  // Use expr from data or fallback to ID
+                                }
+                            });
                         }
                     });
 
-                    showBgeeStatus(`Updated genes with organ-specific expression from Bgee`, "success");
+                    showBgeeStatus(`Added ${data.anatomical_data.length} organ expression patterns`, "success");
+
+                    // Update gene table to show new expression data
+                    setTimeout(() => {
+                        if (window.geneTableManager) {
+                            window.geneTableManager.performTableUpdate();
+                        }
+                    }, 200);
+
+                    // Layout update
+                    setTimeout(() => {
+                        const fontSlider = document.getElementById('font-size-slider');
+                        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                        if (window.positionNodes) {
+                            window.positionNodes(window.cy, fontSizeMultiplier, true);
+                        }
+                    }, 300);
                 } else {
                     showBgeeStatus("No organ-specific expression data found in Bgee", "warning");
                 }
@@ -2132,6 +2240,23 @@ document.addEventListener("DOMContentLoaded", function () {
             .catch(error => {
                 console.error("Error querying Bgee anatomical:", error);
                 showBgeeStatus("Error querying Bgee anatomical data", "error");
+            });
+    }
+
+    function populateGeneExpressionTable() {
+        if (!window.geneExpressionTableManager) {
+            showBgeeStatus("Gene expression table not initialized", "error");
+            return;
+        }
+
+        showBgeeStatus("Updating gene expression table...", "loading");
+        window.geneExpressionTableManager.performTableUpdate()
+            .then(() => {
+                showBgeeStatus("Gene expression table updated", "success");
+            })
+            .catch(error => {
+                console.error("Error updating gene expression table:", error);
+                showBgeeStatus("Error updating gene expression table", "error");
             });
     }
 

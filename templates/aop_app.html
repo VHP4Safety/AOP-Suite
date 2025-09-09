@@ -283,6 +283,9 @@
                                 <!-- Genes and compound cards -->
                                 <div class="querygc-card" id="genes-compound-card">
                                     <h4 class="enhance-card-title"> Genes and Compounds</h4>
+                                    <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2" onclick="toggleOrgans()" title="Toggle organ visibility in the network">
+                                        Show Organs
+                                    </button>
                                     <button id="see_genes" class="btn btn-info btn-block mt-2">
                                         <i class="fas fa-dna"></i> Get gene sets
                                     </button>
@@ -453,12 +456,36 @@
                             </div>
                             <div class="enhance-card-content">
                                 Add gene expression data from Bgee database. Explore tissue-specific and developmental
-                                expression patterns.
+                                expression patterns with customizable confidence levels.
                             </div>
                             <div class="enhance-card-controls">
-                                <button id="query_bgee" class="btn btn-primary btn-sm w-100">
-                                    <i class="fas fa-dna"></i> Query Bgee
-                                </button>
+                                <div class="form-group mb-2">
+                                    <label for="bgee-confidence-level">Expression Confidence Level:</label>
+                                    <div class="confidence-level-selector">
+                                        <div class="btn-group w-100" role="group" aria-label="Confidence Level">
+                                            <button type="button" class="btn btn-outline-warning confidence-btn" data-confidence="low">
+                                                <i class="fas fa-exclamation-triangle"></i> Low
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary confidence-btn active" data-confidence="medium">
+                                                <i class="fas fa-balance-scale"></i> Medium
+                                            </button>
+                                            <button type="button" class="btn btn-outline-success confidence-btn" data-confidence="high">
+                                                <i class="fas fa-check-circle"></i> High
+                                            </button>
+                                        </div>
+                                        <input type="hidden" id="bgee-confidence-level" value="medium">
+                                    </div>
+                                    <small class="form-text text-muted">Higher levels include only more reliable expression data</small>
+                                </div>
+                                <div class="btn-group w-100" role="group">
+                                    <button id="bgee_query_expression" class="btn btn-primary btn-sm">
+                                        <i class="fas fa-dna"></i> Basic Expression
+                                    </button>
+                                    <button id="bgee_query_anatomical" class="btn btn-secondary btn-sm">
+                                        <i class="fas fa-brain"></i> By Organ
+                                    </button>
+                                </div>
+                                <div id="bgee-status" class="mt-2"></div>
                             </div>
                         </div>
 
@@ -1375,6 +1402,11 @@
     if (typeof AOPTableManager !== 'undefined') {
         window.aopTableManager = new AOPTableManager();
         console.log('AOP Table Manager initialized');
+    }
+
+    if (typeof GeneExpressionTableManager !== 'undefined') {
+        window.geneExpressionTableManager = new GeneExpressionTableManager();
+        console.log('Gene Expression Table Manager initialized');
     }
 
     if (typeof ComponentTableManager !== 'undefined') {

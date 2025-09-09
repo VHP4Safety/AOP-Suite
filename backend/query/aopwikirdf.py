@@ -157,6 +157,7 @@ class AOPQueryService:
             # Return original network if gene query fails
             return network
 
+
     def _build_aop_sparql_query(self, query_type: str, values: str) -> str:
         """Build SPARQL query for AOP data"""
         logger.info(f"Building AOP SPARQL query: {query_type}, values: {values}")
@@ -172,7 +173,7 @@ class AOPQueryService:
         formatted_values = " ".join(processed_values)
 
         # Base query template
-        base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?ao_title ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ
+        base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?ao_title ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ ?KE_upstream_organ_name ?KE_downstream_organ_name
         WHERE {
           %VALUES_CLAUSE%
           ?aop a aopo:AdverseOutcomePathway ;
@@ -188,7 +189,9 @@ class AOPQueryService:
                  aopo:has_downstream_key_event ?KE_downstream .
             ?KE_upstream dc:title ?KE_upstream_title .
             ?KE_downstream dc:title ?KE_downstream_title .
-            OPTIONAL { ?KE_upstream aopo:OrganContext ?KE_upstream_organ . ?KE_downstream aopo:OrganContext ?KE_downstream_organ . }
+            OPTIONAL { ?KE_upstream aopo:OrganContext ?KE_upstream_organ . ?KE_downstream aopo:OrganContext ?KE_downstream_organ . 
+            ?KE_upstream_organ dc:title ?KE_upstream_organ_name .
+            ?KE_downstream_organ dc:title ?KE_downstream_organ_name .}
           }
         }"""
 
@@ -261,6 +264,7 @@ class AOPQueryService:
             }}
             ORDER BY ?ke
         """
+
 
     def _execute_sparql_query(self, query: str) -> Dict[str, Any]:
         """Execute SPARQL query with standardized error handling"""

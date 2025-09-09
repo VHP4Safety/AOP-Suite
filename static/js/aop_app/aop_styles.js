@@ -301,7 +301,76 @@ function positionNodes(cy, fontSizeMultiplier = 0.5, animate = false) { // Chang
                 "transition-duration": transitionDuration,
                 "transition-timing-function": "ease-out"
             }
-        }
+        },
+        // Organ nodes - improved styling
+        {
+            selector: "node[type='organ'], .organ-node",
+            style: {
+                "shape": "round-rectangle",
+                "width": `${150 * fontSizeMultiplier}px`,
+                "height": `${150 * fontSizeMultiplier}px`,
+                "background-color": "#8e7cc3", // Soft purple color
+                "border-width": `${2 * fontSizeMultiplier}px`,
+                "border-color": "#6a5acd", // Darker purple border
+                "label": "data(label)",
+                "text-valign": "center",
+                "text-halign": "center",
+                "font-size": `${40 * fontSizeMultiplier}px`,
+                "font-weight": "bold",
+                "color": "#ffffff",
+                "text-outline-color": "#6a5acd",
+                "text-outline-width": 1,
+                "text-wrap": "wrap",
+                "text-max-width": `${50 * fontSizeMultiplier}px`,
+                "padding": `${8 * fontSizeMultiplier}px`,
+                "opacity": 0.9,
+                "transition-property": "width, height, font-size, text-max-width, border-width, padding",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
+            }
+        },
+        
+        // node hover/selected effect for all node types
+        {
+            selector: "node:selected",
+            style: {
+            "border-width": `${14 * fontSizeMultiplier}px`,
+            "border-color": "#1976d2",
+            "z-index": 9999
+            }
+        },
+        
+        // Associated with edges (KE to organ connections) - improved styling
+        {
+            selector: "edge[type='associated_with'], edge[type='expression_in']",
+            style: {
+                "curve-style": "straight",
+                "width": `${2 * fontSizeMultiplier}px`,
+                "line-color": "#b19cd9", // Light purple to match organs
+                "opacity": 0.7,
+                "target-arrow-shape": "triangle",
+                "target-arrow-color": "#b19cd9",
+                "arrow-scale": 1.2,
+                "line-style": "dashed", // Dashed line to distinguish from other edges
+                "line-dash-pattern": [6, 3],
+                "source-endpoint": "outside-to-node",
+                "target-endpoint": "outside-to-node",
+                "transition-property": "width",
+                "transition-duration": transitionDuration,
+                "transition-timing-function": "ease-out"
+            }
+        },
+        
+        // Associated edge hover/selected effect
+        {
+            selector: "edge[type='associated_with']:selected, edge[type='expression_in']:selected",
+            style: {
+                "line-color": "#8e7cc3",
+                "target-arrow-color": "#8e7cc3",
+                "width": `${3 * fontSizeMultiplier}px`,
+                "opacity": 1
+            }
+        },
     ]).update();
 }
 
