@@ -692,18 +692,37 @@ class AOPNetwork:
         return list(self.aop_info.keys())
     
     def get_ensembl_ids(self) -> List[str]:
-        """Retrieve all nodes with class Ensembl"""
+        """Retrieve all Ensembl IDs from nodes in the network"""
         ensembl_ids = []
+        
+        # Check both gene_associations and node_list
         for gene_assoc in self.gene_associations:
-            ensembl_ids.append(gene_assoc.data.id)
+            if gene_assoc.ensembl_id:
+                ensembl_ids.append(gene_assoc.ensembl_id)
+        
+        # Also check node_list for CytoscapeNode objects with Ensembl data
+        for node in self.node_list:
+            if hasattr(node, 'is_ensembl_node') and node.is_ensembl_node():
+                ensembl_id = node.properties.get("ensembl_id", node.id)
+                if ensembl_id.startswith("ensembl_"):
+                    ensembl_id = ensembl_id.replace("ensembl_", "")
+                if ensembl_id and ensembl_id not in ensembl_ids:
+                    ensembl_ids.append(ensembl_id)
+        
         return ensembl_ids
 
     def get_organ_ids(self) -> List[str]:
-        """Retrieve all nodes with class organ"""
+        """Retrieve all organ IDs/names from nodes in the network"""
         organ_ids = []
+        
+        # Check node_list for organ nodes
         for node in self.node_list:
-            if node.is_organ_node():
-                organ_ids.append(node.id)
+            if hasattr(node, 'is_organ_node') and node.is_organ_node():
+                # Use anatomical_name (organ name) rather than full URI
+                organ_name = node.properties.get("anatomical_name", node.label)
+                if organ_name and organ_name not in organ_ids:
+                    organ_ids.append(organ_name)
+        
         return organ_ids
 
     def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
@@ -1094,10 +1113,36 @@ class CytoscapeNetworkParser:
         return [edge for edge in self.edges if edge.is_gene_relationship()]
 
     def get_organ_nodes(self) -> List[CytoscapeNode]:
-        """Get all organ nodes from the network"""
-        return [
-            node for node in self.nodes if node.is_organ_node()
-        ]
+        """Extract organ nodes from Cytoscape elements"""
+        organ_nodes = []
+        
+        for element in self.elements:
+            if element.get("group") == "nodes":
+                node_data = element.get("data", {})
+                node_type = node_data.get("type", "").lower()
+                
+                # Check for organ nodes - look for type "organ" or nodes with anatomical data
+                if (node_type == "organ" or 
+                    "anatomical_id" in node_data or 
+                    "anatomical_name" in node_data or
+                    node_data.get("id", "").startswith("http://purl.obolibrary.org/obo/UBERON_")):
+                    
+                    # Create CytoscapeNode for organ (not NetworkNode)
+                    organ_node = CytoscapeNode(
+                        id=node_data.get("id", ""),
+                        label=node_data.get("label", node_data.get("anatomical_name", "")),
+                        node_type="organ",
+                        classes="organ-node",
+                        properties={
+                            "anatomical_id": node_data.get("anatomical_id", node_data.get("id", "")),
+                            "anatomical_name": node_data.get("anatomical_name", node_data.get("label", "")),
+                            "uberon_id": node_data.get("anatomical_id", node_data.get("id", "")),
+                            "type": "organ"
+                        }
+                    )
+                    organ_nodes.append(organ_node)
+                    
+        return organ_nodes
 
 class AOPTableBuilder:
     """Builds AOP table data"""

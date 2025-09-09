@@ -1,6 +1,10 @@
 from flask import Blueprint, request, jsonify
+import logging
 
 from backend.service import aop_network_service
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Instantiate the service class
 aop_service = aop_network_service.AOPNetworkService()
@@ -71,32 +75,17 @@ def load_and_show_organs():
     return aop_service.load_and_show_organs(request)
 
 # Bgee Expression Routes
+
 @aop_app.route("/query_bgee_expression", methods=["POST"])
-def query_bgee_expression():
-    """Query Bgee for gene expression data"""
+def query_bgee_developmental():
+    """Query Bgee for developmental expression data"""
     try:
         result, status_code = aop_service.query_bgee_expression(request)
         return jsonify(result), status_code
     except Exception as e:
+        logger.error(f"Error in query_bgee_developmental route: {e}")
         return jsonify({"error": "Internal server error"}), 500
 
-@aop_app.route("/query_bgee_anatomical", methods=["POST"])
-def query_bgee_anatomical():
-    """Query Bgee for anatomical expression data"""
-    try:
-        result, status_code = aop_service.query_bgee_anatomical(request)
-        return jsonify(result), status_code
-    except Exception as e:
-        return jsonify({"error": "Internal server error"}), 500
-
-@aop_app.route("/query_bgee_developmental", methods=["POST"])
-def query_bgee_developmental():
-    """Query Bgee for developmental expression data"""
-    try:
-        result, status_code = aop_service.query_bgee_developmental(request)
-        return jsonify(result), status_code
-    except Exception as e:
-        return jsonify({"error": "Internal server error"}), 500
 
 @aop_app.route("/populate_gene_expression_table", methods=["POST"])
 def populate_gene_expression_table():
@@ -105,4 +94,5 @@ def populate_gene_expression_table():
         result, status_code = aop_service.populate_gene_expression_table(request)
         return jsonify(result), status_code
     except Exception as e:
+        logger.error(f"Error in populate_gene_expression_table route: {e}")
         return jsonify({"error": "Internal server error"}), 500

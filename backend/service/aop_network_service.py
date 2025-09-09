@@ -135,79 +135,105 @@ class AOPNetworkService:
             if not data or "cy_elements" not in data:
                 return {"error": "Cytoscape elements required"}, 400
 
+            query_by = "both"  # Always query by both genes and organs
             confidence_level = data.get("confidence_level", None)
-            logger.info(f"Querying Bgee expression for {len(data['cy_elements'])} elements with confidence {confidence_level}")
+            logger.info(f"Querying Bgee by {query_by} with confidence {confidence_level}")
 
-            # Parse elements to find genes
+            # Parse elements and build network
             parser = CytoscapeNetworkParser(data["cy_elements"])
-            ensembl_nodes = parser.get_ensembl_nodes()
+            temp_network = AOPNetwork()
             
-            if not ensembl_nodes:
-                return {"expression_data": []}, 200
+            # Add both genes and organs (required for "both" query)
+            ensembl_nodes = parser.get_ensembl_nodes()
+            organ_nodes = parser.get_organ_nodes()
+            
+            logger.info(f"Found {len(ensembl_nodes)} Ensembl nodes and {len(organ_nodes)} organ nodes")
+            
+            # Validate that we have both genes and organs
+            if len(ensembl_nodes) == 0 and len(organ_nodes) == 0:
+                return {
+                    "expression_data": [],
+                    "expression_elements": [],
+                    "sparql_query": "# No genes or organs found in network",
+                    "message": "Network must contain both genes (Ensembl nodes) and organs to query Bgee"
+                }, 200
+            elif len(ensembl_nodes) == 0:
+                return {
+                    "expression_data": [],
+                    "expression_elements": [],
+                    "sparql_query": "# No genes found in network", 
+                    "message": "Network must contain genes (Ensembl nodes) to query Bgee"
+                }, 200
+            elif len(organ_nodes) == 0:
+                return {
+                    "expression_data": [],
+                    "expression_elements": [],
+                    "sparql_query": "# No organs found in network",
+                    "message": "Network must contain organs to query Bgee"
+                }, 200
+            
+            # Add nodes to temp network
+            temp_network.node_list.extend(ensembl_nodes)
+            temp_network.node_list.extend(organ_nodes)
 
-            # Query Bgee for expression data with confidence level
-            expression_data = bgee_query_service.query_gene_expression_data(ensembl_nodes, confidence_level)
+            # Query Bgee directly
+            enriched_network, query_used = bgee_query_service.query_gene_expressions_for_network(
+                temp_network, query_by, confidence_level
+            )
 
-            logger.info(f"Retrieved expression data for {len(expression_data)} genes")
-            return {"expression_data": expression_data}, 200
+            # Convert results
+            expression_elements = []
+            expression_data = []
+            
+            if enriched_network and enriched_network.gene_expression_associations:
+                for association in enriched_network.gene_expression_associations:
+                    expression_elements.extend(association.to_cytoscape_elements())
+                    expression_data.append(association.to_table_entry())
+
+            logger.info(f"Retrieved {len(expression_data)} expression associations")
+            return {
+                "expression_data": expression_data,
+                "expression_elements": expression_elements,
+                "sparql_query": query_used or "# Query failed"
+            }, 200
 
         except Exception as e:
-            logger.error(f"Error in query_bgee_expression: {e}")
+            logger.error(f"Error in query_bgee_expression: {e}", exc_info=True)
             return {"error": str(e)}, 500
 
     def query_bgee_anatomical(self, request_data) -> Tuple[Dict[str, Any], int]:
-        """Query Bgee for anatomical expression data from Cytoscape elements"""
+        """Query Bgee for anatomical expression data"""
         try:
             data = request_data.get_json(silent=True)
-            if not data or "cy_elements" not in data:
-                return {"error": "Cytoscape elements required"}, 400
-
-            confidence_level = data.get("confidence_level", None)
-            logger.info(f"Querying Bgee anatomical for {len(data['cy_elements'])} elements with confidence {confidence_level}")
-
-            parser = CytoscapeNetworkParser(data["cy_elements"])
-            ensembl_nodes = parser.get_ensembl_nodes()
+            if not data:
+                return {"error": "No JSON data provided"}, 400
             
-            if not ensembl_nodes:
-                return {"anatomical_data": []}, 200
-
-            anatomical_data = bgee_query_service.query_anatomical_expression_data(ensembl_nodes, confidence_level)
-
-            logger.info(f"Retrieved anatomical data for {len(anatomical_data)} genes")
-            return {"anatomical_data": anatomical_data}, 200
-
+            # Set query_by to organs for anatomical queries
+            data["query_by"] = "organs"
+            
+            # Create mock request object with the modified data
+            class MockRequest:
+                def get_json(self, silent=True):
+                    return data
+            
+            return self.query_bgee_expression(MockRequest())
+            
         except Exception as e:
             logger.error(f"Error in query_bgee_anatomical: {e}")
             return {"error": str(e)}, 500
 
     def query_bgee_developmental(self, request_data) -> Tuple[Dict[str, Any], int]:
-        """Query Bgee for developmental expression data from Cytoscape elements"""
+        """Query Bgee for developmental expression data"""
         try:
-            data = request_data.get_json(silent=True)
-            if not data or "cy_elements" not in data:
-                return {"error": "Cytoscape elements required"}, 400
-
-            logger.info(f"Querying Bgee developmental for {len(data['cy_elements'])} elements")
-
-            # Parse elements to find genes
-            parser = CytoscapeNetworkParser(data["cy_elements"])
-            ensembl_nodes = parser.get_ensembl_nodes()
+            # For now, redirect to the main expression query
+            return self.query_bgee_expression(request_data)
             
-            if not ensembl_nodes:
-                return {"developmental_data": []}, 200
-
-            # Query Bgee for developmental expression data
-            developmental_data = bgee_query_service.query_developmental_expression_data(ensembl_nodes)
-
-            logger.info(f"Retrieved developmental data for {len(developmental_data)} genes")
-            return {"developmental_data": developmental_data}, 200
-
         except Exception as e:
             logger.error(f"Error in query_bgee_developmental: {e}")
             return {"error": str(e)}, 500
 
     def populate_gene_expression_table(self, request_data) -> Tuple[Dict[str, Any], int]:
-        """Populate gene expression table from Cytoscape elements"""
+        """Populate gene expression table from network elements"""
         try:
             data = request_data.get_json(silent=True)
             if not data or "cy_elements" not in data:

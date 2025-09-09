@@ -282,7 +282,7 @@
                                 </div>
                                 <!-- Genes and compound cards -->
                                 <div class="querygc-card" id="genes-compound-card">
-                                    <h4 class="enhance-card-title"> Genes and Compounds</h4>
+                                    <h4 class="enhance-card-title"> Expand network from AOP Wiki </h4>
                                     <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2" onclick="toggleOrgans()" title="Toggle organ visibility in the network">
                                         Show Organs
                                     </button>
@@ -455,36 +455,33 @@
                                 <h4 class="enhance-card-title">Bgee Expression</h4>
                             </div>
                             <div class="enhance-card-content">
-                                Add gene expression data from Bgee database. Explore tissue-specific and developmental
-                                expression patterns with customizable confidence levels.
+                                Add gene expression data from Bgee database. Query by both genes and organs with customizable confidence levels.
+                                <div class="alert alert-info mt-2" style="font-size: 0.75rem; padding: 0.5rem;">
+                                    <i class="fas fa-info-circle"></i> <strong>Note:</strong> Network must contain both genes (Ensembl nodes) and organs to query Bgee expression data.
+                                </div>
                             </div>
                             <div class="enhance-card-controls">
                                 <div class="form-group mb-2">
                                     <label for="bgee-confidence-level">Expression Confidence Level:</label>
                                     <div class="confidence-level-selector">
                                         <div class="btn-group w-100" role="group" aria-label="Confidence Level">
-                                            <button type="button" class="btn btn-outline-warning confidence-btn" data-confidence="low">
+                                            <button type="button" class="btn btn-outline-warning confidence-btn" data-confidence="20">
                                                 <i class="fas fa-exclamation-triangle"></i> Low
                                             </button>
-                                            <button type="button" class="btn btn-outline-primary confidence-btn active" data-confidence="medium">
+                                            <button type="button" class="btn btn-outline-primary confidence-btn active" data-confidence="50">
                                                 <i class="fas fa-balance-scale"></i> Medium
                                             </button>
-                                            <button type="button" class="btn btn-outline-success confidence-btn" data-confidence="high">
+                                            <button type="button" class="btn btn-outline-success confidence-btn" data-confidence="80">
                                                 <i class="fas fa-check-circle"></i> High
                                             </button>
                                         </div>
-                                        <input type="hidden" id="bgee-confidence-level" value="medium">
+                                        <input type="hidden" id="bgee-confidence-level" value="50">
                                     </div>
                                     <small class="form-text text-muted">Higher levels include only more reliable expression data</small>
                                 </div>
-                                <div class="btn-group w-100" role="group">
-                                    <button id="bgee_query_expression" class="btn btn-primary btn-sm">
-                                        <i class="fas fa-dna"></i> Basic Expression
-                                    </button>
-                                    <button id="bgee_query_anatomical" class="btn btn-secondary btn-sm">
-                                        <i class="fas fa-brain"></i> By Organ
-                                    </button>
-                                </div>
+                                <button id="bgee_query_expression" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-dna"></i> Query Gene Expression
+                                </button>
                                 <div id="bgee-status" class="mt-2"></div>
                             </div>
                         </div>
