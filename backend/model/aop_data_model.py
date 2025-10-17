@@ -144,7 +144,7 @@ class EdgeType(Enum):
     CUSTOM = "custom"
     IS_STRESSOR_OF = "is stressor of"
     HAS_PROCESS = "has process"
-    HAS_OBJECT = "has object"
+    INVOLVES = "involves"
     NA = "na"
     
     # Component action edge types - these are actual edge labels/types
@@ -419,8 +419,8 @@ class ComponentAssociation:
                         "id": f"{ke}_{process_node_id}_{object_node_id}",
                         "source": process_node_id,
                         "target": object_node_id,
-                        "label": EdgeType.HAS_OBJECT.value,
-                        "type": EdgeType.HAS_OBJECT.value,
+                        "label": EdgeType.INVOLVES.value,
+                        "type": EdgeType.INVOLVES.value,
                     }
                 }
             )
