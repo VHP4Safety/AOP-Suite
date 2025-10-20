@@ -96,3 +96,13 @@ def populate_gene_expression_table():
     except Exception as e:
         logger.error(f"Error in populate_gene_expression_table route: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+@aop_app.route('/ndex/to_ndex_network', methods=['POST'])
+def to_ndex_network():
+    """Accept Cytoscape elements and optional name/description, return CX2 JSON."""
+    try:
+        result, status_code = aop_service.export_to_cx2(request)
+        return jsonify(result), status_code
+    except Exception as e:
+        logger.error(f"Error in to_ndex_network route: {e}")
+        return jsonify({'error': 'Internal server error'}), 500

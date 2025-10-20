@@ -1,8 +1,11 @@
 from dataclasses import dataclass, field
-from pandas import DataFrame
 from typing import Dict, List, Optional, Any, Set
 from enum import Enum
 import logging
+from abc import ABC, abstractmethod
+
+from pandas import DataFrame
+from ndex2.cx2 import CX2Network
 
 logger = logging.getLogger(__name__)
 
@@ -262,7 +265,53 @@ class KeyEventRelationship:
 
 
 @dataclass
-class GeneAssociation:
+class BaseAssociation(ABC):
+    """Abstract base class for all association types"""
+    
+    @abstractmethod
+    def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
+        """Convert to Cytoscape elements (nodes and edges)"""
+        pass
+    
+    def get_nodes(self) -> List[CytoscapeNode]:
+        """Extract nodes from cytoscape elements"""
+        elements = self.to_cytoscape_elements()
+        nodes = []
+        for element in elements:
+            if element.get("group") != "edges" and "data" in element:
+                data = element["data"]
+                if "source" not in data and "target" not in data:  # It's a node
+                    node = CytoscapeNode(
+                        id=data.get("id", ""),
+                        label=data.get("label", ""),
+                        node_type=data.get("type", ""),
+                        classes=element.get("classes", ""),
+                        properties=data
+                    )
+                    nodes.append(node)
+        return nodes
+    
+    def get_edges(self) -> List[CytoscapeEdge]:
+        """Extract edges from cytoscape elements"""
+        elements = self.to_cytoscape_elements()
+        edges = []
+        for element in elements:
+            if element.get("group") == "edges" or ("data" in element and "source" in element["data"]):
+                data = element["data"]
+                if "source" in data and "target" in data:  # It's an edge
+                    edge = CytoscapeEdge(
+                        id=data.get("id", f"{data.get('source', '')}_{data.get('target', '')}"),
+                        source=data.get("source", ""),
+                        target=data.get("target", ""),
+                        label=data.get("label", ""),
+                        properties=data
+                    )
+                    edges.append(edge)
+        return edges
+
+
+@dataclass
+class GeneAssociation(BaseAssociation):
     """Represents gene associations with Key Events"""
 
     ke_uri: str
@@ -345,7 +394,7 @@ class GeneAssociation:
 
 
 @dataclass
-class ComponentAssociation:
+class ComponentAssociation(BaseAssociation):
     """Represents component associations with KEs"""
 
     ke_uri: str
@@ -451,7 +500,7 @@ class ComponentAssociation:
         }
 
 @dataclass
-class CompoundAssociation:
+class CompoundAssociation(BaseAssociation):
     """Represents compound associations with AOPs"""
 
     aop_uri: str
@@ -533,7 +582,7 @@ class CompoundAssociation:
 
 
 @dataclass
-class GeneExpressionAssociation:
+class GeneExpressionAssociation(BaseAssociation):
     """Represents gene expression associations with organs"""
 
     def __init__(
@@ -609,7 +658,7 @@ class GeneExpressionAssociation:
 
 
 @dataclass
-class OrganAssociation:
+class OrganAssociation(BaseAssociation):
     """Represents an organ-key event association"""
     ke_uri: str
     organ_data: CytoscapeNode
@@ -635,7 +684,26 @@ class AOPNetwork:
         self.organ_associations: List[OrganAssociation] = []
         self.aop_info: Dict[str, AOPInfo] = {}
         self.node_list: List[CytoscapeNode] = []
+        self.edge_list: List[CytoscapeEdge] = []
         self.gene_expression_associations: List[GeneExpressionAssociation] = []
+
+    @classmethod
+    def from_cytoscape_elements(cls, elements: List[Dict[str, Any]]) -> "AOPNetwork":
+        """Create AOPNetwork from Cytoscape elements - puts ALL nodes and edges into the network"""
+        network = cls()
+        
+        # Parse all elements using the parser
+        parser = CytoscapeNetworkParser(elements)
+        
+        # Add ALL nodes to the network
+        network.node_list = parser.nodes
+        
+        # Add ALL edges to the network  
+        network.edge_list = parser.edges
+        
+        logger.info(f"Created AOPNetwork from {len(elements)} Cytoscape elements: {len(network.node_list)} nodes, {len(network.edge_list)} edges")
+        
+        return network
 
     def add_key_event(self, key_event: AOPKeyEvent):
         """Add a key event to the network"""
@@ -656,22 +724,43 @@ class AOPNetwork:
     def add_gene_association(self, association: GeneAssociation):
         """Add a gene association"""
         self.gene_associations.append(association)
+        self._update_nodes_and_edges(association)
 
     def add_gene_expression_association(self, association: GeneExpressionAssociation):
         """Add a gene expression association"""
         self.gene_expression_associations.append(association)
+        self._update_nodes_and_edges(association)
 
     def add_compound_association(self, association: CompoundAssociation):
         """Add a compound association"""
         self.compound_associations.append(association)
+        self._update_nodes_and_edges(association)
 
     def add_component_association(self, association: ComponentAssociation):
-        """Add a compound association"""
+        """Add a component association"""
         self.component_associations.append(association)
+        self._update_nodes_and_edges(association)
 
     def add_organ_association(self, association: OrganAssociation):
         """Add an organ association"""
         self.organ_associations.append(association)
+        self._update_nodes_and_edges(association)
+
+    def _update_nodes_and_edges(self, association: BaseAssociation):
+        """Update node_list and edge_list with nodes and edges from association"""
+        # Add nodes
+        new_nodes = association.get_nodes()
+        for node in new_nodes:
+            # Avoid duplicates by checking node ID
+            if not any(existing_node.id == node.id for existing_node in self.node_list):
+                self.node_list.append(node)
+        
+        # Add edges
+        new_edges = association.get_edges()
+        for edge in new_edges:
+            # Avoid duplicates by checking edge ID
+            if not any(existing_edge.id == edge.id for existing_edge in self.edge_list):
+                self.edge_list.append(edge)
 
     def get_genes_for_ke(self, ke_uri: str) -> List[GeneAssociation]:
         """Get all gene associations for a specific Key Event"""
@@ -695,34 +784,22 @@ class AOPNetwork:
         """Retrieve all Ensembl IDs from nodes in the network"""
         ensembl_ids = []
         
-        # Check both gene_associations and node_list
+        # Check gene_associations
         for gene_assoc in self.gene_associations:
             if gene_assoc.ensembl_id:
                 ensembl_ids.append(gene_assoc.ensembl_id)
-        
-        # Also check node_list for CytoscapeNode objects with Ensembl data
-        for node in self.node_list:
-            if hasattr(node, 'is_ensembl_node') and node.is_ensembl_node():
-                ensembl_id = node.properties.get("ensembl_id", node.id)
-                if ensembl_id.startswith("ensembl_"):
-                    ensembl_id = ensembl_id.replace("ensembl_", "")
-                if ensembl_id and ensembl_id not in ensembl_ids:
-                    ensembl_ids.append(ensembl_id)
-        
         return ensembl_ids
 
     def get_organ_ids(self) -> List[str]:
         """Retrieve all organ IDs/names from nodes in the network"""
         organ_ids = []
-        
-        # Check node_list for organ nodes
-        for node in self.node_list:
-            if hasattr(node, 'is_organ_node') and node.is_organ_node():
+        for organ_assoc in self.organ_associations:
+            organ_node = organ_assoc.organ_data
+            if organ_node and organ_node.is_organ_node():
                 # Use anatomical_name (organ name) rather than full URI
-                organ_name = node.properties.get("anatomical_name", node.label)
+                organ_name = organ_node.properties.get("anatomical_name", organ_node.label)
                 if organ_name and organ_name not in organ_ids:
-                    organ_ids.append(organ_name)
-        
+                    organ_ids.append(organ_name)        
         return organ_ids
 
     def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
@@ -773,10 +850,78 @@ class AOPNetwork:
             "gene_associations": len(self.component_associations),
             "gene_expression_associations": len(self.gene_expression_associations),
             "compound_associations": len(self.compound_associations),
+            "component_associations": len(self.component_associations),
             "total_aops": len(self.aop_info),
         }
 
+    def to_ndex_network(self, name: Optional[str] = None, description: Optional[str] = None):
+        net_cx = CX2Network()
 
+        # Set network attributes
+        net_name = name or f"AOP Network ({len(self.node_list)} nodes)"
+        net_cx.add_network_attribute("name", net_name)
+        if description:
+            net_cx.add_network_attribute("description", description)
+
+        # Add simple node and edge counts as metadata
+        net_cx.add_network_attribute("total_nodes", len(self.node_list))
+        net_cx.add_network_attribute("total_edges", len(self.edge_list))
+
+        # Add ALL nodes from node_list to CX2
+        original_to_cx2_id = {}  # Map original node IDs to CX2 integer IDs
+        
+        for node in self.node_list:
+            # Convert node to dict and remove CX2 reserved keys
+            node_data = node.to_dict()
+            node_data.pop('id', None)  # Remove conflicting id key
+            
+            # Add node - CX2Network.add_node() returns the node ID
+            cx2_node_id = net_cx.add_node(attributes=node_data)
+            original_to_cx2_id[node.id] = cx2_node_id
+
+        # Add ALL edges from edge_list to CX2
+        for edge in self.edge_list:
+            # Map source and target to CX2 node IDs
+            source_cx2_id = original_to_cx2_id.get(edge.source)
+            target_cx2_id = original_to_cx2_id.get(edge.target)
+            
+            if source_cx2_id is not None and target_cx2_id is not None:
+                edge_data = edge.to_dict()
+                # Remove ALL CX2 reserved keys
+                edge_data.pop('id', None)
+                edge_data.pop('source', None)
+                edge_data.pop('target', None)
+                
+                net_cx.add_edge(source=source_cx2_id, target=target_cx2_id, attributes=edge_data)
+
+        logger.info(f"Created CX2 network with {len(self.node_list)} nodes and {len(self.edge_list)} edges")
+        return net_cx
+
+    def get_summary(self) -> Dict[str, int]:
+        """Get network summary statistics"""
+        mie_count = sum(
+            1 for ke in self.key_events.values() if ke.ke_type == NodeType.MIE
+        )
+        ao_count = sum(
+            1 for ke in self.key_events.values() if ke.ke_type == NodeType.AO
+        )
+        ke_count = sum(
+            1 for ke in self.key_events.values() if ke.ke_type == NodeType.KE
+        )
+
+        return {
+            "total_key_events": len(self.key_events),
+            "mie_count": mie_count,
+            "ao_count": ao_count,
+            "ke_count": ke_count,
+            "ker_count": len(self.relationships),
+            "gene_associations": len(self.component_associations),
+            "gene_expression_associations": len(self.gene_expression_associations),
+            "compound_associations": len(self.compound_associations),
+            "total_aops": len(self.aop_info),
+        }
+
+    
 class AOPNetworkBuilder:
     """Builder class for constructing AOP networks from SPARQL results"""
 

@@ -94,7 +94,7 @@ class AOPNetworkService:
         try:
             kes = request_data.args.get("kes", "")
             include_proteins = request_data.args.get("include_proteins", "true").lower() == "true"
-            
+
             if not kes:
                 return {"error": "kes parameter is required"}, 400
 
@@ -144,13 +144,13 @@ class AOPNetworkService:
             # Parse elements and build network
             parser = CytoscapeNetworkParser(data["cy_elements"])
             temp_network = AOPNetwork()
-            
+
             # Add both genes and organs (required for "both" query)
             ensembl_nodes = parser.get_ensembl_nodes()
             organ_nodes = parser.get_organ_nodes()
-            
+
             logger.info(f"Found {len(ensembl_nodes)} Ensembl nodes and {len(organ_nodes)} organ nodes")
-            
+
             # Validate that we have both genes and organs
             if len(ensembl_nodes) == 0 and len(organ_nodes) == 0:
                 return {
@@ -173,7 +173,7 @@ class AOPNetworkService:
                     "sparql_query": "# No organs found in network",
                     "message": "Network must contain organs to query Bgee"
                 }, 200
-            
+
             # Add nodes to temp network
             temp_network.node_list.extend(ensembl_nodes)
             temp_network.node_list.extend(organ_nodes)
@@ -186,7 +186,7 @@ class AOPNetworkService:
             # Convert results
             expression_elements = []
             expression_data = []
-            
+
             if enriched_network and enriched_network.gene_expression_associations:
                 for association in enriched_network.gene_expression_associations:
                     expression_elements.extend(association.to_cytoscape_elements())
@@ -209,17 +209,17 @@ class AOPNetworkService:
             data = request_data.get_json(silent=True)
             if not data:
                 return {"error": "No JSON data provided"}, 400
-            
+
             # Set query_by to organs for anatomical queries
             data["query_by"] = "organs"
-            
+
             # Create mock request object with the modified data
             class MockRequest:
                 def get_json(self, silent=True):
                     return data
-            
+
             return self.query_bgee_expression(MockRequest())
-            
+
         except Exception as e:
             logger.error(f"Error in query_bgee_anatomical: {e}")
             return {"error": str(e)}, 500
@@ -229,7 +229,7 @@ class AOPNetworkService:
         try:
             # For now, redirect to the main expression query
             return self.query_bgee_expression(request_data)
-            
+
         except Exception as e:
             logger.error(f"Error in query_bgee_developmental: {e}")
             return {"error": str(e)}, 500
@@ -479,6 +479,40 @@ class AOPNetworkService:
         except Exception as e:
             logger.error(f"Error in load_and_show_organs: {e}")
             return {"error": str(e)}, 500
+
+    def export_to_cx2(self, request_data) -> Tuple[Dict[str, Any], int]:
+        """Export network to CX2 format using the data model"""
+        try:
+            data = request_data.get_json(silent=True)
+            if not data:
+                return {"error": "No data provided"}, 400
+
+            elements = data.get("elements", [])
+            if not elements:
+                return {"error": "No network elements provided"}, 400
+
+            # Extract metadata
+            name = data.get("name", "AOP Network")
+            description = data.get("description", "Exported from AOP Network Builder")
+
+            logger.info(f"Exporting network to CX2: {name} with {len(elements)} elements")
+
+            # Create AOPNetwork from Cytoscape elements - let the model handle everything
+            network = AOPNetwork.from_cytoscape_elements(elements)
+
+            # Convert to CX2 using the data model
+            cx2_network = network.to_ndex_network(name=name, description=description)
+
+            # Convert to JSON format
+            cx2_json = cx2_network.to_cx2()
+
+            logger.info(f"Successfully exported network to CX2 format")
+
+            return cx2_json, 200
+
+        except Exception as e:
+            logger.error(f"Error in export_to_cx2: {e}", exc_info=True)
+            return {"error": f"Failed to export to CX2: {str(e)}"}, 500
 
 @dataclass
 class ServiceResponse:

@@ -397,8 +397,75 @@
 /* Network Controls */
 .network-controls {
     display: flex;
-    gap: 0.25rem;
-    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Download dropdown styling */
+.download-dropdown {
+    position: relative;
+    display: inline-block;
+    padding-left: 1.5%;
+}
+
+.download-dropdown summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.download-dropdown summary::-webkit-details-marker {
+    display: none;
+}
+
+.download-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    z-index: 9999;
+    padding: 4px 0;
+}
+
+.download-divider {
+    height: 1px;
+    background: #e9ecef;
+    margin: 4px 0;
+}
+
+.download-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 0.8rem;
+    color: #495057;
+}
+
+.download-option:hover {
+    background-color: #f8f9fa;
+}
+
+.download-option i {
+    width: 16px;
+    text-align: center;
+    color: #6c757d;
+}
+
+/* Close dropdown when clicking outside */
+.download-dropdown:not([open]) .download-menu {
+    display: none;
 }
 
 .network-container {
@@ -1368,6 +1435,7 @@ edge[type="go_hierarchy"] {
     align-items: center;
     gap: 1rem;
     margin-left: auto;
+    padding-right: 2%;
     font-size: 0.8rem;
     color: #6c757d;
 }
