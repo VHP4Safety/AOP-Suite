@@ -234,7 +234,7 @@ class AOPNetworkBuilder:
     def add_gene_expression_association(
         self, gene_expression_results: List[Dict[str, Any]]
     ):
-        """Add bgee gene expression associations from biodatafuse query results"""
+        """Add bgee gene expression associations from query results"""
         for result in gene_expression_results:
             ensembl_id = result.get("ensembl_id", {}).get("value", "")
             if not ensembl_id:
@@ -260,44 +260,33 @@ class AOPNetworkBuilder:
             )
             self.network.add_gene_expression_association(association)
 
-    def add_organ_associations_from_sparql(self, sparql_results: List[Dict[str, Any]]):
-        """Add organ associations from SPARQL results"""
-        for result in sparql_results:
+    def add_organ_associations(
+            self, organ_sparql_results: List[Dict[str, Any]]):
+        """Add organs to the network from SPARQL results"""
+        for result in organ_sparql_results:
             ke_uri = result.get("ke", {}).get("value", "")
             organ_uri = result.get("organ", {}).get("value", "")
             organ_name = result.get("organ_name", {}).get("value", "")
-
-            if ke_uri and organ_uri:
-                organ_node = CytoscapeNode(
-                    id=f"organ_{organ_uri.split('/')[-1] if '/' in organ_uri else organ_uri}",
-                    label=organ_name if organ_name else organ_uri.split("/")[-1],
-                    node_type=NodeType.ORGAN.value,
-                    classes="organ-node",
-                    properties={
-                        "anatomical_id": (
-                            organ_uri.split("/")[-1] if "/" in organ_uri else organ_uri
-                        ),
-                        "anatomical_name": organ_name,
-                        "organ_uri": organ_uri,
-                    },
+            association = OrganAssociation(
+                    ke_uri=ke_uri,
+                    organ_data=CytoscapeNode(
+                        id=organ_uri,
+                        label=organ_name if organ_name else organ_uri.split("/")[-1],
+                        node_type=NodeType.ORGAN.value,
+                        classes="organ-node",
+                        properties={"anatomical_id": organ_uri, "anatomical_name": organ_name},
+                    ),
+                    edge_data=CytoscapeEdge(
+                        id=f"{ke_uri}_{organ_uri}",
+                        source=ke_uri,
+                        target=organ_uri,
+                        label="associated with",
+                        properties={"type": "associated_with"},
+                    )
                 )
-
-                edge = CytoscapeEdge(
-                    id=f"{ke_uri}_{organ_node.id}",
-                    source=ke_uri,
-                    target=organ_node.id,
-                    label="associated with",
-                    properties={
-                        "type": "associated_with",
-                        "edge_type": "ke_organ_association",
-                    },
-                )
-
-                association = OrganAssociation(
-                    ke_uri=ke_uri, organ_data=organ_node, edge_data=edge
-                )
-
-                self.network.add_organ_association(association)
+            if not ke_uri or not organ_uri:
+                continue
+        return self.network.add_organ_association(association)
 
     def build(self) -> AOPNetwork:
         """Return the constructed network"""

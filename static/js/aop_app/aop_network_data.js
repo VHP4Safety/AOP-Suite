@@ -438,7 +438,7 @@ class AOPNetworkDataManager {
                         // Update button state
                         const button = document.getElementById('toggle-organs-btn');
                         if (button) {
-                            button.textContent = 'Show Organs';
+                            button.textContent = 'Query Organs';
                             button.classList.remove('active');
                         }
                     }

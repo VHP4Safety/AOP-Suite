@@ -578,38 +578,127 @@ document.addEventListener("DOMContentLoaded", function () {
     // ===== ORGAN VISIBILITY FUNCTIONS =====
     
     // Add organ visibility control functions
-    function hideOrgans() {
-        if (window.cy) {
-            window.cy.nodes('[type="organ"]').style('display', 'none');
-            window.cy.edges('[type="associated_with"], [type="expression_in"]').style('display', 'none');
+    function toggleOrgans() {
+        const action = window.organsVisible ? 'hide' : 'show';
+        if (action === 'show') {
+            // Check if there are selected elements
+            const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+            // Extract Key Event URIs from either selected nodes or all nodes
+            const keyEventUris = getKeyEventsFromNetwork(hasSelection);
+            if (keyEventUris.length === 0) {
+                const scopeMessage = hasSelection ? "selected elements" : "network";
+                console.log(`No Key Events found in ${scopeMessage} for organ loading`);
+                updateOrganToggleButton();
+                window.organsVisible = true;
+                return;
+            }
+            const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
+            console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for organ loading:`, keyEventUris);
+            
+            // Call the load_and_show_organs endpoint with the extracted KEs
+            fetch(`/load_and_show_organs?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
+                method: 'GET'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        console.error("Organ loading error:", data.error);
+                        showStatus(`Error loading organs: ${data.error}`, 'error');
+                        return;
+                    }
+
+                    const fontSlider = document.getElementById('font-size-slider');
+                    const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                    
+                    // Add query to history table
+                    if (data.sparql_query && window.historyTableManager) {
+                        window.historyTableManager.addHistoryEntry('organ', 'AOP-Wiki RDF', data.sparql_query, null, data.organ_elements);
+                    }
+
+                    // Add only new organ elements
+                    data.organ_elements.forEach(element => {
+                        console.log(element.data);
+                        const elementId = element.data?.id;
+                        if (elementId && !window.cy.getElementById(elementId).length) {
+                            try {
+                                window.cy.add(element);
+                            } catch (error) {
+                                console.warn("Error adding organ element:", elementId, error.message);
+                            }
+                        }
+                    });
+
+                    // Show organs based on selection
+                    if (hasSelection) {
+                        // Only show organs connected to selected nodes
+                        const selectedNodes = window.cy.$(':selected').nodes();
+                        const organNodesToShow = window.cy.collection();
+                        selectedNodes.forEach(node => {
+                            const connectedOrgans = node.connectedEdges().connectedNodes('[type="organ"]');
+                            organNodesToShow.merge(connectedOrgans);
+                        });
+                        organNodesToShow.show();
+                        organNodesToShow.connectedEdges().show();
+                        console.log(`Showed ${organNodesToShow.length} organs connected to selected nodes`);
+                    } else {
+                        // Show all organs
+                        window.cy.elements('[type="organ"]').show();
+                        window.cy.edges('[type="associated_with"], [type="expression_in"]').show();
+                        console.log(`Showed all organ nodes`);
+                    }
+
+                    // Update button and state
+                    window.organsVisible = true;
+                    updateOrganToggleButton();
+
+                    // Layout update
+                    setTimeout(() => {
+                        positionNodes(window.cy, fontSizeMultiplier, true);
+                    }, 150);
+                    window.resetNetworkLayout();
+                })
+                .catch(error => {
+                    console.error("Error loading organs:", error);
+                    showStatus(`Error loading organs: ${error.message}`, 'error');
+                });
+        } else {
+            // Remove organs
+            const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+            if (hasSelection) {
+                // Hide only organs connected to selected nodes
+                const selectedNodes = window.cy.$(':selected').nodes();
+                const organsToHide = window.cy.collection();
+                selectedNodes.forEach(node => {
+                    const connectedOrgans = node.connectedEdges().connectedNodes('[type="organ"]');
+                    organsToHide.merge(connectedOrgans);
+                });
+                organsToHide.remove();
+                organsToHide.connectedEdges().remove();
+                console.log(`Removed ${organsToHide.length} organs connected to selected nodes`);
+            } else {
+                // Hide all organs
+                const allOrgans = window.cy.elements('[type="organ"]');
+                allOrgans.remove();
+                allOrgans.connectedEdges().remove();
+                console.log(`Removed all organ nodes`);
+            }
+
+            // Reset layout and update state
+            window.resetNetworkLayout();
             window.organsVisible = false;
             updateOrganToggleButton();
-        }
-    }
-
-    function showOrgans() {
-        if (window.cy) {
-            window.cy.nodes('[type="organ"]').style('display', 'element');
-            window.cy.edges('[type="associated_with"], [type="expression_in"]').style('display', 'element');
-            window.organsVisible = true;
-            updateOrganToggleButton();
-        }
-    }
-
-    function toggleOrgans() {
-        if (window.organsVisible) {
-            hideOrgans();
-            resetNetworkLayout();
-        } else {
-            showOrgans();
-            resetNetworkLayout();
         }
     }
 
     function updateOrganToggleButton() {
         const button = document.getElementById('toggle-organs-btn');
         if (button) {
-            button.textContent = window.organsVisible ? 'Hide Organs' : 'Show Organs';
+            button.textContent = window.organsVisible ? 'Remove Organs' : 'Query Organs';
             button.classList.toggle('active', window.organsVisible);
         }
     }

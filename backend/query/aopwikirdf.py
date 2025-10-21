@@ -89,6 +89,38 @@ class AOPQueryService:
             # Return original network if gene query fails
             return network
 
+    def query_organs_for_network(self, network: AOPNetwork) -> AOPNetwork:
+        """Query gene associations for all KEs in the network"""
+        try:
+            ke_uris = network.get_ke_uris()
+            if not ke_uris:
+                logger.warning("No Key Events found for gene querying")
+                return network
+
+            # Format KE URIs for SPARQL
+            formatted_uris = " ".join([f"<{uri}>" for uri in ke_uris])
+            organ_query = self._build_organ_sparql_query(formatted_uris)
+
+            organ_results = self._execute_sparql_query(organ_query)
+
+            # Add gene associations to network using the builder
+            builder = AOPNetworkBuilder()
+            builder.network = network  # Use existing network
+            builder.add_organ_associations(
+                organ_results.get("results", {}).get("bindings", [])
+            )
+
+            updated_network = builder.build()
+            logger.info(
+                f"Added organ associations: {len(updated_network.organ_associations)} components"
+            )
+
+            return updated_network, organ_query
+        except Exception as e:
+            logger.error(f"Failed to query components for network: {e}")
+            # Return original network if gene query fails
+            return network
+
     def query_compounds_for_network(self, network: AOPNetwork) -> AOPNetwork:
         """Query compound associations for all AOPs in the network"""
         try:
@@ -155,7 +187,6 @@ class AOPQueryService:
             # Return original network if gene query fails
             return network
 
-
     def _build_aop_sparql_query(self, query_type: str, values: str) -> str:
         """Build SPARQL query for AOP data"""
         logger.info(f"Building AOP SPARQL query: {query_type}, values: {values}")
@@ -171,7 +202,7 @@ class AOPQueryService:
         formatted_values = " ".join(processed_values)
 
         # Base query template
-        base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?ao_title ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ ?KE_upstream_organ_name ?KE_downstream_organ_name
+        base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?ao_title ?KE_upstream ?KE_upstream_title
         WHERE {
           %VALUES_CLAUSE%
           ?aop a aopo:AdverseOutcomePathway ;
@@ -187,9 +218,6 @@ class AOPQueryService:
                  aopo:has_downstream_key_event ?KE_downstream .
             ?KE_upstream dc:title ?KE_upstream_title .
             ?KE_downstream dc:title ?KE_downstream_title .
-            OPTIONAL { ?KE_upstream aopo:OrganContext ?KE_upstream_organ . ?KE_downstream aopo:OrganContext ?KE_downstream_organ . 
-            ?KE_upstream_organ dc:title ?KE_upstream_organ_name .
-            ?KE_downstream_organ dc:title ?KE_downstream_organ_name .}
           }
         }"""
 
@@ -253,6 +281,16 @@ class AOPQueryService:
             ORDER BY ?compound_name
         """
 
+    def _build_organ_sparql_query(self, ke_uris: str) -> str:
+        """Build SPARQL query for organ data"""
+        return f"""
+        SELECT DISTINCT ?ke ?organ ?organ_name WHERE {{
+                    VALUES ?ke {{ {ke_uris} }}
+                    ?ke a aopo:KeyEvent; aopo:OrganContext ?organ .
+                    ?organ dc:title ?organ_name .
+        }}
+        """
+
     def _build_components_sparql_query(self, go_only: bool, ke_uris: str) -> str:
         """Build SPARQL query for GO process data"""
         if go_only:
@@ -272,7 +310,6 @@ class AOPQueryService:
             }}
             ORDER BY ?ke
         """
-
 
     def _execute_sparql_query(self, query: str) -> Dict[str, Any]:
         """Execute SPARQL query with standardized error handling"""
