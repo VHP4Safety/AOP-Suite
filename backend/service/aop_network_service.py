@@ -494,20 +494,23 @@ class AOPNetworkService:
             # Extract metadata
             name = data.get("name", "AOP Network")
             description = data.get("description", "Exported from AOP Network Builder")
+            cytoscape_styles = data.get("styles")  # Extract Cytoscape styles
 
             logger.info(f"Exporting network to CX2: {name} with {len(elements)} elements")
+            if cytoscape_styles:
+                logger.info(f"Received Cytoscape styles with {len(cytoscape_styles)} style rules")
 
             # Create AOPNetwork from Cytoscape elements - let the model handle everything
             network = AOPNetwork.from_cytoscape_elements(elements)
-
-            # Convert to CX2 using the data model
-            cx2_network = network.to_ndex_network(name=name, description=description)
-
+            
+            # Pass the Cytoscape styles to the conversion method
+            cx2_network = network.to_ndx_network(name=name, description=description, cytoscape_styles=cytoscape_styles)
+            
             # Convert to JSON format
             cx2_json = cx2_network.to_cx2()
 
             logger.info(f"Successfully exported network to CX2 format")
-
+            
             return cx2_json, 200
 
         except Exception as e:

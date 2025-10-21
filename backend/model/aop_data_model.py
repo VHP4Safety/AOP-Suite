@@ -7,6 +7,15 @@ from abc import ABC, abstractmethod
 from pandas import DataFrame
 from ndex2.cx2 import CX2Network
 
+# Import the style manager
+try:
+    from .aop_styles import AOPStyleManager, get_default_styles, get_layout_config
+except ImportError:
+    # Fallback for when styles module is not available
+    AOPStyleManager = None
+    get_default_styles = lambda: []
+    get_layout_config = lambda: {"name": "breadthfirst", "directed": True, "padding": 30}
+
 logger = logging.getLogger(__name__)
 
 
@@ -686,6 +695,9 @@ class AOPNetwork:
         self.node_list: List[CytoscapeNode] = []
         self.edge_list: List[CytoscapeEdge] = []
         self.gene_expression_associations: List[GeneExpressionAssociation] = []
+        
+        # Style management
+        self.style_manager = AOPStyleManager() if AOPStyleManager else None
 
     @classmethod
     def from_cytoscape_elements(cls, elements: List[Dict[str, Any]]) -> "AOPNetwork":
@@ -700,6 +712,9 @@ class AOPNetwork:
         
         # Add ALL edges to the network  
         network.edge_list = parser.edges
+        
+        # Store original elements for position and style extraction
+        network._original_elements = elements
         
         logger.info(f"Created AOPNetwork from {len(elements)} Cytoscape elements: {len(network.node_list)} nodes, {len(network.edge_list)} edges")
         
@@ -784,15 +799,44 @@ class AOPNetwork:
         """Retrieve all Ensembl IDs from nodes in the network"""
         ensembl_ids = []
         
-        # Check gene_associations
+        # Check node_list for Ensembl nodes
+        for node in self.node_list:
+            if node.is_ensembl_node():
+                # Extract Ensembl ID from node properties or ID
+                ensembl_id = node.properties.get("ensembl_id", "")
+                if not ensembl_id:
+                    # Try to extract from node ID if it starts with ensembl_
+                    if node.id.startswith("ensembl_"):
+                        ensembl_id = node.id.replace("ensembl_", "")
+                    else:
+                        ensembl_id = node.label
+                
+                if ensembl_id and ensembl_id not in ensembl_ids:
+                    ensembl_ids.append(ensembl_id)
+        
+        # Also check gene_associations for backward compatibility
         for gene_assoc in self.gene_associations:
-            if gene_assoc.ensembl_id:
+            if gene_assoc.ensembl_id and gene_assoc.ensembl_id not in ensembl_ids:
                 ensembl_ids.append(gene_assoc.ensembl_id)
+                
         return ensembl_ids
 
     def get_organ_ids(self) -> List[str]:
         """Retrieve all organ IDs/names from nodes in the network"""
         organ_ids = []
+        
+        # Check node_list for organ nodes
+        for node in self.node_list:
+            if node.is_organ_node():
+                # Use anatomical_name (organ name) rather than full URI
+                organ_name = node.properties.get("anatomical_name", "")
+                if not organ_name:
+                    organ_name = node.label
+                
+                if organ_name and organ_name not in organ_ids:
+                    organ_ids.append(organ_name)
+        
+        # Also check organ_associations for backward compatibility        
         for organ_assoc in self.organ_associations:
             organ_node = organ_assoc.organ_data
             if organ_node and organ_node.is_organ_node():
@@ -802,8 +846,8 @@ class AOPNetwork:
                     organ_ids.append(organ_name)        
         return organ_ids
 
-    def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
-        """Convert entire network to Cytoscape elements"""
+    def to_cytoscape_elements(self, include_styles: bool = True) -> Dict[str, Any]:
+        """Convert entire network to Cytoscape format with optional styles"""
         elements = []
 
         # Add Key Event nodes
@@ -815,19 +859,36 @@ class AOPNetwork:
             elements.append({"data": relationship.to_cytoscape_data()})
 
         # Add gene associations
-        for gene_assoc in self.component_associations:
+        for gene_assoc in self.gene_associations:
             elements.extend(gene_assoc.to_cytoscape_elements())
 
         # Add compound associations
         for compound_assoc in self.compound_associations:
             elements.extend(compound_assoc.to_cytoscape_elements())
 
+        # Add component associations
+        for comp_assoc in self.component_associations:
+            elements.extend(comp_assoc.to_cytoscape_elements())
+
         # Add organ associations
         for organ_assoc in self.organ_associations:
             elements.extend(organ_assoc.to_cytoscape_elements())
 
+        # Add gene expression associations
+        for expr_assoc in self.gene_expression_associations:
+            elements.extend(expr_assoc.to_cytoscape_elements())
+
         logger.info(f"Generated {len(elements)} Cytoscape elements")
-        return elements
+        
+        # Prepare response with elements
+        result = {"elements": elements}
+        
+        # Add styles and layout if requested
+        if include_styles:
+            result["style"] = self.get_styles()
+            result["layout"] = self.get_layout_config()
+        
+        return result
 
     def get_summary(self) -> Dict[str, int]:
         """Get network summary statistics"""
@@ -847,14 +908,14 @@ class AOPNetwork:
             "ao_count": ao_count,
             "ke_count": ke_count,
             "ker_count": len(self.relationships),
-            "gene_associations": len(self.component_associations),
+            "gene_associations": len(self.gene_associations),
             "gene_expression_associations": len(self.gene_expression_associations),
             "compound_associations": len(self.compound_associations),
             "component_associations": len(self.component_associations),
             "total_aops": len(self.aop_info),
         }
 
-    def to_ndex_network(self, name: Optional[str] = None, description: Optional[str] = None):
+    def to_ndx_network(self, name: Optional[str] = None, description: Optional[str] = None, cytoscape_styles: Optional[Dict[str, Any]] = None):
         net_cx = CX2Network()
 
         # Set network attributes
@@ -867,7 +928,19 @@ class AOPNetwork:
         net_cx.add_network_attribute("total_nodes", len(self.node_list))
         net_cx.add_network_attribute("total_edges", len(self.edge_list))
 
-        # Add ALL nodes from node_list to CX2
+        # Extract position data from original elements
+        position_map = {}
+        
+        if hasattr(self, '_original_elements'):
+            for element in self._original_elements:
+                if element.get("group") != "edges" and "data" in element:
+                    # Node element - extract position
+                    node_id = element["data"].get("id")
+                    position = element.get("position", {})
+                    if node_id and position:
+                        position_map[node_id] = position
+
+        # Add ALL nodes from node_list to CX2 with positions
         original_to_cx2_id = {}  # Map original node IDs to CX2 integer IDs
         
         for node in self.node_list:
@@ -875,8 +948,17 @@ class AOPNetwork:
             node_data = node.to_dict()
             node_data.pop('id', None)  # Remove conflicting id key
             
-            # Add node - CX2Network.add_node() returns the node ID
-            cx2_node_id = net_cx.add_node(attributes=node_data)
+            # Extract position for this node
+            position = position_map.get(node.id, {})
+            x = position.get("x")
+            y = position.get("y")
+            
+            # Add node with position coordinates if available
+            if x is not None and y is not None:
+                cx2_node_id = net_cx.add_node(attributes=node_data, x=float(x), y=float(y))
+            else:
+                cx2_node_id = net_cx.add_node(attributes=node_data)
+            
             original_to_cx2_id[node.id] = cx2_node_id
 
         # Add ALL edges from edge_list to CX2
@@ -894,34 +976,35 @@ class AOPNetwork:
                 
                 net_cx.add_edge(source=source_cx2_id, target=target_cx2_id, attributes=edge_data)
 
-        logger.info(f"Created CX2 network with {len(self.node_list)} nodes and {len(self.edge_list)} edges")
+        # Use the actual Cytoscape styles if provided
+        if cytoscape_styles:
+            try:
+                # Just pass the Cytoscape styles directly to CX2
+                visual_properties = {
+                    "cytoscape_styles": cytoscape_styles
+                }
+                net_cx.set_visual_properties(visual_properties)
+                logger.info(f"Added Cytoscape styles to CX2 network ({len(cytoscape_styles)} style rules)")
+            except Exception as e:
+                logger.warning(f"Could not add Cytoscape styles to CX2: {e}")
+
+        logger.info(f"Created CX2 network with {len(self.node_list)} nodes and {len(self.edge_list)} edges, including positions and styles")
         return net_cx
 
-    def get_summary(self) -> Dict[str, int]:
-        """Get network summary statistics"""
-        mie_count = sum(
-            1 for ke in self.key_events.values() if ke.ke_type == NodeType.MIE
-        )
-        ao_count = sum(
-            1 for ke in self.key_events.values() if ke.ke_type == NodeType.AO
-        )
-        ke_count = sum(
-            1 for ke in self.key_events.values() if ke.ke_type == NodeType.KE
-        )
+    def get_styles(self) -> List[Dict[str, Any]]:
+        """Get styles for the network"""
+        if not self.style_manager:
+            return get_default_styles()
+        
+        return self.style_manager.get_styles()
 
-        return {
-            "total_key_events": len(self.key_events),
-            "mie_count": mie_count,
-            "ao_count": ao_count,
-            "ke_count": ke_count,
-            "ker_count": len(self.relationships),
-            "gene_associations": len(self.component_associations),
-            "gene_expression_associations": len(self.gene_expression_associations),
-            "compound_associations": len(self.compound_associations),
-            "total_aops": len(self.aop_info),
-        }
+    def get_layout_config(self) -> Dict[str, Any]:
+        """Get layout configuration for the network"""
+        if self.style_manager:
+            return self.style_manager.get_layout_config()
+        return get_layout_config()
 
-    
+
 class AOPNetworkBuilder:
     """Builder class for constructing AOP networks from SPARQL results"""
 
@@ -1099,17 +1182,17 @@ class AOPNetworkBuilder:
             pubchem_compound = result.get("pubchem_compound", {}).get("value", "")
             compound_name = result.get("compound_name", {}).get("value", "")
             cid = result.get("cid", {}).get("value", "")
-            mie_uri = result.get("mie", {}).get("value", "")  # Get MIE directly from SPARQL
+            mie_uri = result.get("mie", {}).get("value", "")
 
             if aop_uri and chemical_uri and pubchem_compound:
                 association = CompoundAssociation(
                     aop_uri=aop_uri,
-                    mie_uri=mie_uri,  # Use MIE from SPARQL results
+                    mie_uri=mie_uri,
                     chemical_uri=chemical_uri,
-                    chemical_label=compound_name,  # Use compound_name as chemical_label
+                    chemical_label=compound_name,
                     pubchem_compound=pubchem_compound,
                     compound_name=compound_name,
-                    cas_id=cid if cid else None,  # Use cid as cas_id for now
+                    cas_id=cid if cid else None,
                 )
 
                 self.network.add_compound_association(association)
@@ -1118,7 +1201,7 @@ class AOPNetworkBuilder:
         """Add component associations from compound SPARQL results"""
         for result in component_sparql_results:
             process_iri = result.get("process", {}).get("value", "")
-            if not process_iri:  # skip empty process iri (drop from network & table)
+            if not process_iri:
                 continue
             association = ComponentAssociation(
                 ke_uri=result.get("ke", {}).get("value", ""),
@@ -1135,7 +1218,7 @@ class AOPNetworkBuilder:
         """Add bgee gene expression associations from biodatafuse query results"""
         for result in gene_expression_results:
             ensembl_id = result.get("ensembl_id", {}).get("value", "")
-            if not ensembl_id:  # skip empty ensembl id
+            if not ensembl_id:
                 continue
             association = GeneExpressionAssociation(
                 ensembl_id=ensembl_id,
@@ -1158,7 +1241,6 @@ class AOPNetworkBuilder:
             organ_name = result.get("organ_name", {}).get("value", "")
             
             if ke_uri and organ_uri:
-                # Create organ node
                 organ_node = CytoscapeNode(
                     id=f"organ_{organ_uri.split('/')[-1] if '/' in organ_uri else organ_uri}",
                     label=organ_name if organ_name else organ_uri.split('/')[-1],
@@ -1171,7 +1253,6 @@ class AOPNetworkBuilder:
                     }
                 )
                 
-                # Create edge from KE to organ
                 edge = CytoscapeEdge(
                     id=f"{ke_uri}_{organ_node.id}",
                     source=ke_uri,
@@ -1275,13 +1356,11 @@ class CytoscapeNetworkParser:
                 node_data = element.get("data", {})
                 node_type = node_data.get("type", "").lower()
                 
-                # Check for organ nodes - look for type "organ" or nodes with anatomical data
                 if (node_type == "organ" or 
                     "anatomical_id" in node_data or 
                     "anatomical_name" in node_data or
                     node_data.get("id", "").startswith("http://purl.obolibrary.org/obo/UBERON_")):
                     
-                    # Create CytoscapeNode for organ (not NetworkNode)
                     organ_node = CytoscapeNode(
                         id=node_data.get("id", ""),
                         label=node_data.get("label", node_data.get("anatomical_name", "")),
@@ -1297,6 +1376,7 @@ class CytoscapeNetworkParser:
                     organ_nodes.append(organ_node)
                     
         return organ_nodes
+
 
 class AOPTableBuilder:
     """Builds AOP table data"""
@@ -1326,7 +1406,6 @@ class AOPTableBuilder:
         relationships = []
 
         for edge in self.parser.edges:
-            # Only process edges with KER data
             if (edge.properties.get("ker_label") and 
                 edge.properties.get("curie")):
 
@@ -1347,7 +1426,6 @@ class AOPTableBuilder:
         """Extract disconnected nodes"""
         connected_node_ids = set()
 
-        # Get all connected node IDs
         for edge in self.parser.edges:
             connected_node_ids.add(edge.source)
             connected_node_ids.add(edge.target)
@@ -1355,7 +1433,6 @@ class AOPTableBuilder:
         disconnected_entries = []
         for node in self.parser.nodes:
             if node.id not in connected_node_ids:
-                # Extract AOP information
                 aop_info = self._extract_aop_info_from_node(node)
 
                 entry = {
@@ -1387,7 +1464,6 @@ class AOPTableBuilder:
         if not isinstance(aop_titles, list):
             aop_titles = [aop_titles] if aop_titles else []
 
-        # Convert URIs to AOP IDs
         aop_ids = []
         for aop_uri in aop_uris:
             if aop_uri and "aop/" in aop_uri:
@@ -1428,14 +1504,12 @@ class GeneTableBuilder:
 
         all_pairs = gene_pairs + orphaned_genes + orphaned_proteins
 
-        # Convert to table entries and add expression data
         table_entries = []
         seen_pairs = set()
 
         for pair in all_pairs:
             entry = pair.to_table_entry()
             
-            # Add expression data
             expression_data = self._get_expression_data_for_gene(pair.ensembl_node_id)
             if expression_data:
                 entry.update({
@@ -1467,7 +1541,6 @@ class GeneTableBuilder:
         
         for edge in self.expression_edges:
             if edge.source == gene_node_id:
-                # Find the target organ node
                 target_node = None
                 for node in self.parser.nodes:
                     if node.id == edge.target:
@@ -1495,7 +1568,6 @@ class GeneTableBuilder:
             ensembl_node = None
             uniprot_node = None
 
-            # Determine which is ensembl and which is uniprot
             source_node = self.ensembl_nodes.get(edge.source) or self.uniprot_nodes.get(
                 edge.source
             )
@@ -1523,19 +1595,16 @@ class GeneTableBuilder:
     ) -> Optional[GeneProteinPair]:
         """Create a gene-protein pair from two nodes"""
         try:
-            # Extract Ensembl information
             gene_label = ensembl_node.label
             ensembl_id = ensembl_node.properties.get("ensembl_id", ensembl_node.id)
             if ensembl_id.startswith("ensembl_"):
                 ensembl_id = ensembl_id.replace("ensembl_", "")
 
-            # Extract UniProt information
             protein_label = uniprot_node.label
             uniprot_id = uniprot_node.properties.get("uniprot_id", uniprot_node.id)
             if uniprot_id.startswith("uniprot_"):
                 uniprot_id = uniprot_id.replace("uniprot_", "")
 
-            # If protein label looks like UniProt ID, use it as the ID
             if len(protein_label) <= 10 and not protein_label.startswith("uniprot_"):
                 if uniprot_id == "NA" or uniprot_id == uniprot_node.id:
                     uniprot_id = protein_label
@@ -1595,7 +1664,6 @@ class GeneTableBuilder:
                 if uniprot_id.startswith("uniprot_"):
                     uniprot_id = uniprot_id.replace("uniprot_", "")
 
-                # If label looks like UniProt ID, use it
                 if len(node.label) <= 10 and not node.label.startswith("uniprot_"):
                     if uniprot_id == "NA" or uniprot_id == node.id:
                         uniprot_id = node.label
@@ -1625,11 +1693,9 @@ class AOPRelationshipEntry:
 
     def to_table_entry(self) -> Dict[str, str]:
         """Convert to AOP table entry format"""
-        # Extract AOP info from both nodes
         source_aop_info = self._extract_node_aop_info(self.source_node)
         target_aop_info = self._extract_node_aop_info(self.target_node)
 
-        # Combine AOP information
         all_aop_ids = set(source_aop_info["aop_ids"] + target_aop_info["aop_ids"])
         all_aop_titles = set(
             source_aop_info["aop_titles"] + target_aop_info["aop_titles"]
@@ -1664,7 +1730,6 @@ class AOPRelationshipEntry:
         if not isinstance(aop_titles, list):
             aop_titles = [aop_titles] if aop_titles else []
 
-        # Convert URIs to AOP IDs
         aop_ids = []
         for aop_uri in aop_uris:
             if aop_uri and "aop/" in aop_uri:
@@ -1672,6 +1737,7 @@ class AOPRelationshipEntry:
                 aop_ids.append(f"AOP:{aop_id}")
 
         return {"aop_ids": aop_ids, "aop_titles": aop_titles}
+
 
 class CompoundTableBuilder:
     """Builds compound table data from Cytoscape network"""
@@ -1695,7 +1761,6 @@ class CompoundTableBuilder:
         seen_compounds = set()
 
         for node in self.chemical_nodes.values():
-            # Extract compound information from node properties
             compound_name = (
                 node.properties.get("compound_name") or 
                 node.properties.get("chemical_label") or 
@@ -1706,7 +1771,6 @@ class CompoundTableBuilder:
             pubchem_compound = node.properties.get("pubchem_compound", "")
             cas_id = node.properties.get("cas_id", "N/A")
             
-            # Create unique identifier to avoid duplicates
             compound_key = f"{compound_name}_{pubchem_id}"
             if compound_key not in seen_compounds:
                 entry = {
@@ -1753,34 +1817,29 @@ class ComponentTableBuilder:
         table_entries = []
         seen_components = set()
 
-        # Group elements by KE
         ke_components = self._group_by_ke()
 
         for ke_id, components in ke_components.items():
             processes = components.get("processes", [])
             objects = components.get("objects", [])
             actions = components.get("actions", [])
-            ke_name = self._get_ke_name(ke_id)  # NEW: resolve ke_name
+            ke_name = self._get_ke_name(ke_id)
 
-            # Create entries for each process
             for process in processes:
-                # Skip processes lacking iri (cleanup safeguard)
                 if not process.get("iri"):
                     continue
-                # Find associated objects and actions for this process
                 process_objects = self._find_objects_for_process(process["id"], objects, actions)
                 
                 if process_objects:
                     for obj_data in process_objects:
-                        entry = self._create_component_entry(ke_id, process, obj_data, ke_name)  # UPDATED
+                        entry = self._create_component_entry(ke_id, process, obj_data, ke_name)
                         component_key = f"{ke_id}_{process['id']}_{obj_data.get('object_id', 'no_object')}"
                         
                         if component_key not in seen_components:
                             table_entries.append(entry)
                             seen_components.add(component_key)
                 else:
-                    # Process without object
-                    entry = self._create_component_entry(ke_id, process, {}, ke_name)  # UPDATED
+                    entry = self._create_component_entry(ke_id, process, {}, ke_name)
                     component_key = f"{ke_id}_{process['id']}_no_object"
                     
                     if component_key not in seen_components:
@@ -1794,29 +1853,24 @@ class ComponentTableBuilder:
         """Group component elements by KE"""
         ke_components = {}
 
-        # First, identify all KEs from edges - handle both URI formats
         for edge in self.component_edges:
             edge_data = edge.get("data", {})
             source = edge_data.get("source", "")
             target = edge_data.get("target", "")
             
-            # KE-process edges (action edges)
             ke_id = self._normalize_ke_id(source)
             if ke_id and target.startswith("process_"):
                 if ke_id not in ke_components:
                     ke_components[ke_id] = {"processes": [], "objects": [], "actions": []}
 
-        # Add processes with their actions
         for edge in self.component_edges:
             edge_data = edge.get("data", {})
             source = edge_data.get("source", "")
             target = edge_data.get("target", "")
             label = edge_data.get("label", "")
             
-            # KE-process edges
             ke_id = self._normalize_ke_id(source)
             if ke_id and target.startswith("process_") and ke_id in ke_components:
-                # Find the process node
                 process_node = None
                 for node in self.component_nodes:
                     if node.get("data", {}).get("id") == target:
@@ -1829,10 +1883,9 @@ class ComponentTableBuilder:
                         "id": target,
                         "name": node_data.get("process_name", node_data.get("label", "")),
                         "iri": node_data.get("process_iri", ""),
-                        "action": label  # Action from KE-process edge
+                        "action": label
                     }
                     
-                    # Check if this process already exists
                     existing_process = None
                     for p in ke_components[ke_id]["processes"]:
                         if p["id"] == target:
@@ -1842,8 +1895,7 @@ class ComponentTableBuilder:
                     if not existing_process:
                         ke_components[ke_id]["processes"].append(process_info)
 
-        # Add process-object relationships
-        process_object_relationships = {}  # Maps process_id to list of objects
+        process_object_relationships = {}
         
         for edge in self.component_edges:
             edge_data = edge.get("data", {})
@@ -1855,7 +1907,6 @@ class ComponentTableBuilder:
                 if source not in process_object_relationships:
                     process_object_relationships[source] = []
                 
-                # Find the object node
                 object_node = None
                 for node in self.component_nodes:
                     if node.get("data", {}).get("id") == target:
@@ -1864,18 +1915,16 @@ class ComponentTableBuilder:
                 
                 if object_node:
                     node_data = object_node.get("data", {})
-                    # Preserve both the full IRI and the shortened ID
                     full_object_iri = node_data.get("object_iri", "")
                     object_info = {
                         "object_id": target,
                         "object_name": node_data.get("object_name", node_data.get("label", "")),
-                        "object_iri": full_object_iri,  # Keep full IRI for href
-                        "object_iri_short": target.replace("object_", "") if target.startswith("object_") else target,  # Short ID for other uses
-                        "relationship": label  # "has object" or similar
+                        "object_iri": full_object_iri,
+                        "object_iri_short": target.replace("object_", "") if target.startswith("object_") else target,
+                        "relationship": label
                     }
                     process_object_relationships[source].append(object_info)
 
-        # Store the process-object relationships for later use
         self._process_object_relationships = process_object_relationships
 
         return ke_components
@@ -1885,76 +1934,27 @@ class ComponentTableBuilder:
         if source.startswith("aop.events_"):
             return source
         elif "aop.events/" in source:
-            # Extract from URI format like https://identifiers.org/aop.events/756
             ke_number = source.split("aop.events/")[-1]
             return f"aop.events_{ke_number}"
         return None
 
-    def _find_ke_for_node(self, node_id: str) -> Optional[str]:
-        """Find the KE that a node belongs to"""
-        for edge in self.component_edges:
-            edge_data = edge.get("data", {})
-            source = edge_data.get("source", "")
-            target = edge_data.get("target", "")
-            
-            if target == node_id:
-                return self._normalize_ke_id(source)
-        return None
-
-    def _find_ke_for_process(self, process_id: str) -> Optional[str]:
-        """Find the KE that a process belongs to"""
-        for edge in self.component_edges:
-            edge_data = edge.get("data", {})
-            source = edge_data.get("source", "")
-            target = edge_data.get("target", "")
-            
-            if target == process_id:
-                return self._normalize_ke_id(source)
-        return None
-
-    def _find_kes_for_object(self, object_id: str) -> List[str]:
-        """Find all KEs connected to an object through processes"""
-        kes = set()
-        
-        # Find processes connected to this object
-        connected_processes = []
-        for edge in self.component_edges:
-            edge_data = edge.get("data", {})
-            source = edge_data.get("source", "")
-            target = edge_data.get("target", "")
-            
-            if target == object_id and source.startswith("process_"):
-                connected_processes.append(source)
-        
-        # Find KEs for these processes
-        for process_id in connected_processes:
-            ke_id = self._find_ke_for_process(process_id)
-            if ke_id:
-                kes.add(ke_id)
-        
-        return list(kes)
-
     def _find_objects_for_process(self, process_id: str, objects: List[Dict[str, Any]], actions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Find objects associated with a process"""
-        # Use the stored process-object relationships
         if hasattr(self, '_process_object_relationships'):
             return self._process_object_relationships.get(process_id, [])
         return []
 
     def _create_component_entry(self, ke_id: str, process: Dict[str, Any], object_data: Dict[str, Any], ke_name: str = "") -> Dict[str, str]:
         """Create a component table entry"""
-        # Extract KE number from ke_id
         ke_number = ke_id.replace("aop.events_", "") if ke_id.startswith("aop.events_") else ke_id
         
-        # Extract process ID without prefix
         process_id = process["id"].replace("process_", "") if process["id"].startswith("process_") else process["id"]
         
-        # Extract object ID 
         object_id = "N/A"
         object_iri = "N/A"
         if object_data.get("object_id"):
             object_id = object_data.get("object_iri_short", object_data["object_id"].replace("object_", ""))
-            object_iri = object_data.get("object_iri", "N/A")  # Use full IRI for href
+            object_iri = object_data.get("object_iri", "N/A")
 
         return {
             "ke_id": ke_id,
@@ -1966,40 +1966,16 @@ class ComponentTableBuilder:
             "process_iri": process.get("iri", ""),
             "object_id": object_id,
             "object_name": object_data.get("object_name", "N/A"),
-            "object_iri": object_iri,  # Full IRI preserved for href
+            "object_iri": object_iri,
             "action": process.get("action", "N/A"),
             "relationship": object_data.get("relationship", "N/A"),
             "node_id": process["id"],
         }
 
-    def _find_ke_and_action_for_process(self, process_id: str) -> Optional[Dict[str, str]]:
-        """Find the KE and action for a process from KE process edges"""
-        for edge in self.component_edges:
-            edge_data = edge.get("data", {})
-            source = edge_data.get("source", "")
-            target = edge_data.get("target", "")
-            label = edge_data.get("label", "")
-            
-            if target == process_id:
-                ke_id = self._normalize_ke_id(source)
-                if ke_id:
-                    return {
-                        "ke_id": ke_id,
-                        "action": label  # This is the action from KE-process edge
-                    }
-        return None
-
-    def _find_ke_for_process_object_relation(self, process_id: str) -> Optional[str]:
-        """Find the KE for a process-object relationship"""
-        # First find the KE that connects to this process
-        ke_info = self._find_ke_and_action_for_process(process_id)
-        return ke_info["ke_id"] if ke_info else None
-
     def _get_ke_name(self, ke_id: str) -> str:
         """Attempt to resolve the KE name (label) from provided elements"""
-        # Possible KE identifiers in elements: raw normalized id or full URI
         candidates = {ke_id}
-        if ke_id.startswith("aop.events_"):
+        if (ke_id.startswith("aop.events_")):
             number = ke_id.replace("aop.events_", "")
             candidates.add(f"https://identifiers.org/aop.events/{number}")
         for element in self.component_elements:
@@ -2008,6 +1984,7 @@ class ComponentTableBuilder:
                 return data.get("label") or data.get("ke_label") or ""
         return ""
 
+
 class GeneExpressionTableBuilder:
     """Builds gene expression table data from Cytoscape network"""
 
@@ -2015,12 +1992,13 @@ class GeneExpressionTableBuilder:
         self.parser = parser
         self.ensembl_nodes = {node.id: node for node in parser.get_ensembl_nodes()}
         self.gene_expression_edges = self._get_gene_expression_edges()
-        self._get_organ_nodes = self.parser.get_organ_nodes()
+        self.organ_nodes = self.parser.get_organ_nodes()
+    
     def _get_gene_expression_edges(self) -> List[CytoscapeEdge]:
         """Get all gene expression edges from the network"""
         return [
             edge for edge in self.parser.edges
-            if edge.label == EdgeType.EXPRESSION_IN
+            if edge.properties.get("type") == "expression_in"
         ]
 
     def build_gene_expression_table(self) -> List[Dict[str, str]]:
@@ -2030,13 +2008,31 @@ class GeneExpressionTableBuilder:
 
         for edge in self.gene_expression_edges:
             source_node = self.ensembl_nodes.get(edge.source)
-            target_node = self.ensembl_nodes.get(edge.target)
+            
+            # Find target organ node
+            target_node = None
+            for node in self.parser.nodes:
+                if node.id == edge.target and node.is_organ_node():
+                    target_node = node
+                    break
 
             if source_node and target_node:
                 entry_key = f"{source_node.id}_{target_node.id}"
                 if entry_key not in seen_entries:
+                    # Extract gene ID from node
+                    gene_id = source_node.properties.get("ensembl_id", source_node.id)
+                    if gene_id.startswith("ensembl_"):
+                        gene_id = gene_id.replace("ensembl_", "")
+                    
                     entry = {
-                        # todo
+                        "gene_id": gene_id,
+                        "gene_label": source_node.label,
+                        "organ": target_node.label,
+                        "organ_id": target_node.properties.get("anatomical_id", target_node.id),
+                        "expression_level": edge.properties.get("expression_level", "N/A"),
+                        "confidence": edge.properties.get("confidence_level", "N/A"),
+                        "developmental_stage": edge.properties.get("developmental_stage", "N/A"),
+                        "expr_id": edge.properties.get("expr", "N/A")
                     }
                     table_entries.append(entry)
                     seen_entries.add(entry_key)

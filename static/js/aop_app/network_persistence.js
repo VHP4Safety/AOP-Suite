@@ -71,7 +71,11 @@ class NetworkState {
     // Extract style data safely without cyclic references
     extractStyleData() {
         try {
-            // Return basic style information instead of full style object
+            // Get actual Cytoscape style object
+            if (window.cy && window.cy.style) {
+                return window.cy.style().json();
+            }
+            // Fallback to basic style information
             return {
                 fontSizeMultiplier: parseFloat(document.getElementById('font-size-slider')?.value || 0.5),
                 timestamp: new Date().toISOString()
@@ -261,6 +265,15 @@ class NetworkState {
             const networkName = this.getNetworkName() || 'AOP Network';
             const networkDescription = this.getNetworkDescription() || 'Exported from AOP Network Builder';
 
+            // Extract actual Cytoscape styles
+            let cytoscapeStyles = null;
+            try {
+                cytoscapeStyles = window.cy.style().json();
+                console.log('Extracted Cytoscape styles:', cytoscapeStyles);
+            } catch (error) {
+                console.warn('Could not extract Cytoscape styles:', error);
+            }
+
             // Include comprehensive network metadata for better CX2 export
             const metadata = this.collectNetworkMetadata();
 
@@ -268,7 +281,8 @@ class NetworkState {
                 elements,
                 name: networkName,
                 description: networkDescription,
-                metadata: metadata
+                metadata: metadata,
+                styles: cytoscapeStyles  // Add Cytoscape styles to the request
             };
 
             const resp = await fetch('/ndex/to_ndex_network', {
@@ -296,7 +310,7 @@ class NetworkState {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${this.sanitizeFilename(networkName)}_cx2_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `${this.sanitizeFilename(networkName)}_cx2_${new Date().toISOString().split('T')[0]}.cx2`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);

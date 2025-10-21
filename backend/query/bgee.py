@@ -44,8 +44,6 @@ class BgeeQueryService:
                 ensembl_ids = [f'"{eid}"' for eid in ensembl_ids if eid]
                 logger.info(f"Formatted ensembl_ids for SPARQL: {ensembl_ids}")
 
-            # Get organs from network if needed
-            if query_by in ["organs", "both"]:
                 organ_ids = network.get_organ_ids()
                 logger.info(f"Raw organ_ids from network: {organ_ids}")
                 # Format for SPARQL query
@@ -53,7 +51,7 @@ class BgeeQueryService:
                 logger.info(f"Formatted organ_ids for SPARQL: {organ_ids}")
 
             if not ensembl_ids and not organ_ids:
-                logger.warning(f"No {query_by} found in network for Bgee querying")
+                logger.warning(f"No elements found in network for Bgee querying")
                 return network, ""
 
             logger.info(f"Querying Bgee by {query_by}: {len(ensembl_ids)} genes, {len(organ_ids)} organs, confidence: {confidence_level}")
