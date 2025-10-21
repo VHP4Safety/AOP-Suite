@@ -1,25 +1,24 @@
 import json
 import logging
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, Optional, Any, Tuple
 from dataclasses import dataclass
+from datetime import datetime
+import os
 
 from backend.query.aopwikirdf import aop_query_service
 from backend.query.bgee import bgee_query_service
-from backend.model.aop_data_model import (
-    CytoscapeNetworkParser, 
-    GeneTableBuilder,
-    GeneExpressionTableBuilder,
-    AOPNetwork,
-    AOPKeyEvent,
-    NodeType,
-    AOPTableBuilder,
-    AOPInfo,
-    CompoundTableBuilder,
-    ComponentTableBuilder
-)
 
-from datetime import datetime
-import os
+from backend.model.schemas.base import AOPNetwork, AOPKeyEvent, AOPInfo
+
+from backend.model.constants import NodeType
+
+from backend.model.parsers.cytoscape import CytoscapeNetworkParser
+
+from backend.model.table_builders.gene import GeneTableBuilder, GeneExpressionTableBuilder
+from backend.model.table_builders.aop import AOPTableBuilder
+from backend.model.table_builders.compound import CompoundTableBuilder
+from backend.model.table_builders.component import ComponentTableBuilder
+from backend.model.parsers.cytoscape import CytoscapeNetworkParser
 
 logger = logging.getLogger(__name__)
 

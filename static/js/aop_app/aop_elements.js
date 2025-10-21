@@ -467,7 +467,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (data.sparql_query && window.historyTableManager) {
                         window.historyTableManager.addHistoryEntry(
                             'Components Query',
-                            'AOP-Wiki SPARQL',
+                            'AOP-Wiki RDF',
                             data.sparql_query,
                             null,
                             data.component_elements

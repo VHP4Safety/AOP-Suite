@@ -128,8 +128,15 @@ class AOPNetworkDataManager {
             console.log('Parsing JSON response...');
             const result = await response.json();
             console.log('Parsed result:', result);
-
-            // Handle the new backend response structure
+            if (result.error) {
+                console.error('Server returned error:', result.error);
+                throw new Error(result.error);
+            }
+            // Add query to history table
+            if (result.success && result.sparql_query && window.historyTableManager && result.elements.elements) {
+                window.historyTableManager.addHistoryEntry('aop_network', 'AOP-Wiki RDF', result.sparql_query, null, result.elements.elements,);
+            }            
+            // Handle the backend response to ghet data
             if (result.success && result.elements) {
                 // Extract the nested elements structure
                 const networkData = result.elements;

@@ -1,14 +1,12 @@
 import requests
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, Any
 
-from backend.model.aop_data_model import (
-    AOPNetworkBuilder,
-    AOPNetwork,
-    AOPKeyEvent,
-    NodeType,
-    GeneAssociation,
-)
+
+from backend.model.parsers.builder import AOPNetworkBuilder
+
+from backend.model.schemas.base import AOPNetwork
+
 
 # Set up logger
 logger = logging.getLogger(__name__)
