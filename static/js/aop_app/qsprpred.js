@@ -10,10 +10,10 @@ $.ajax({
                 window.modelToProteinInfo = {};
                 results.data.forEach(row => {
                     const model = row["qsprpred_model"];
-                    const proteinName = row["protein name uniprot"];
-                    const uniprotId = row["uniprot ID inferred from qspred name"];
-                    if (model && proteinName && uniprotId) {
-                        window.modelToProteinInfo[model] = { proteinName, uniprotId };
+                    const proteinName = row["protein name protein"];
+                    const proteinId = row["protein ID inferred from qspred name"];
+                    if (model && proteinName && proteinId) {
+                        window.modelToProteinInfo[model] = { proteinName, proteinId };
                     }
                 });
                 console.log("Loaded protein info:", window.modelToProteinInfo);
@@ -149,13 +149,13 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
             predictions.forEach(prediction => {
                 Object.entries(prediction).forEach(([model, value]) => {
                     if (model !== "smiles" && parseFloat(value) >= 6.5) {
-                        const proteinInfo = modelToProteinInfo[model] || { proteinName: "Unknown Protein", uniprotId: "" };
-                        const proteinLink = proteinInfo.uniprotId ? `<a href="https://www.uniprot.org/uniprotkb/${proteinInfo.uniprotId}" target="_blank">${proteinInfo.proteinName}</a>` : proteinInfo.proteinName;
+                        const proteinInfo = modelToProteinInfo[model] || { proteinName: "Unknown Protein", proteinId: "" };
+                        const proteinLink = proteinInfo.proteinId ? `<a href="https://www.protein.org/proteinkb/${proteinInfo.proteinId}" target="_blank">${proteinInfo.proteinName}</a>` : proteinInfo.proteinName;
                         targetCells.push(`${proteinLink} (${model})`);
                         pChEMBLCells.push(value);
 
                         const compoundId = compound ? compound.term : smiles;
-                        const uniprotNodeId = `uniprot_${proteinInfo.uniprotId}`;
+                        const proteinNodeId = `protein_${proteinInfo.proteinId}`;
                         
                         // Check if compound node exists, if not create it but keep it hidden initially
                         let compoundNode = cy.getElementById(compoundId);
@@ -172,14 +172,14 @@ function populateQsprPredMies(cy, compoundMapping, modelToProteinInfo, modelToMI
                         }
                         
                         // Only add edge if the target UniProt node exists
-                        if (cy.getElementById(uniprotNodeId).length > 0) {
-                            const edgeId = `${compoundId}-${uniprotNodeId}-${model}`;
+                        if (cy.getElementById(proteinNodeId).length > 0) {
+                            const edgeId = `${compoundId}-${proteinNodeId}-${model}`;
                             if (!cy.getElementById(edgeId).length) {
                                 cyElements.push({
                                     data: { 
                                         id: edgeId,
                                         source: compoundId, 
-                                        target: uniprotNodeId, 
+                                        target: proteinNodeId, 
                                         value: value, 
                                         type: "interaction", 
                                         label: `pChEMBL: ${value}`,

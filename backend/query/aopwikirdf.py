@@ -3,9 +3,9 @@ import logging
 from typing import Dict, Any
 
 
-from backend.model.parsers.builder import AOPNetworkBuilder
+from backend.models.converters.sparql_to_model import AOPNetworkBuilder
 
-from backend.model.schemas.base import AOPNetwork
+from backend.models.core.aop import AOPNetwork
 
 
 # Set up logger
@@ -112,12 +112,12 @@ class AOPQueryService:
 
             updated_network = builder.build()
             logger.info(
-                f"Added organ associations: {len(updated_network.organ_associations)} components"
+                f"Added organ associations: {len(updated_network.organ_associations)} organs"
             )
 
             return updated_network, organ_query
         except Exception as e:
-            logger.error(f"Failed to query components for network: {e}")
+            logger.error(f"Failed to query organs for network: {e}")
             # Return original network if gene query fails
             return network
 
@@ -243,25 +243,25 @@ class AOPQueryService:
         """Build SPARQL query for gene data"""
         if include_proteins:
             return f"""
-                SELECT DISTINCT ?ke ?ensembl ?uniprot WHERE {{
+                SELECT DISTINCT ?ke ?gene ?protein WHERE {{
                     VALUES ?ke {{ {ke_uris} }}
                     ?ke a aopo:KeyEvent; edam:data_1025 ?object .
                     ?object skos:exactMatch ?id .
-                    ?id a edam:data_1033; edam:data_1033 ?ensembl .
+                    ?id a edam:data_1033; edam:data_1033 ?gene .
                     OPTIONAL {{
                         ?object skos:exactMatch ?prot .
                         ?prot a edam:data_2291 ;
-                              edam:data_2291 ?uniprot .
+                              edam:data_2291 ?protein .
                     }}
                 }}
             """
         else:
             return f"""
-                SELECT DISTINCT ?ke ?ensembl WHERE {{
+                SELECT DISTINCT ?ke ?gene WHERE {{
                     VALUES ?ke {{ {ke_uris} }}
                     ?ke a aopo:KeyEvent; edam:data_1025 ?object .
                     ?object skos:exactMatch ?id .
-                    ?id a edam:data_1033; edam:data_1033 ?ensembl .
+                    ?id a edam:data_1033; edam:data_1033 ?gene .
                 }}
             """
 
@@ -298,14 +298,14 @@ class AOPQueryService:
         else:
             go_filter = ""
         return f"""
-            SELECT DISTINCT ?ke ?keTitle ?bioEvent ?process ?processName ?object ?objectName ?action
+            SELECT DISTINCT ?ke ?keTitle ?bioEvent ?process ?processName ?object ?objectName ?action ?objectType
             WHERE {{
                 {go_filter}
                 VALUES ?ke {{ {ke_uris } }}
                 ?ke a aopo:KeyEvent ;
                     dc:title ?keTitle .
                 OPTIONAL {{ ?ke aopo:hasBiologicalEvent ?bioEvent. ?bioEvent aopo:hasProcess ?process . ?process dc:title ?processName.}}
-                OPTIONAL {{ ?ke aopo:hasBiologicalEvent ?bioEvent. ?bioEvent aopo:hasObject ?object . ?object dc:title ?objectName.}}
+                OPTIONAL {{ ?ke aopo:hasBiologicalEvent ?bioEvent. ?bioEvent aopo:hasObject ?object . ?object dc:title ?objectName ; a ?objectType . }}
                 OPTIONAL {{ ?ke aopo:hasBiologicalEvent ?bioEvent. ?bioEvent aopo:hasAction ?action . }}
             }}
             ORDER BY ?ke

@@ -3,8 +3,8 @@ from typing import Dict, List, Optional, Any
 import logging
 from abc import ABC, abstractmethod
 
-from backend.model.cytoscape.elements import CytoscapeNode, CytoscapeEdge
-from backend.model.constants import NodeType, EdgeType
+from backend.models.cytoscape.elements import CytoscapeNode, CytoscapeEdge
+from backend.models.constants import NodeType, EdgeType
 
 logger = logging.getLogger(__name__)
 
@@ -59,39 +59,39 @@ class GeneAssociation(BaseAssociation):
     """Represents gene associations with Key Events"""
 
     ke_uri: str
-    ensembl_id: str
-    uniprot_id: Optional[str] = None
+    gene_id: str
+    protein_id: Optional[str] = None
 
     def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
         """Convert to Cytoscape elements (nodes and edges)"""
         elements = []
 
-        # Ensembl node
-        ensembl_node_id = f"ensembl_{self.ensembl_id}"
+        # Gene node
+        gene_node_id = f"gene_{self.gene_id}"
         elements.append(
             {
                 "data": {
-                    "id": ensembl_node_id,
-                    "label": self.ensembl_id,
-                    "type": NodeType.ENSEMBL.value,
-                    "ensembl_id": self.ensembl_id,
+                    "id": gene_node_id,
+                    "label": self.gene_id,
+                    "type": NodeType.GENE.value,
+                    "gene_id": self.gene_id,
                 },
-                "classes": "ensembl-node",
+                "classes": "gene-node",
             }
         )
 
-        # UniProt node and relationships (only if proteins are included)
-        if self.uniprot_id and self.uniprot_id != "NA":
-            uniprot_node_id = f"uniprot_{self.uniprot_id}"
+        # Protein node and relationships (only if proteins are included)
+        if self.protein_id and self.protein_id != "NA":
+            protein_node_id = f"protein_{self.protein_id}"
             elements.append(
                 {
                     "data": {
-                        "id": uniprot_node_id,
-                        "label": self.uniprot_id,
-                        "type": NodeType.UNIPROT.value,
-                        "uniprot_id": self.uniprot_id,
+                        "id": protein_node_id,
+                        "label": self.protein_id,
+                        "type": NodeType.PROTEIN.value,
+                        "protein_id": self.protein_id,
                     },
-                    "classes": "uniprot-node",
+                    "classes": "protein-node",
                 }
             )
 
@@ -99,9 +99,9 @@ class GeneAssociation(BaseAssociation):
             elements.append(
                 {
                     "data": {
-                        "id": f"{ensembl_node_id}_{uniprot_node_id}",
-                        "source": ensembl_node_id,
-                        "target": uniprot_node_id,
+                        "id": f"{gene_node_id}_{protein_node_id}",
+                        "source": gene_node_id,
+                        "target": protein_node_id,
                         "label": "translates to",
                         "type": EdgeType.TRANSLATES_TO.value,
                     }
@@ -112,8 +112,8 @@ class GeneAssociation(BaseAssociation):
             elements.append(
                 {
                     "data": {
-                        "id": f"{uniprot_node_id}_{self.ke_uri}",
-                        "source": uniprot_node_id,
+                        "id": f"{protein_node_id}_{self.ke_uri}",
+                        "source": protein_node_id,
                         "target": self.ke_uri,
                         "label": "part of",
                         "type": EdgeType.PART_OF.value,
@@ -125,8 +125,8 @@ class GeneAssociation(BaseAssociation):
             elements.append(
                 {
                     "data": {
-                        "id": f"{ensembl_node_id}_{self.ke_uri}",
-                        "source": ensembl_node_id,
+                        "id": f"{gene_node_id}_{self.ke_uri}",
+                        "source": gene_node_id,
                         "target": self.ke_uri,
                         "label": "part of",
                         "type": EdgeType.PART_OF.value,
@@ -148,6 +148,7 @@ class ComponentAssociation(BaseAssociation):
     object: str
     object_name: str
     action: str
+    object_type: str
 
     def to_cytoscape_elements(self) -> List[Dict[str, Any]]:
         """Convert to Cytoscape elements (nodes and edges)"""
@@ -158,7 +159,7 @@ class ComponentAssociation(BaseAssociation):
         object = self.object.split("/")[-1] if "/" in self.object else self.object
         elements = []
         process_node_id = f"process_{process}"
-        
+
         elements.append(
             {
                 "data": {
@@ -188,24 +189,54 @@ class ComponentAssociation(BaseAssociation):
                 }
             }
         )
-        
+
         if self.object:
             object_node_id = f"object_{object}"
-            
+
+            # Determine the type of the object node based on object_type or object_iri
+            # Hacky patch for misassigned types in AOP WIKI RDF
+            if (
+                self.object_type == "http://aopkb.org/aop_ontology#OrganContext"
+                or any(substring in object for substring in 
+                       ["FMA", "UBERON"])
+            ):
+                object_node_type = NodeType.ORGAN.value
+                object_classes = NodeType.ORGAN.value
+            elif ("CellTypeContext" in self.object_type
+                  or any(substring in object for substring in 
+                         ["CL", "EFO"])
+                  or self.object_name in ["cell", "mitochondrion"]):
+                object_node_type = NodeType.CELL.value  
+                object_classes = "cell-node"
+            elif (self.object.endswith("PATO_0001241")
+                  or any(substring in object for substring in 
+                         ["PR"])):
+                object_node_type = NodeType.PROTEIN.value
+                object_classes = "protein-node"
+            elif any(
+                substring in object for substring in ["GO"]
+            ):
+                object_node_type = NodeType.CELLULAR_COMPONENT.value
+                object_classes = "cellular-component-node"
+            else:
+                # Default to component object type
+                object_node_type = NodeType.COMPONENT_OBJECT.value
+                object_classes = "object-node component-node"
+
             elements.append(
                 {
                     "data": {
                         "id": object_node_id,
                         "label": self.object_name,
-                        "type": NodeType.COMPONENT_OBJECT.value,
-                        "object_iri": self.object,  # Keep full IRI here instead of truncated
+                        "type": object_node_type,
+                        "object_iri": self.object,
                         "object_name": self.object_name,
-                        "object_id": object,  # Keep short ID for other uses
+                        "object_id": object,
                     },
-                    "classes": "object-node component-node",
+                    "classes": object_classes,
                 }
             )
-            
+
             elements.append(
                 {
                     "data": {
@@ -331,7 +362,7 @@ class GeneExpressionAssociation(BaseAssociation):
 
     def __init__(
         self,
-        ensembl_id: str,
+        gene_id: str,
         anatomical_id: str,
         anatomical_name: str,
         expression_level: str,
@@ -341,7 +372,7 @@ class GeneExpressionAssociation(BaseAssociation):
         developmental_stage_name: str,
         expr: str,
     ):
-        self.ensembl_id = ensembl_id
+        self.gene_id = gene_id
         self.anatomical_id = anatomical_id
         self.anatomical_name = anatomical_name
         self.expression_level = expression_level
@@ -356,7 +387,7 @@ class GeneExpressionAssociation(BaseAssociation):
         elements = []
         
         # Organ node
-        organ_node_id = f"organ_{self.anatomical_id}"
+        organ_node_id = f"{self.anatomical_id}"
         elements.append(
             {
                 "data": {
@@ -371,7 +402,7 @@ class GeneExpressionAssociation(BaseAssociation):
         )
 
         # Expression edge from gene to organ
-        gene_node_id = f"ensembl_{self.ensembl_id}"
+        gene_node_id = f"gene_{self.gene_id}"
         expression_edge_id = f"{gene_node_id}_{organ_node_id}_expression"
         elements.append(
             {
@@ -393,7 +424,7 @@ class GeneExpressionAssociation(BaseAssociation):
     def to_table_entry(self) -> Dict[str, str]:
         """Convert to gene expression table entry format"""
         return {
-            "gene_id": self.ensembl_id,
+            "gene_id": self.gene_id,
             "organ": self.anatomical_name,
             "expression_level": self.expression_level,
             "confidence": self.confidence_level_name,

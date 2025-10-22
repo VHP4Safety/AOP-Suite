@@ -339,8 +339,8 @@
                                     <select id="node-type" class="form-control">
                                         <option value="ke">Key Event</option>
                                         <option value="chemical">Chemical</option>
-                                        <option value="uniprot">UniProt</option>
-                                        <option value="ensembl">Ensembl</option>
+                                        <option value="protein">Protein</option>
+                                        <option value="gene">Gene</option>
                                         <option value="component_process">Component Process</option>
                                         <option value="component_object">Component Object</option>
                                         <option value="organ">Organ</option>
@@ -544,8 +544,8 @@
                             <select id="node-type-select" class="form-control">
                                 <option value="ke">Key Event</option>
                                 <option value="chemical">Chemical</option>
-                                <option value="uniprot">UniProt</option>
-                                <option value="ensembl">Ensembl</option>
+                                <option value="protein">UniProt</option>
+                                <option value="gene">Ensembl</option>
                                 <option value="component_process">Component Process</option>
                                 <option value="component_object">Component Object</option>
                                 <option value="organ">Organ</option>
@@ -1298,8 +1298,8 @@
     function setupGeneTableHandlers() {
         $(document).off('click', '#gene_table tbody tr').on('click', '#gene_table tbody tr', function () {
             const geneSymbol = $(this).data('gene');
-            const uniprotId = $(this).data('uniprot-id');
-            const ensemblId = $(this).data('ensembl-id');
+            const proteinId = $(this).data('protein-id');
+            const geneId = $(this).data('gene-id');
 
             if (!geneSymbol) return;
 
@@ -1315,25 +1315,25 @@
                 window.cy.elements().removeClass('highlighted');
 
                 // Find and highlight gene nodes
-                const ensemblNode = window.cy.getElementById(ensemblId);
-                const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
+                const geneNode = window.cy.getElementById(geneId);
+                const proteinNode = window.cy.$(`[protein_id="${proteinId}"]`);
 
-                if (ensemblNode.length > 0) {
-                    ensemblNode.addClass('highlighted');
+                if (geneNode.length > 0) {
+                    geneNode.addClass('highlighted');
                     // Center on the node
-                    window.cy.center(ensemblNode);
+                    window.cy.center(geneNode);
                 }
 
-                if (uniprotNode.length > 0) {
-                    uniprotNode.addClass('highlighted');
+                if (proteinNode.length > 0) {
+                    proteinNode.addClass('highlighted');
                 }
 
                 // Also highlight connecting edges
-                const connectedEdges = ensemblNode.connectedEdges().union(uniprotNode.connectedEdges());
+                const connectedEdges = geneNode.connectedEdges().union(proteinNode.connectedEdges());
                 connectedEdges.addClass('highlighted');
             }
 
-            console.log(`Clicked gene: ${geneSymbol}, UniProt: ${uniprotId}`);
+            console.log(`Clicked gene: ${geneSymbol}, UniProt: ${proteinId}`);
         });
     }
 

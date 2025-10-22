@@ -1,5 +1,5 @@
-from backend.model.parsers.cytoscape import CytoscapeNetworkParser
-from backend.model.cytoscape.elements import CytoscapeNode
+from backend.models.converters.cy_to_model import CytoscapeNetworkParser
+from backend.models.cytoscape.elements import CytoscapeNode
 import logging
 from typing import List, Dict
 

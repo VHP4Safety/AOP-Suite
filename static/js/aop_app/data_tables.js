@@ -940,7 +940,7 @@ class GeneExpressionTableManager extends DataTableManager {
     getVisibleNodeIds() {
         const visibleNodeIds = new Set();
         this.filteredData.forEach(row => {
-            if (row.gene_id && row.gene_id !== 'N/A') visibleNodeIds.add(`ensembl_${row.gene_id}`);
+            if (row.gene_id && row.gene_id !== 'N/A') visibleNodeIds.add(`gene_${row.gene_id}`);
             if (row.organ_id && row.organ_id !== 'N/A') visibleNodeIds.add(`organ_${row.organ_id}`);
         });
         return visibleNodeIds;
@@ -982,7 +982,7 @@ class GeneExpressionTableManager extends DataTableManager {
                     data-expression-level="${row.expression_level}"
                     data-row-index="${index}"
                     style="cursor: pointer;">
-                    <td class="gene-expression-cell clickable-cell" data-node-id="ensembl_${row.gene_id}" style="cursor: pointer;">
+                    <td class="gene-expression-cell clickable-cell" data-node-id="gene_${row.gene_id}" style="cursor: pointer;">
                         <strong>${this.highlightMatch(row.gene_symbol || row.gene_id)}</strong>
                         <br><small class="text-muted">${row.gene_id}</small>
                     </td>
@@ -1119,7 +1119,7 @@ class GeneExpressionTableManager extends DataTableManager {
                 if (window.cy) {
                     window.cy.elements().removeClass('highlighted');
                     
-                    const geneNode = window.cy.getElementById(`ensembl_${geneId}`);
+                    const geneNode = window.cy.getElementById(`gene_${geneId}`);
                     const organNode = organId ? window.cy.getElementById(`organ_${organId}`) : null;
                     
                     if (geneNode.length > 0) {
@@ -1249,8 +1249,8 @@ class GeneTableManager extends DataTableManager {
     getVisibleNodeIds() {
         const visibleNodeIds = new Set();
         this.filteredData.forEach(row => {
-            if (row.ensembl_id && row.ensembl_id !== 'N/A') visibleNodeIds.add(row.ensembl_id);
-            if (row.uniprot_node_id && row.uniprot_node_id !== 'N/A') visibleNodeIds.add(row.uniprot_node_id);
+            if (row.gene_id && row.gene_id !== 'N/A') visibleNodeIds.add(row.gene_id);
+            if (row.protein_node_id && row.protein_node_id !== 'N/A') visibleNodeIds.add(row.protein_node_id);
         });
         return visibleNodeIds;
     }
@@ -1259,9 +1259,9 @@ class GeneTableManager extends DataTableManager {
         const searchFields = [
             row.gene,
             row.protein,
-            row.uniprot_id,
-            row.ensembl_id,
-            row.uniprot_node_id
+            row.protein_id,
+            row.gene_id,
+            row.protein_node_id
         ].join(' ').toLowerCase();
         
         return searchFields.includes(this.filterText);
@@ -1344,7 +1344,7 @@ class GeneTableManager extends DataTableManager {
 
         this.filteredData.forEach((gene, index) => {
             const proteinDisplay = gene.protein !== "N/A" ?
-                `<a href="https://www.uniprot.org/uniprotkb/${gene.uniprot_id}" target="_blank">${this.highlightMatch(gene.protein)}</a>` :
+                `<a href="https://www.protein.org/proteinkb/${gene.protein_id}" target="_blank">${this.highlightMatch(gene.protein)}</a>` :
                 "N/A";
 
             const geneDisplay = gene.gene !== "N/A" ?
@@ -1357,15 +1357,15 @@ class GeneTableManager extends DataTableManager {
 
             html += `
                 <tr data-gene="${gene.gene}" 
-                    data-uniprot-id="${gene.uniprot_id}" 
-                    data-ensembl-id="${gene.ensembl_id}"
-                    data-uniprot-node-id="${gene.uniprot_node_id}"
+                    data-protein-id="${gene.protein_id}" 
+                    data-gene-id="${gene.gene_id}"
+                    data-protein-node-id="${gene.protein_node_id}"
                     data-row-index="${index}"
                     style="cursor: pointer;">
-                    <td class="gene-cell clickable-cell" data-node-id="${gene.ensembl_id}" style="cursor: pointer;">
+                    <td class="gene-cell clickable-cell" data-node-id="${gene.gene_id}" style="cursor: pointer;">
                         ${geneDisplay}
                     </td>
-                    <td class="protein-cell clickable-cell" data-node-id="${gene.uniprot_node_id}" style="cursor: pointer;">
+                    <td class="protein-cell clickable-cell" data-node-id="${gene.protein_node_id}" style="cursor: pointer;">
                         ${proteinDisplay}
                     </td>
                     <td class="expression-cell" title="${expressionOrgans}">
@@ -1505,8 +1505,8 @@ class GeneTableManager extends DataTableManager {
                 if (e.target.closest('a') || e.target.closest('.gene-cell, .protein-cell')) return;
 
                 const geneSymbol = row.dataset.gene;
-                const uniprotId = row.dataset.uniprotId;
-                const ensemblId = row.dataset.ensemblId;
+                const proteinId = row.dataset.proteinId;
+                const geneId = row.dataset.geneId;
                 
                 if (!geneSymbol) return;
                 
@@ -1523,16 +1523,16 @@ class GeneTableManager extends DataTableManager {
                 if (window.cy) {
                     window.cy.elements().removeClass('highlighted');
                     
-                    const ensemblNode = window.cy.getElementById(ensemblId);
-                    const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
+                    const geneNode = window.cy.getElementById(geneId);
+                    const proteinNode = window.cy.$(`[protein_id="${proteinId}"]`);
                     
-                    if (ensemblNode.length > 0) {
-                        ensemblNode.addClass('highlighted');
-                        window.cy.center(ensemblNode);
+                    if (geneNode.length > 0) {
+                        geneNode.addClass('highlighted');
+                        window.cy.center(geneNode);
                     }
                     
-                    if (uniprotNode.length > 0) {
-                        uniprotNode.addClass('highlighted');
+                    if (proteinNode.length > 0) {
+                        proteinNode.addClass('highlighted');
                     }
                 }
             });

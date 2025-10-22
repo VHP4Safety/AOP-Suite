@@ -2,8 +2,9 @@ from typing import List, Dict, Optional
 import logging
 from dataclasses import dataclass, field
 
-from backend.model.parsers.cytoscape import CytoscapeNetworkParser
-from backend.model.cytoscape.elements import CytoscapeNode, CytoscapeEdge
+from backend.models.converters.cy_to_model import CytoscapeNetworkParser
+from backend.models.cytoscape.elements import CytoscapeNode, CytoscapeEdge
+from backend.models.constants import NodeType, EdgeType
 
 logger = logging.getLogger(__name__)
 
@@ -16,21 +17,21 @@ class GeneProteinPair:
     gene_label: str
     protein_id: str
     protein_label: str
-    uniprot_id: str
-    ensembl_node_id: str
-    uniprot_node_id: str
+    protein_id: str
+    gene_node_id: str
+    protein_node_id: str
 
     def to_table_entry(self) -> Dict[str, str]:
         """Convert to gene table entry format"""
         return {
             "gene": self.gene_label if self.gene_label != "N/A" else "N/A",
             "protein": self.protein_label if self.protein_label != "N/A" else "N/A",
-            "uniprot_id": self.uniprot_id if self.uniprot_id != "N/A" else "N/A",
-            "ensembl_id": (
-                self.ensembl_node_id if self.ensembl_node_id != "N/A" else "N/A"
+            "protein_id": self.protein_id if self.protein_id != "N/A" else "N/A",
+            "gene_id": (
+                self.gene_node_id if self.gene_node_id != "N/A" else "N/A"
             ),
-            "uniprot_node_id": (
-                self.uniprot_node_id if self.uniprot_node_id != "N/A" else "N/A"
+            "protein_node_id": (
+                self.protein_node_id if self.protein_node_id != "N/A" else "N/A"
             ),
         }
 
@@ -39,9 +40,12 @@ class GeneTableBuilder:
 
     def __init__(self, parser: CytoscapeNetworkParser):
         self.parser = parser
-        self.ensembl_nodes = {node.id: node for node in parser.get_ensembl_nodes()}
-        self.uniprot_nodes = {node.id: node for node in parser.get_uniprot_nodes()}
-        self.gene_relationships = parser.get_gene_relationships()
+        self.gene_nodes = {node.id: node for node in parser.get_nodes_by_type(NodeType.GENE)}
+        self.protein_nodes = {node.id: node for node in parser.get_nodes_by_type(NodeType.PROTEIN)}
+        self.gene_relationships = (
+            parser.get_edges_by_type(EdgeType.TRANSLATES_TO)
+            + parser.get_edges_by_type(EdgeType.EXPRESSION_IN)
+        )
         self.expression_edges = self._get_expression_edges()
 
     def _get_expression_edges(self) -> List[CytoscapeEdge]:
@@ -66,7 +70,7 @@ class GeneTableBuilder:
         for pair in all_pairs:
             entry = pair.to_table_entry()
 
-            expression_data = self._get_expression_data_for_gene(pair.ensembl_node_id)
+            expression_data = self._get_expression_data_for_gene(pair.gene_node_id)
             if expression_data:
                 entry.update(
                     {
@@ -94,7 +98,7 @@ class GeneTableBuilder:
                     }
                 )
 
-            pair_key = f"{entry['gene']}_{entry['protein']}_{entry['uniprot_id']}"
+            pair_key = f"{entry['gene']}_{entry['protein']}_{entry['protein_id']}"
 
             if pair_key not in seen_pairs:
                 table_entries.append(entry)
@@ -134,28 +138,28 @@ class GeneTableBuilder:
         pairs = []
 
         for edge in self.gene_relationships:
-            if edge.label != "translates to":
+            if edge.label != EdgeType.TRANSLATES_TO.value:
                 continue
 
-            ensembl_node = None
-            uniprot_node = None
+            gene_node = None
+            protein_node = None
 
-            source_node = self.ensembl_nodes.get(edge.source) or self.uniprot_nodes.get(
+            source_node = self.gene_nodes.get(edge.source) or self.protein_nodes.get(
                 edge.source
             )
-            target_node = self.ensembl_nodes.get(edge.target) or self.uniprot_nodes.get(
+            target_node = self.gene_nodes.get(edge.target) or self.protein_nodes.get(
                 edge.target
             )
 
-            if source_node and source_node.is_ensembl_node():
-                ensembl_node = source_node
-                uniprot_node = target_node
-            elif target_node and target_node.is_ensembl_node():
-                ensembl_node = target_node
-                uniprot_node = source_node
+            if source_node and source_node.is_instance_of(NodeType.GENE):
+                gene_node = source_node
+                protein_node = target_node
+            elif target_node and target_node.is_instance_of(NodeType.GENE):
+                gene_node = target_node
+                protein_node = source_node
 
-            if ensembl_node and uniprot_node:
-                pair = self._create_pair_from_nodes(ensembl_node, uniprot_node)
+            if gene_node and protein_node:
+                pair = self._create_pair_from_nodes(gene_node, protein_node)
                 if pair:
                     pairs.append(pair)
 
@@ -163,36 +167,36 @@ class GeneTableBuilder:
         return pairs
 
     def _create_pair_from_nodes(
-        self, ensembl_node: CytoscapeNode, uniprot_node: CytoscapeNode
+        self, gene_node: CytoscapeNode, protein_node: CytoscapeNode
     ) -> Optional[GeneProteinPair]:
         """Create a gene-protein pair from two nodes"""
         try:
-            gene_label = ensembl_node.label
-            ensembl_id = ensembl_node.properties.get("ensembl_id", ensembl_node.id)
-            if ensembl_id.startswith("ensembl_"):
-                ensembl_id = ensembl_id.replace("ensembl_", "")
+            gene_label = gene_node.label
+            gene_id = gene_node.properties.get("gene_id", gene_node.id)
+            if gene_id.startswith("gene_"):
+                gene_id = gene_id.replace("gene_", "")
 
-            protein_label = uniprot_node.label
-            uniprot_id = uniprot_node.properties.get("uniprot_id", uniprot_node.id)
-            if uniprot_id.startswith("uniprot_"):
-                uniprot_id = uniprot_id.replace("uniprot_", "")
+            protein_label = protein_node.label
+            protein_id = protein_node.properties.get("protein_id", protein_node.id)
+            if protein_id.startswith("protein_"):
+                protein_id = protein_id.replace("protein_", "")
 
-            if len(protein_label) <= 10 and not protein_label.startswith("uniprot_"):
-                if uniprot_id == "NA" or uniprot_id == uniprot_node.id:
-                    uniprot_id = protein_label
+            if len(protein_label) <= 10 and not protein_label.startswith("protein_"):
+                if protein_id == "NA" or protein_id == protein_node.id:
+                    protein_id = protein_label
 
             return GeneProteinPair(
-                gene_id=ensembl_id,
+                gene_id=gene_id,
                 gene_label=gene_label,
-                protein_id=uniprot_id,
+                protein_id=protein_id,
                 protein_label=protein_label,
-                uniprot_id=uniprot_id,
-                ensembl_node_id=ensembl_node.id,
-                uniprot_node_id=uniprot_node.id,
+                #protein_id=protein_id,
+                gene_node_id=gene_node.id,
+                protein_node_id=protein_node.id,
             )
         except Exception as e:
             logger.warning(
-                f"Failed to create pair from nodes {ensembl_node.id}, {uniprot_node.id}: {e}"
+                f"Failed to create pair from nodes {gene_node.id}, {protein_node.id}: {e}"
             )
             return None
 
@@ -200,23 +204,23 @@ class GeneTableBuilder:
         self, existing_pairs: List[GeneProteinPair]
     ) -> List[GeneProteinPair]:
         """Get genes without protein connections"""
-        connected_gene_ids = {pair.ensembl_node_id for pair in existing_pairs}
+        connected_gene_ids = {pair.gene_node_id for pair in existing_pairs}
         orphaned = []
 
-        for node_id, node in self.ensembl_nodes.items():
+        for node_id, node in self.gene_nodes.items():
             if node_id not in connected_gene_ids:
-                ensembl_id = node.properties.get("ensembl_id", node.id)
-                if ensembl_id.startswith("ensembl_"):
-                    ensembl_id = ensembl_id.replace("ensembl_", "")
+                gene_id = node.properties.get("gene_id", node.id)
+                if gene_id.startswith("gene_"):
+                    gene_id = gene_id.replace("gene_", "")
 
                 pair = GeneProteinPair(
-                    gene_id=ensembl_id,
+                    gene_id=gene_id,
                     gene_label=node.label,
                     protein_id="N/A",
                     protein_label="N/A",
-                    uniprot_id="N/A",
-                    ensembl_node_id=node.id,
-                    uniprot_node_id="N/A",
+                    #protein_id="N/A",
+                    gene_node_id=node.id,
+                    protein_node_id="N/A",
                 )
                 orphaned.append(pair)
 
@@ -227,27 +231,27 @@ class GeneTableBuilder:
         self, existing_pairs: List[GeneProteinPair]
     ) -> List[GeneProteinPair]:
         """Get proteins without gene connections"""
-        connected_protein_ids = {pair.uniprot_node_id for pair in existing_pairs}
+        connected_protein_ids = {pair.protein_node_id for pair in existing_pairs}
         orphaned = []
 
-        for node_id, node in self.uniprot_nodes.items():
+        for node_id, node in self.protein_nodes.items():
             if node_id not in connected_protein_ids:
-                uniprot_id = node.properties.get("uniprot_id", node.id)
-                if uniprot_id.startswith("uniprot_"):
-                    uniprot_id = uniprot_id.replace("uniprot_", "")
+                protein_id = node.properties.get("protein_id", node.id)
+                if protein_id.startswith("protein_"):
+                    protein_id = protein_id.replace("protein_", "")
 
-                if len(node.label) <= 10 and not node.label.startswith("uniprot_"):
-                    if uniprot_id == "NA" or uniprot_id == node.id:
-                        uniprot_id = node.label
+                if len(node.label) <= 10 and not node.label.startswith("protein_"):
+                    if protein_id == "NA" or protein_id == node.id:
+                        protein_id = node.label
 
                 pair = GeneProteinPair(
                     gene_id="N/A",
                     gene_label="N/A",
-                    protein_id=uniprot_id,
+                    protein_id=protein_id,
                     protein_label=node.label,
-                    uniprot_id=uniprot_id,
-                    ensembl_node_id="N/A",
-                    uniprot_node_id=node.id,
+                    #protein_id=protein_id,
+                    gene_node_id="N/A",
+                    protein_node_id=node.id,
                 )
                 orphaned.append(pair)
 
@@ -260,9 +264,9 @@ class GeneExpressionTableBuilder:
 
     def __init__(self, parser: CytoscapeNetworkParser):
         self.parser = parser
-        self.ensembl_nodes = {node.id: node for node in parser.get_ensembl_nodes()}
+        self.gene_nodes = {node.id: node for node in parser.get_nodes_by_type(NodeType.GENE)}
         self.gene_expression_edges = self._get_gene_expression_edges()
-        self.organ_nodes = self.parser.get_organ_nodes()
+        self.organ_nodes = self.parser.get_nodes_by_type(NodeType.ORGAN)
 
     def _get_gene_expression_edges(self) -> List[CytoscapeEdge]:
         """Get all gene expression edges from the network"""
@@ -278,7 +282,7 @@ class GeneExpressionTableBuilder:
         seen_entries = set()
 
         for edge in self.gene_expression_edges:
-            source_node = self.ensembl_nodes.get(edge.source)
+            source_node = self.gene_nodes.get(edge.source)
 
             # Find target organ node
             target_node = None
@@ -291,9 +295,9 @@ class GeneExpressionTableBuilder:
                 entry_key = f"{source_node.id}_{target_node.id}"
                 if entry_key not in seen_entries:
                     # Extract gene ID from node
-                    gene_id = source_node.properties.get("ensembl_id", source_node.id)
-                    if gene_id.startswith("ensembl_"):
-                        gene_id = gene_id.replace("ensembl_", "")
+                    gene_id = source_node.properties.get("gene_id", source_node.id)
+                    if gene_id.startswith("gene_"):
+                        gene_id = gene_id.replace("gene_", "")
 
                     entry = {
                         "gene_id": gene_id,

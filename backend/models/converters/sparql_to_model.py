@@ -2,13 +2,13 @@ from typing import Dict, List, Any, Optional
 import logging
 
 
-from backend.model.schemas.base import (
+from backend.models.core.aop import (
     AOPNetwork,
     AOPInfo,
     AOPKeyEvent,
     KeyEventRelationship,
 )
-from backend.model.schemas.associations import (
+from backend.models.core.associations import (
     GeneAssociation,
     CompoundAssociation,
     ComponentAssociation,
@@ -16,9 +16,9 @@ from backend.model.schemas.associations import (
     GeneExpressionAssociation,
 )
 
-from backend.model.constants import NodeType
+from backend.models.constants import NodeType, EdgeType
 
-from backend.model.cytoscape.elements import CytoscapeNode, CytoscapeEdge
+from backend.models.cytoscape.elements import CytoscapeNode, CytoscapeEdge
 
 logger = logging.getLogger(__name__)
 
@@ -153,8 +153,8 @@ class AOPNetworkBuilder:
             id=f"{ke_uri}_{organ_uri}",
             source=ke_uri,
             target=organ_uri,
-            label="associated with",
-            properties={"type": "associated_with"},
+            label=EdgeType.ASSOCIATED_WITH.value,
+            properties={"type": EdgeType.ASSOCIATED_WITH.value},
         )
 
         association = OrganAssociation(
@@ -170,18 +170,18 @@ class AOPNetworkBuilder:
         for binding in gene_bindings:
             try:
                 ke_uri = binding.get("ke", {}).get("value", "")
-                ensembl_id = binding.get("ensembl", {}).get("value", "")
+                gene_id = binding.get("gene", {}).get("value", "")
 
                 if include_proteins:
-                    uniprot_id = binding.get("uniprot", {}).get("value", "")
+                    protein_id = binding.get("protein", {}).get("value", "")
                 else:
-                    uniprot_id = None
+                    protein_id = None
 
-                if ke_uri and ensembl_id:
+                if ke_uri and gene_id:
                     gene_assoc = GeneAssociation(
                         ke_uri=ke_uri,
-                        ensembl_id=ensembl_id,
-                        uniprot_id=uniprot_id if include_proteins else None,
+                        gene_id=gene_id,
+                        protein_id=protein_id if include_proteins else None,
                     )
                     self.network.gene_associations.append(gene_assoc)
 
@@ -228,6 +228,7 @@ class AOPNetworkBuilder:
                 object=result.get("object", {}).get("value", ""),
                 object_name=result.get("objectName", {}).get("value", ""),
                 action=result.get("action", {}).get("value", ""),
+                object_type=result.get("objectType", {}).get("value", ""),
             )
             self.network.add_component_association(association)
 
@@ -236,11 +237,11 @@ class AOPNetworkBuilder:
     ):
         """Add bgee gene expression associations from query results"""
         for result in gene_expression_results:
-            ensembl_id = result.get("ensembl_id", {}).get("value", "")
-            if not ensembl_id:
+            gene_id = result.get("gene_id", {}).get("value", "")
+            if not gene_id:
                 continue
             association = GeneExpressionAssociation(
-                ensembl_id=ensembl_id,
+                gene_id=gene_id,
                 anatomical_id=result.get("anatomical_entity_id", {}).get("value", ""),
                 anatomical_name=result.get("anatomical_entity_name", {}).get(
                     "value", ""
@@ -268,22 +269,25 @@ class AOPNetworkBuilder:
             organ_uri = result.get("organ", {}).get("value", "")
             organ_name = result.get("organ_name", {}).get("value", "")
             association = OrganAssociation(
-                    ke_uri=ke_uri,
-                    organ_data=CytoscapeNode(
-                        id=organ_uri,
-                        label=organ_name if organ_name else organ_uri.split("/")[-1],
-                        node_type=NodeType.ORGAN.value,
-                        classes="organ-node",
-                        properties={"anatomical_id": organ_uri, "anatomical_name": organ_name},
-                    ),
-                    edge_data=CytoscapeEdge(
-                        id=f"{ke_uri}_{organ_uri}",
-                        source=ke_uri,
-                        target=organ_uri,
-                        label="associated with",
-                        properties={"type": "associated_with"},
-                    )
-                )
+                ke_uri=ke_uri,
+                organ_data=CytoscapeNode(
+                    id=organ_uri,
+                    label=organ_name if organ_name else organ_uri.split("/")[-1],
+                    node_type=NodeType.ORGAN.value,
+                    classes="organ-node",
+                    properties={
+                        "anatomical_id": organ_uri,
+                        "anatomical_name": organ_name,
+                    },
+                ),
+                edge_data=CytoscapeEdge(
+                    id=f"{ke_uri}_{organ_uri}",
+                    source=ke_uri,
+                    target=organ_uri,
+                    label=EdgeType.ASSOCIATED_WITH.value,
+                    properties={"type": EdgeType.ASSOCIATED_WITH.value},
+                ),
+            )
             if not ke_uri or not organ_uri:
                 continue
         return self.network.add_organ_association(association)

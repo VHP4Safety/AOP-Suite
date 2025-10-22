@@ -4,8 +4,8 @@ import logging
 from ndex2.cx2 import CX2Network
 from typing import List, Dict, Any, Optional
 
-from backend.model.constants import NodeType
-from backend.model.schemas.associations import (
+from backend.models.constants import NodeType
+from backend.models.core.associations import (
     BaseAssociation,
     GeneAssociation,
     CompoundAssociation,
@@ -13,10 +13,10 @@ from backend.model.schemas.associations import (
     OrganAssociation,
     GeneExpressionAssociation,
 )
-from backend.model.cytoscape.styles import AOPStyleManager
-from backend.model.cytoscape.elements import CytoscapeNode, CytoscapeEdge
-from backend.model.constants import NodeType, EdgeType
-from backend.model.parsers.cytoscape import CytoscapeNetworkParser
+from backend.models.cytoscape.styles import AOPStyleManager
+from backend.models.cytoscape.elements import CytoscapeNode, CytoscapeEdge
+from backend.models.constants import NodeType, EdgeType
+from backend.models.converters.cy_to_model import CytoscapeNetworkParser
 
 logger = logging.getLogger(__name__)
 
@@ -203,31 +203,31 @@ class AOPNetwork:
         """Get all AOP URIs in the network"""
         return list(self.aop_info.keys())
 
-    def get_ensembl_ids(self) -> List[str]:
-        """Retrieve all Ensembl IDs from nodes in the network"""
-        ensembl_ids = []
+    def get_gene_ids(self) -> List[str]:
+        """Retrieve all Gene IDs from nodes in the network"""
+        gene_ids = []
 
-        # Check node_list for Ensembl nodes
+        # Check node_list for Gene nodes
         for node in self.node_list:
-            if node.is_ensembl_node():
-                # Extract Ensembl ID from node properties or ID
-                ensembl_id = node.properties.get("ensembl_id", "")
-                if not ensembl_id:
-                    # Try to extract from node ID if it starts with ensembl_
-                    if node.id.startswith("ensembl_"):
-                        ensembl_id = node.id.replace("ensembl_", "")
+            if node.is_instance_of(NodeType.GENE):
+                # Extract Gene ID from node properties or ID
+                gene_id = node.properties.get("gene_id", "")
+                if not gene_id:
+                    # Try to extract from node ID if it starts with gene_
+                    if node.id.startswith("gene_"):
+                        gene_id = node.id.replace("gene_", "")
                     else:
-                        ensembl_id = node.label
+                        gene_id = node.label
 
-                if ensembl_id and ensembl_id not in ensembl_ids:
-                    ensembl_ids.append(ensembl_id)
+                if gene_id and gene_id not in gene_ids:
+                    gene_ids.append(gene_id)
 
         # Also check gene_associations for backward compatibility
         for gene_assoc in self.gene_associations:
-            if gene_assoc.ensembl_id and gene_assoc.ensembl_id not in ensembl_ids:
-                ensembl_ids.append(gene_assoc.ensembl_id)
+            if gene_assoc.gene_id and gene_assoc.gene_id not in gene_ids:
+                gene_ids.append(gene_assoc.gene_id)
 
-        return ensembl_ids
+        return gene_ids
 
     def get_organ_ids(self) -> List[str]:
         """Retrieve all organ IDs/names from nodes in the network"""
@@ -235,7 +235,7 @@ class AOPNetwork:
 
         # Check node_list for organ nodes
         for node in self.node_list:
-            if node.is_organ_node():
+            if node.is_instance_of(NodeType.ORGAN):
                 # Use anatomical_name (organ name) rather than full URI
                 organ_name = node.properties.get("anatomical_name", "")
                 if not organ_name:
@@ -247,7 +247,7 @@ class AOPNetwork:
         # Also check organ_associations for backward compatibility
         for organ_assoc in self.organ_associations:
             organ_node = organ_assoc.organ_data
-            if organ_node and organ_node.is_organ_node():
+            if organ_node and organ_node.is_instance_of(NodeType.ORGAN):
                 # Use anatomical_name (organ name) rather than full URI
                 organ_name = organ_node.properties.get(
                     "anatomical_name", organ_node.label

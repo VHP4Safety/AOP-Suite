@@ -206,7 +206,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         const selectedNodes = window.cy.$(':selected').nodes();
                         const geneNodesToShow = window.cy.collection();
                         selectedNodes.forEach(node => {
-                            const connectedGenes = node.connectedEdges().connectedNodes('.uniprot-node, .ensembl-node');
+                            const connectedGenes = node.connectedEdges().connectedNodes('.protein-node, .gene-node');
                             geneNodesToShow.merge(connectedGenes);
                         });
                         geneNodesToShow.show();
@@ -214,12 +214,12 @@ document.addEventListener("DOMContentLoaded", function () {
                         console.log(`Showed ${geneNodesToShow.length} genes connected to selected nodes`);
                     } else {
                         // Show all genes
-                        window.cy.elements(".uniprot-node, .ensembl-node").show();
+                        window.cy.elements(".protein-node, .gene-node").show();
                         window.cy.edges().forEach(function (edge) {
                             const source = edge.source();
                             const target = edge.target();
-                            const sourceIsGene = source.hasClass("uniprot-node") || source.hasClass("ensembl-node");
-                            const targetIsGene = target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
+                            const sourceIsGene = source.hasClass("protein-node") || source.hasClass("gene-node");
+                            const targetIsGene = target.hasClass("protein-node") || target.hasClass("gene-node");
                             if (source.visible() && target.visible() && (sourceIsGene || targetIsGene)) {
                                 edge.show();
                             }
@@ -258,8 +258,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 const genesToHide = window.cy.collection();
                 const proteinsToHide = window.cy.collection();
                 selectedNodes.forEach(node => {
-                    const connectedProts = node.connectedEdges().connectedNodes('.uniprot-node');
-                    const connectedGenes = connectedProts.connectedEdges().connectedNodes('.ensembl-node');
+                    const connectedProts = node.connectedEdges().connectedNodes('.protein-node');
+                    const connectedGenes = connectedProts.connectedEdges().connectedNodes('.gene-node');
                     genesToHide.merge(connectedGenes);
                     proteinsToHide.merge(connectedProts);
                 });
@@ -271,7 +271,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.log(`Removed ${genesToHide.length} genes and ${proteinsToHide.length} proteins connected to selected nodes`);
             } else {
                 // Hide all genes
-                const allGenes = window.cy.elements(".uniprot-node, .ensembl-node");
+                const allGenes = window.cy.elements(".protein-node, .gene-node");
                 allGenes.remove();
                 allGenes.connectedEdges().remove();
 
@@ -734,96 +734,8 @@ document.addEventListener("DOMContentLoaded", function () {
                         ...ele.data
                     }
                 })),
-                style: [
-                    {
-                        selector: 'node',
-                        style: {
-                            'label': 'data(label)',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'color': 'white',
-                            'font-size': '10px',
-                            'font-weight': 'bold',
-                            'width': 40,
-                            'height': 40,
-                            'shape': 'circle',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '30px'
-                        }
-                    },
-                    {
-                        selector: '.uniprot-node',
-                        style: {
-                            'background-color': '#3498DB',
-                            'border-color': '#2980B9',
-                            'border-width': 2
-                        }
-                    },
-                    {
-                        selector: '.ensembl-node',
-                        style: {
-                            'background-color': '#2ECC71',
-                            'border-color': '#27AE60',
-                            'border-width': 2
-                        }
-                    },
-                    {
-                        selector: '.chemical-node',
-                        style: {
-                            'background-color': '#E67E22',
-                            'border-color': '#D35400',
-                            'border-width': 2
-                        }
-                    },
-                    {
-                        selector: '.go-process-node',
-                        style: {
-                            'background-color': '#8E44AD',
-                            'border-color': '#6C3483',
-                            'border-width': 2,
-                            'label': 'data(label)',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'color': 'white',
-                            'font-size': '10px',
-                            'font-weight': 'bold',
-                            'width': 60,
-                            'height': 60,
-                            'shape': 'hexagon',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '50px'
-                        }
-                    },
-                    {
-                        selector: 'edge',
-                        style: {
-                            'width': 2,
-                            'opacity': 0.7
-                        }
-                    },
-                    {
-                        selector: 'edge[type="aop_relationship"]',
-                        style: {
-                            'line-color': '#3498DB',
-                            'target-arrow-color': '#3498DB',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'arrow-scale': 1.2
-                        }
-                    },
-                    {
-                        selector: 'edge[type="go_hierarchy"]',
-                        style: {
-                            'line-color': '#8E44AD',
-                            'target-arrow-color': '#8E44AD',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'arrow-scale': 1.2,
-                            'width': 2,
-                            'opacity': 0.7
-                        }
-                    }
-                ]
+                // Styles are handled by the backend AOPStyleManager
+                style: []
             });
             console.debug("Cytoscape instance created with elements:", window.cy.elements());
 
@@ -1152,7 +1064,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     'border-color': '#ff6b35',
                     'border-opacity': 1,
                     'overlay-color': '#ff6b35',
-                    'overlay-opacity': 0.3,
+                    //'overlay-opacity': 0.3,
                     'overlay-padding': '4px'
                 })
                 .selector('edge.element-selected')
@@ -1354,10 +1266,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Update gene table if genes were deleted
         const deletedGenes = deletedNodes.filter(node =>
-            node.classes.includes("uniprot-node") ||
-            node.classes.includes("ensembl-node") ||
-            node.data.type === "uniprot" ||
-            node.data.type === "ensembl"
+            node.classes.includes("protein-node") ||
+            node.classes.includes("gene-node") ||
+            node.data.type === "protein" ||
+            node.data.type === "gene"
         );
         if (deletedGenes.length > 0) {
             console.log(`Updating gene table after deleting ${deletedGenes.length} genes`);
@@ -1407,9 +1319,9 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log(`Network change detected: ${action} - ${nodeId} (type: ${nodeType}, classes: ${nodeClasses})`);
         
         // Check if it's a gene node (Ensembl)
-        if (nodeClasses.includes("ensembl-node") ||
-            nodeType === "ensembl" ||
-            nodeId.startsWith("ensembl_")) {
+        if (nodeClasses.includes("gene-node") ||
+            nodeType === "gene" ||
+            nodeId.startsWith("gene_")) {
             console.log(`Gene node ${action}: ${nodeData.label || nodeId}`);
             populateGeneTable();
         }
@@ -2041,11 +1953,11 @@ document.addEventListener("DOMContentLoaded", function () {
                                     id: target.id,
                                     label: target.label,
                                     type: 'protein',
-                                    uniprot_id: target.uniprot_id,
-                                    ensembl_id: target.ensembl_id,
+                                    protein_id: target.protein_id,
+                                    gene_id: target.gene_id,
                                     target_class: target.target_class
                                 },
-                                classes: 'uniprot-node opentargets-target'
+                                classes: 'protein-node opentargets-target'
                             });
                         }
                     });
@@ -2167,8 +2079,8 @@ document.addEventListener("DOMContentLoaded", function () {
         
         // Check if network has both genes and organs before proceeding
         const hasGenes = currentElements.some(el => 
-            el.classes && el.classes.includes('ensembl-node') || 
-            (el.data && el.data.type === 'ensembl')
+            el.classes && el.classes.includes('gene-node') || 
+            (el.data && el.data.type === 'gene')
         );
         const hasOrgans = currentElements.some(el => 
             el.classes && el.classes.includes('organ-node') || 

@@ -2,8 +2,8 @@ import requests
 import logging
 from typing import Dict, List, Any, Tuple
 
-from backend.model.parsers.builder import AOPNetworkBuilder
-from backend.model.schemas.base import AOPNetwork
+from backend.models.converters.sparql_to_model import AOPNetworkBuilder
+from backend.models.core.aop import AOPNetwork
 
 
 # Set up logger
@@ -31,16 +31,16 @@ class BgeeQueryService:
             Tuple of updated network and SPARQL query used
         """
         try:
-            ensembl_ids = []
+            gene_ids = []
             organ_ids = []
 
             # Get genes from network if needed
             if query_by in ["genes", "both"]:
-                ensembl_ids = network.get_ensembl_ids()
-                logger.info(f"Raw ensembl_ids from network: {ensembl_ids}")
+                gene_ids = network.get_gene_ids()
+                logger.info(f"Raw gene_ids from network: {gene_ids}")
                 # Format for SPARQL query
-                ensembl_ids = [f'"{eid}"' for eid in ensembl_ids if eid]
-                logger.info(f"Formatted ensembl_ids for SPARQL: {ensembl_ids}")
+                gene_ids = [f'"{eid}"' for eid in gene_ids if eid]
+                logger.info(f"Formatted gene_ids for SPARQL: {gene_ids}")
 
                 organ_ids = network.get_organ_ids()
                 logger.info(f"Raw organ_ids from network: {organ_ids}")
@@ -48,14 +48,14 @@ class BgeeQueryService:
                 organ_ids = [f'"{oid}"' for oid in organ_ids if oid]
                 logger.info(f"Formatted organ_ids for SPARQL: {organ_ids}")
 
-            if not ensembl_ids and not organ_ids:
+            if not gene_ids and not organ_ids:
                 logger.warning(f"No elements found in network for Bgee querying")
                 return network, ""
 
-            logger.info(f"Querying Bgee by {query_by}: {len(ensembl_ids)} genes, {len(organ_ids)} organs, confidence: {confidence_level}")
+            logger.info(f"Querying Bgee by {query_by}: {len(gene_ids)} genes, {len(organ_ids)} organs, confidence: {confidence_level}")
 
             # Build and execute SPARQL query
-            gene_expression_query = self._build_bgee_sparql_query(ensembl_ids, organ_ids, confidence_level)
+            gene_expression_query = self._build_bgee_sparql_query(gene_ids, organ_ids, confidence_level)
 
             # LOG THE COMPLETE QUERY
             logger.info("="*80)
@@ -83,13 +83,13 @@ class BgeeQueryService:
             # Return original network if query fails
             return network, ""
 
-    def _build_bgee_sparql_query(self, ensembl_ids: List[str], organ_ids: List[str], confidence_level: int = None) -> str:
+    def _build_bgee_sparql_query(self, gene_ids: List[str], organ_ids: List[str], confidence_level: int = None) -> str:
         """Build SPARQL query for Bgee gene expression data"""
         
         # Build genes clause
         genes_clause = ""
-        if ensembl_ids:
-            genes_clause = f"VALUES ?ensembl_id {{ {' '.join(ensembl_ids)} }}"
+        if gene_ids:
+            genes_clause = f"VALUES ?gene_id {{ {' '.join(gene_ids)} }}"
         
         # Build anatomical entities clause - use organ names directly
         anatomical_entities_clause = ""
@@ -132,13 +132,13 @@ class BgeeQueryService:
             PREFIX obo: <http://purl.obolibrary.org/obo/>
             PREFIX dcterms: <http://purl.org/dc/terms/>
 
-            SELECT ?gene_id ?ensembl_id ?anatomical_entity_id ?anatomical_entity_name ?developmental_stage_id ?developmental_stage_name ?expression_level ?confidence_level_id ?confidence_level_name ?expr
+            SELECT ?gene_idI ?gene_id ?anatomical_entity_id ?anatomical_entity_name ?developmental_stage_id ?developmental_stage_name ?expression_level ?confidence_level_id ?confidence_level_name ?expr
             WHERE {{
               {genes_clause}
               {anatomical_entities_clause}
-              ?gene_id a orth:Gene .
-              ?gene_id dcterms:identifier ?ensembl_id .
-              ?expr genex:hasSequenceUnit ?gene_id.
+              ?gene_idI a orth:Gene .
+              ?gene_idI dcterms:identifier ?gene_id .
+              ?expr genex:hasSequenceUnit ?gene_idI.
               ?expr a genex:Expression .
               {confidence_filter}
               ?expr genex:hasConfidenceLevel ?confidence_level_id .

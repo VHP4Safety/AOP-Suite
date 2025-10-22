@@ -2,8 +2,8 @@ from typing import List, Dict, Any, Optional
 import logging
 from dataclasses import dataclass
 
-from backend.model.parsers.cytoscape import CytoscapeNetworkParser
-from backend.model.cytoscape.elements import CytoscapeNode, CytoscapeEdge
+from backend.models.converters.cy_to_model import CytoscapeNetworkParser
+from backend.models.cytoscape.elements import CytoscapeNode, CytoscapeEdge
 
 logger = logging.getLogger(__name__)
 

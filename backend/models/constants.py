@@ -9,12 +9,15 @@ class NodeType(Enum):
     KE = "ke"
     AO = "ao"
     CHEMICAL = "chemical"
-    UNIPROT = "uniprot"
-    ENSEMBL = "ensembl"
+    PROTEIN = "protein"
+    GENE = "gene"
     ORGAN = "organ"
-    COMPONENT_PROCESS = "component_process"
-    COMPONENT_OBJECT = "component_object"
+    COMPONENT_PROCESS = "component_process" # TODO get actual types
+    COMPONENT_OBJECT = "component_object" # If no other type is found
     CUSTOM = "custom"
+    CELL = "cell"
+    QUALITY = "quality"
+    CELLULAR_COMPONENT = "cellular_component"
 
 
 class EdgeType(Enum):
@@ -41,6 +44,8 @@ class EdgeType(Enum):
     MORPHOLOGICAL_CHANGE = "morphological change"
     PATHOLOGICAL = "pathological"
     ARRESTED = "arrested"
+    ASSOCIATED_WITH = "involves"
+    HAS_OBJECT = "has object"
 
     @classmethod
     def get_component_actions(cls) -> Set[str]:

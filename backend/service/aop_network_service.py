@@ -8,21 +8,20 @@ import os
 from backend.query.aopwikirdf import aop_query_service
 from backend.query.bgee import bgee_query_service
 
-from backend.model.schemas.base import AOPNetwork, AOPKeyEvent, AOPInfo
+from backend.models.core.aop import AOPNetwork, AOPKeyEvent, AOPInfo
 
-from backend.model.constants import NodeType
+from backend.models.constants import NodeType
 
-from backend.model.parsers.cytoscape import CytoscapeNetworkParser
+from backend.models.converters.cy_to_model import CytoscapeNetworkParser
 
-from backend.model.table_builders.gene import GeneTableBuilder, GeneExpressionTableBuilder
-from backend.model.table_builders.aop import AOPTableBuilder
-from backend.model.table_builders.compound import CompoundTableBuilder
-from backend.model.table_builders.component import ComponentTableBuilder
-from backend.model.parsers.cytoscape import CytoscapeNetworkParser
+from backend.models.core.data_tables.gene import GeneTableBuilder, GeneExpressionTableBuilder
+from backend.models.core.data_tables.aop import AOPTableBuilder
+from backend.models.core.data_tables.compound import CompoundTableBuilder
+from backend.models.core.data_tables.component import ComponentTableBuilder
 
 logger = logging.getLogger(__name__)
 
-NETWORK_STATES_DIR = os.path.join(os.path.dirname(__file__), "../saved_networks")
+NETWORK_STATES_DIR = os.path.join(os.path.dirname(__file__), "../../saved_networks")
 
 
 class AOPNetworkService:
@@ -145,20 +144,20 @@ class AOPNetworkService:
             temp_network = AOPNetwork()
 
             # Add both genes and organs (required for "both" query)
-            ensembl_nodes = parser.get_ensembl_nodes()
-            organ_nodes = parser.get_organ_nodes()
+            gene_nodes = parser.get_nodes_by_type(NodeType.GENE)
+            organ_nodes = parser.get_nodes_by_type(NodeType.ORGAN)
 
-            logger.info(f"Found {len(ensembl_nodes)} Ensembl nodes and {len(organ_nodes)} organ nodes")
+            logger.info(f"Found {len(gene_nodes)} Ensembl nodes and {len(organ_nodes)} organ nodes")
 
             # Validate that we have both genes and organs
-            if len(ensembl_nodes) == 0 and len(organ_nodes) == 0:
+            if len(gene_nodes) == 0 and len(organ_nodes) == 0:
                 return {
                     "expression_data": [],
                     "expression_elements": [],
                     "sparql_query": "# No genes or organs found in network",
                     "message": "Network must contain both genes (Ensembl nodes) and organs to query Bgee"
                 }, 200
-            elif len(ensembl_nodes) == 0:
+            elif len(gene_nodes) == 0:
                 return {
                     "expression_data": [],
                     "expression_elements": [],
@@ -174,7 +173,7 @@ class AOPNetworkService:
                 }, 200
 
             # Add nodes to temp network
-            temp_network.node_list.extend(ensembl_nodes)
+            temp_network.node_list.extend(gene_nodes)
             temp_network.node_list.extend(organ_nodes)
 
             # Query Bgee directly

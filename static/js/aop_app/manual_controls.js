@@ -273,10 +273,10 @@ class ManualControls {
                 } else if (nodeType === 'chemical') {
                     nodeData.data.compound_name = label;
                     nodeData.data.chemical_label = label;
-                } else if (nodeType === 'uniprot') {
-                    nodeData.data.uniprot_id = finalId.replace('uniprot_', '');
-                } else if (nodeType === 'ensembl') {
-                    nodeData.data.ensembl_id = finalId.replace('ensembl_', '');
+                } else if (nodeType === 'protein') {
+                    nodeData.data.protein_id = finalId.replace('protein_', '');
+                } else if (nodeType === 'gene') {
+                    nodeData.data.gene_id = finalId.replace('gene_', '');
                 } else if (nodeType === 'organ') {
                     nodeData.data.organ_name = label;
                 }
@@ -336,8 +336,8 @@ class ManualControls {
             'mie': 'mie-node',
             'ao': 'ao-node',
             'chemical': 'chemical-node',
-            'uniprot': 'uniprot-node',
-            'ensembl': 'ensembl-node',
+            'protein': 'protein-node',
+            'gene': 'gene-node',
             'component_process': 'process-node',
             'component_object': 'object-node',
             'organ': 'organ-node',
