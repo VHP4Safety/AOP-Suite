@@ -1,4 +1,4 @@
-from backend.models.converters.cy_to_model import CytoscapeNetworkParser
+from backend.models.converters.cy_to_aop import CytoscapeNetworkParser
 from backend.models.cytoscape.elements import CytoscapeNode
 import logging
 from typing import List, Dict

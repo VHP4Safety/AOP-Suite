@@ -13,7 +13,7 @@ class NodeType(Enum):
     GENE = "gene"
     ORGAN = "organ"
     COMPONENT_PROCESS = "component_process" # TODO get actual types
-    COMPONENT_OBJECT = "component_object" # If no other type is found
+    COMPONENT_OBJECT = "component_object" # To group component object types
     CUSTOM = "custom"
     CELL = "cell"
     QUALITY = "quality"

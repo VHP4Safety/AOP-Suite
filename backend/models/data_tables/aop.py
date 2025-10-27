@@ -2,7 +2,7 @@ from typing import List, Dict, Any, Optional
 import logging
 from dataclasses import dataclass
 
-from backend.models.converters.cy_to_model import CytoscapeNetworkParser
+from backend.models.converters.cy_to_aop import CytoscapeNetworkParser
 from backend.models.cytoscape.elements import CytoscapeNode, CytoscapeEdge
 
 logger = logging.getLogger(__name__)
@@ -12,9 +12,9 @@ logger = logging.getLogger(__name__)
 class AOPRelationshipEntry:
     """Represents an AOP relationship entry for the table"""
 
-    source_node: "CytoscapeNode"
-    target_node: "CytoscapeNode"
-    edge: "CytoscapeEdge"
+    source_node: CytoscapeNode
+    target_node: CytoscapeNode
+    edge: CytoscapeEdge
 
     def to_table_entry(self) -> Dict[str, str]:
         """Convert to AOP table entry format"""

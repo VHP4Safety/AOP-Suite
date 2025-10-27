@@ -16,7 +16,7 @@ from backend.models.core.associations import (
 from backend.models.cytoscape.styles import AOPStyleManager
 from backend.models.cytoscape.elements import CytoscapeNode, CytoscapeEdge
 from backend.models.constants import NodeType, EdgeType
-from backend.models.converters.cy_to_model import CytoscapeNetworkParser
+from backend.models.converters.cy_to_aop import CytoscapeNetworkParser
 
 logger = logging.getLogger(__name__)
 

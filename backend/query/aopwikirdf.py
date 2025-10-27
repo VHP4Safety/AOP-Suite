@@ -3,7 +3,7 @@ import logging
 from typing import Dict, Any
 
 
-from backend.models.converters.sparql_to_model import AOPNetworkBuilder
+from backend.models.converters.sparql_to_aop import AOPNetworkBuilder
 
 from backend.models.core.aop import AOPNetwork
 

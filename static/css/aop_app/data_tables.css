@@ -1,0 +1,148 @@
+/* Component Table Styles */
+.action-process-item {
+    margin-bottom: 8px;
+    padding: 6px;
+    background-color: #f8f9fa;
+    border-left: 3px solid #007bff;
+    border-radius: 4px;
+}
+
+.action-process-item:last-child {
+    margin-bottom: 0;
+}
+
+.action-label {
+    font-weight: bold;
+    color: #495057;
+    margin-bottom: 2px;
+}
+
+.process-name {
+    font-size: 0.9em;
+    color: #6c757d;
+}
+
+.process-link {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.process-link:hover {
+    color: #0056b3;
+    text-decoration: underline;
+}
+
+.process-text {
+    color: #495057;
+}
+
+.organ-item {
+    margin-bottom: 6px;
+    padding: 4px 8px;
+    background-color: #fff3cd;
+    border-left: 3px solid #ffc107;
+    border-radius: 4px;
+}
+
+.organ-item:last-child {
+    margin-bottom: 0;
+}
+
+.organ-link {
+    color: #856404;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.organ-link:hover {
+    color: #533f03;
+    text-decoration: underline;
+}
+
+.organ-text {
+    color: #856404;
+    font-weight: 500;
+}
+
+/*.ke-info {
+    padding: 4px 0;
+}
+
+.ke-link {
+    color: #28a745;
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.ke-link:hover {
+    color: #1e7e34;
+    text-decoration: underline;
+}
+
+.ke-name {
+    font-size: 0.9em;
+    color: #6c757d;
+    margin-top: 2px;
+    font-style: italic;
+}
+*/
+.counts-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.count-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.count-item .badge {
+    min-width: 24px;
+    text-align: center;
+}
+
+.count-item small {
+    color: #6c757d;
+    font-size: 0.8em;
+}
+
+/* Component Table DataTable customizations */
+#componentTable {
+    font-size: 0.9em;
+}
+
+#componentTable td {
+    vertical-align: top;
+    padding: 12px 8px;
+}
+
+#componentTable tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#componentTable tbody tr:hover {
+    background-color: #f8f9fa !important;
+}
+
+#componentTable tbody tr.highlighted {
+    background-color: #e3f2fd !important;
+    border-left: 4px solid #2196f3 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .action-process-item,
+    .organ-item {
+        margin-bottom: 4px;
+        padding: 4px;
+        font-size: 0.85em;
+    }
+    
+    .counts-info {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+}

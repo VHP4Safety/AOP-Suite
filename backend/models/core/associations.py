@@ -170,7 +170,7 @@ class ComponentAssociation(BaseAssociation):
                     "process_name": self.process_name,
                     "process_id": process,
                 },
-                "classes": "process-node component-node",
+                "classes": NodeType.COMPONENT_PROCESS.value,
             }
         )
 
@@ -178,6 +178,7 @@ class ComponentAssociation(BaseAssociation):
         edge_label = self.action if self.action in EdgeType.get_component_actions() else EdgeType.HAS_PROCESS.value
         edge_type = EdgeType.HAS_PROCESS.value  # Always use has_process as the type
 
+        # KE -> Process edge (action)
         elements.append(
             {
                 "data": {
@@ -201,27 +202,35 @@ class ComponentAssociation(BaseAssociation):
                        ["FMA", "UBERON"])
             ):
                 object_node_type = NodeType.ORGAN.value
-                object_classes = NodeType.ORGAN.value
+                object_classes = f"{NodeType.ORGAN.value} {NodeType.COMPONENT_OBJECT.value}"
             elif ("CellTypeContext" in self.object_type
                   or any(substring in object for substring in 
                          ["CL", "EFO"])
                   or self.object_name in ["cell", "mitochondrion"]):
                 object_node_type = NodeType.CELL.value  
-                object_classes = "cell-node"
+                object_classes = (
+                    f"{NodeType.CELL.value} {NodeType.COMPONENT_OBJECT.value}"
+                )
             elif (self.object.endswith("PATO_0001241")
                   or any(substring in object for substring in 
                          ["PR"])):
                 object_node_type = NodeType.PROTEIN.value
-                object_classes = "protein-node"
+                object_classes = (
+                    f"{NodeType.PROTEIN.value} {NodeType.COMPONENT_OBJECT.value}"
+                )
             elif any(
                 substring in object for substring in ["GO"]
             ):
                 object_node_type = NodeType.CELLULAR_COMPONENT.value
-                object_classes = "cellular-component-node"
+                object_classes = (
+                    f"{NodeType.CELLULAR_COMPONENT.value} {NodeType.COMPONENT_OBJECT.value}"
+                )
             else:
                 # Default to component object type
                 object_node_type = NodeType.COMPONENT_OBJECT.value
-                object_classes = "object-node component-node"
+                object_classes = (
+                    f"{NodeType.COMPONENT_OBJECT.value}"
+                )
 
             elements.append(
                 {
@@ -237,11 +246,12 @@ class ComponentAssociation(BaseAssociation):
                 }
             )
 
+            # NEW: KE -> Object edge instead of Process -> Object
             elements.append(
                 {
                     "data": {
-                        "id": f"{ke}_{process_node_id}_{object_node_id}",
-                        "source": process_node_id,
+                        "id": f"{ke}_{object_node_id}",
+                        "source": self.ke_uri,
                         "target": object_node_id,
                         "label": EdgeType.INVOLVES.value,
                         "type": EdgeType.INVOLVES.value,
@@ -273,6 +283,7 @@ class ComponentAssociation(BaseAssociation):
             "action": self.action if self.action else "N/A",
             "node_id": f"process_{process_id}",
         }
+
 
 @dataclass
 class CompoundAssociation(BaseAssociation):

@@ -7,47 +7,23 @@ logger = logging.getLogger(__name__)
 # Global registries to track existing nodes and edges
 _existing_nodes: Dict[str, "CytoscapeNode"] = {}
 _existing_node_labels: Dict[str, "CytoscapeNode"] = {}
-_existing_edges: Dict[str, "CytoscapeEdge"] = {}
 
 class CytoscapeEdge:
     """Represents an edge in Cytoscape format"""
 
-    def __new__(cls, id: str, source: str, target: str, label: str, properties: Dict[str, Any]):
-        """Check if edge already exists before creating new instance"""
-        logger.info(f"CytoscapeEdge.__new__ called with id: {id}")
-        
-        # Check by ID only
-        if id in _existing_edges:
-            existing_edge = _existing_edges[id]
-            logger.info(f"Edge {id} already exists, returning existing edge with label: {existing_edge.label}")
-            return existing_edge
-
-        # Create new instance
-        logger.info(f"Creating new CytoscapeEdge with id: {id}")
-        instance = object.__new__(cls)
-        return instance
-
     def __init__(self, id: str, source: str, target: str, label: str, properties: Dict[str, Any]):
-        """Initialize the edge if it's a new instance"""
-        # Only initialize if this is a new instance (not already in registry)
-        if hasattr(self, 'id'):
-            return  # Already initialized
-            
+        """Initialize the edge"""
         self.id = id
         self.source = source
         self.target = target
         self.label = label
         self.properties = properties
-        
-        # Register this edge in the global registry
-        _existing_edges[self.id] = self
-        logger.info(f"Registered new edge {id} in registry")
 
     @classmethod
     def from_cytoscape_element(
         cls, element: Dict[str, Any]
     ) -> Optional["CytoscapeEdge"]:
-        """Create an edge from a Cytoscape element, or return existing one if ID exists"""
+        """Create an edge from a Cytoscape element"""
         if element.get("group") != "edges":
             return None
 
@@ -63,7 +39,6 @@ class CytoscapeEdge:
         if not edge_id:
             edge_id = f"{source}_{target}"
 
-        # Use __new__ to handle existing instances
         edge = cls(
             id=edge_id,
             source=source,
@@ -73,22 +48,6 @@ class CytoscapeEdge:
         )
 
         return edge
-
-    @classmethod
-    def get_existing_edge(cls, edge_id: str) -> Optional["CytoscapeEdge"]:
-        """Get an existing edge by ID"""
-        return _existing_edges.get(edge_id)
-
-    @classmethod
-    def edge_exists(cls, edge_id: str) -> bool:
-        """Check if an edge with the given ID exists"""
-        return edge_id in _existing_edges
-
-    @classmethod
-    def clear_registry(cls):
-        """Clear the edge registry (useful for testing)"""
-        global _existing_edges
-        _existing_edges.clear()
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format for Cytoscape"""
@@ -124,7 +83,7 @@ class CytoscapeNode:
         """Check if node already exists before creating new instance"""
         logger.info(f"CytoscapeNode.__new__ called with id: {id}, label: {label}")
         
-        # First check if node with same label already exists (case-insensitive)
+        # First check if node with same label already exists
         if label and label.lower() in _existing_node_labels:
             existing_node = _existing_node_labels[label.lower()]
             logger.info(f"Node with label '{label}' already exists in __new__, returning existing node with id: {existing_node.id}")
@@ -140,7 +99,7 @@ class CytoscapeNode:
         # Then check by ID
         if id in _existing_nodes:
             existing_node = _existing_nodes[id]
-            logger.info(f"Node {id} already exists in __new__, returning existing node with label: {existing_node.label}")
+            logger.info(f"Node {id} already exists, returning existing node with label: {existing_node.label}")
             
             # Optionally merge additional properties from the new element
             new_properties = {k: v for k, v in properties.items() if k not in ['id', 'label', 'type']}

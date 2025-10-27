@@ -2,7 +2,7 @@ from typing import List, Dict, Optional
 import logging
 from dataclasses import dataclass, field
 
-from backend.models.converters.cy_to_model import CytoscapeNetworkParser
+from backend.models.converters.cy_to_aop import CytoscapeNetworkParser
 from backend.models.cytoscape.elements import CytoscapeNode, CytoscapeEdge
 from backend.models.constants import NodeType, EdgeType
 

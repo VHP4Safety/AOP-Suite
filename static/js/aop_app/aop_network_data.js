@@ -136,12 +136,12 @@ class AOPNetworkDataManager {
             if (result.success && result.sparql_query && window.historyTableManager && result.elements.elements) {
                 window.historyTableManager.addHistoryEntry('aop_network', 'AOP-Wiki RDF', result.sparql_query, null, result.elements.elements,);
             }            
-            // Handle the backend response to ghet data
+            // Handle the backend response to get data
             if (result.success && result.elements) {
                 // Extract the nested elements structure
                 const networkData = result.elements;
 
-                // Check if we have the expected structure
+                // Check structure
                 if (networkData.elements && Array.isArray(networkData.elements)) {
                     console.log(`Received ${networkData.elements.length} network elements`);
 
@@ -156,10 +156,9 @@ class AOPNetworkDataManager {
 
                     // Create or update the network
                     if (window.cy) {
-                        // Clear existing network and add new elements
-                        console.log('Updating existing network');
-                        window.cy.elements().remove();
-                        window.cy.add(networkData.elements);
+                        // Add new elements to existing network instead of clearing
+                        console.log('Adding elements to existing network');
+                        this.addElementsToNetwork(networkData.elements);
 
                         // Apply styles and layout from backend
                         if (window.positionNodes) {

@@ -12,7 +12,7 @@ class AOPStyleManager:
         self.base_styles = self._create_base_styles()
 
     def _create_base_styles(self) -> List[Dict[str, Any]]:
-        """Create the base Cytoscape styles (without font size multipliers)"""
+        """Create the base Cytoscape styles"""
         return [
             # Default node styles
             {
@@ -20,7 +20,7 @@ class AOPStyleManager:
                 "style": {
                     "width": "350px",
                     "height": "350px",
-                    "background-color": "#ffff99",  # Default yellow
+                    "background-color": "#ffff99",
                     "label": "data(label)",
                     "text-wrap": "wrap",
                     "text-max-width": "235px",

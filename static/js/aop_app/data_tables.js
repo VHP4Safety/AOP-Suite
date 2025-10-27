@@ -940,7 +940,7 @@ class GeneExpressionTableManager extends DataTableManager {
     getVisibleNodeIds() {
         const visibleNodeIds = new Set();
         this.filteredData.forEach(row => {
-            if (row.gene_id && row.gene_id !== 'N/A') visibleNodeIds.add(`gene_${row.gene_id}`);
+            if (row.gene_id && row.gene_id !== 'N/A') visibleNodeIds.add(`ensembl_${row.gene_id}`);
             if (row.organ_id && row.organ_id !== 'N/A') visibleNodeIds.add(`organ_${row.organ_id}`);
         });
         return visibleNodeIds;
@@ -982,7 +982,7 @@ class GeneExpressionTableManager extends DataTableManager {
                     data-expression-level="${row.expression_level}"
                     data-row-index="${index}"
                     style="cursor: pointer;">
-                    <td class="gene-expression-cell clickable-cell" data-node-id="gene_${row.gene_id}" style="cursor: pointer;">
+                    <td class="gene-expression-cell clickable-cell" data-node-id="ensembl_${row.gene_id}" style="cursor: pointer;">
                         <strong>${this.highlightMatch(row.gene_symbol || row.gene_id)}</strong>
                         <br><small class="text-muted">${row.gene_id}</small>
                     </td>
@@ -1119,7 +1119,7 @@ class GeneExpressionTableManager extends DataTableManager {
                 if (window.cy) {
                     window.cy.elements().removeClass('highlighted');
                     
-                    const geneNode = window.cy.getElementById(`gene_${geneId}`);
+                    const geneNode = window.cy.getElementById(`ensembl_${geneId}`);
                     const organNode = organId ? window.cy.getElementById(`organ_${organId}`) : null;
                     
                     if (geneNode.length > 0) {
@@ -1249,8 +1249,8 @@ class GeneTableManager extends DataTableManager {
     getVisibleNodeIds() {
         const visibleNodeIds = new Set();
         this.filteredData.forEach(row => {
-            if (row.gene_id && row.gene_id !== 'N/A') visibleNodeIds.add(row.gene_id);
-            if (row.protein_node_id && row.protein_node_id !== 'N/A') visibleNodeIds.add(row.protein_node_id);
+            if (row.ensembl_id && row.ensembl_id !== 'N/A') visibleNodeIds.add(row.ensembl_id);
+            if (row.uniprot_node_id && row.uniprot_node_id !== 'N/A') visibleNodeIds.add(row.uniprot_node_id);
         });
         return visibleNodeIds;
     }
@@ -1259,9 +1259,9 @@ class GeneTableManager extends DataTableManager {
         const searchFields = [
             row.gene,
             row.protein,
-            row.protein_id,
-            row.gene_id,
-            row.protein_node_id
+            row.uniprot_id,
+            row.ensembl_id,
+            row.uniprot_node_id
         ].join(' ').toLowerCase();
         
         return searchFields.includes(this.filterText);
@@ -1344,7 +1344,7 @@ class GeneTableManager extends DataTableManager {
 
         this.filteredData.forEach((gene, index) => {
             const proteinDisplay = gene.protein !== "N/A" ?
-                `<a href="https://www.protein.org/proteinkb/${gene.protein_id}" target="_blank">${this.highlightMatch(gene.protein)}</a>` :
+                `<a href="https://www.uniprot.org/uniprotkb/${gene.uniprot_id}" target="_blank">${this.highlightMatch(gene.protein)}</a>` :
                 "N/A";
 
             const geneDisplay = gene.gene !== "N/A" ?
@@ -1357,15 +1357,15 @@ class GeneTableManager extends DataTableManager {
 
             html += `
                 <tr data-gene="${gene.gene}" 
-                    data-protein-id="${gene.protein_id}" 
-                    data-gene-id="${gene.gene_id}"
-                    data-protein-node-id="${gene.protein_node_id}"
+                    data-uniprot-id="${gene.uniprot_id}" 
+                    data-ensembl-id="${gene.ensembl_id}"
+                    data-uniprot-node-id="${gene.uniprot_node_id}"
                     data-row-index="${index}"
                     style="cursor: pointer;">
-                    <td class="gene-cell clickable-cell" data-node-id="${gene.gene_id}" style="cursor: pointer;">
+                    <td class="gene-cell clickable-cell" data-node-id="${gene.ensembl_id}" style="cursor: pointer;">
                         ${geneDisplay}
                     </td>
-                    <td class="protein-cell clickable-cell" data-node-id="${gene.protein_node_id}" style="cursor: pointer;">
+                    <td class="protein-cell clickable-cell" data-node-id="${gene.uniprot_node_id}" style="cursor: pointer;">
                         ${proteinDisplay}
                     </td>
                     <td class="expression-cell" title="${expressionOrgans}">
@@ -1505,8 +1505,8 @@ class GeneTableManager extends DataTableManager {
                 if (e.target.closest('a') || e.target.closest('.gene-cell, .protein-cell')) return;
 
                 const geneSymbol = row.dataset.gene;
-                const proteinId = row.dataset.proteinId;
-                const geneId = row.dataset.geneId;
+                const uniprotId = row.dataset.uniprotId;
+                const ensemblId = row.dataset.ensemblId;
                 
                 if (!geneSymbol) return;
                 
@@ -1523,16 +1523,16 @@ class GeneTableManager extends DataTableManager {
                 if (window.cy) {
                     window.cy.elements().removeClass('highlighted');
                     
-                    const geneNode = window.cy.getElementById(geneId);
-                    const proteinNode = window.cy.$(`[protein_id="${proteinId}"]`);
+                    const ensemblNode = window.cy.getElementById(ensemblId);
+                    const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
                     
-                    if (geneNode.length > 0) {
-                        geneNode.addClass('highlighted');
-                        window.cy.center(geneNode);
+                    if (ensemblNode.length > 0) {
+                        ensemblNode.addClass('highlighted');
+                        window.cy.center(ensemblNode);
                     }
                     
-                    if (proteinNode.length > 0) {
-                        proteinNode.addClass('highlighted');
+                    if (uniprotNode.length > 0) {
+                        uniprotNode.addClass('highlighted');
                     }
                 }
             });
@@ -2834,94 +2834,129 @@ class ComponentTableManager extends DataTableManager {
         }, delay);
     }
 
-    generateComponentRowHTML(row, index) {
-        // Use KE label from network if available
-        let keLabel = row.ke_name;
-        const cyNode = (window.cy && row.ke_id) ? window.cy.getElementById(row.ke_id) : null;
-        if (cyNode && cyNode.length > 0) {
-            const lbl = cyNode.data('label') || cyNode.data('name');
-            if (lbl) keLabel = lbl;
+    generateTableHTML() {
+        if (!this.filteredData || this.filteredData.length === 0) {
+            return '<tr><td colspan="4" style="text-align: center; padding: 30px; color: #6c757d; font-style: italic;">No component data available. Query components to populate with Key Event processes and organs.</td></tr>';
         }
 
-        // Determine KE type for badge (mie / ao / ke)
-        const keType = this._getKEType(row.ke_id);
-        const keTypeClass = `node-type-${keType}`;
+        const headers = ['Key Event', 'Action - Processes', 'Organs', 'Counts'];
 
-        const keNumberBlock = row.ke_number
-            ? `<small class="ke-number text-muted d-block">#${row.ke_number}</small>`
-            : '';
+        let html = '<thead><tr>';
+        headers.forEach(header => {
+            html += `<th>${header}</th>`;
+        });
+        html += '</tr></thead><tbody>';
 
-        const keLink = `
-            <span class="node-type-badge ${keTypeClass}">${keType.toUpperCase()}</span>
-            <a href="https://identifiers.org/aop.events/${row.ke_number || ''}" 
-               target="_blank" 
-               class="ke-link" 
-               title="${row.ke_id}">${this.highlightMatch(keLabel)}</a>
-            ${keNumberBlock}
-        `;
+        this.filteredData.forEach((row, index) => {
+            // Key Event column
+            const keNumber = row.ke_number || 'N/A';
+            const keName = row.ke_name || 'N/A';
+            const keUri = row.ke_uri || '#';
 
-        const processLink = (row.process_iri && row.process_iri !== 'N/A')
-            ? `<a href="${row.process_iri}" target="_blank" class="process-link">${this.highlightMatch(row.process_name)}</a>`
-            : this.highlightMatch(row.process_name || 'N/A');
+            const keDisplay = `
+                <div class="ke-info">
+                    <strong><a href="${keUri}" target="_blank" class="ke-link">KE ${keNumber}</a></strong>
+                    <div class="ke-name">${this.highlightMatch(keName)}</div>
+                </div>
+            `;
 
-        const actionDisplay = row.action && row.action !== 'N/A'
-            ? `<span class="action-text">${this.highlightMatch(row.action)}</span>`
-            : '<span class="text-muted">N/A</span>';
+            // Action-Processes column
+            const actionProcesses = row.action_processes || [];
+            const actionProcessDisplay = actionProcesses.length === 0
+                ? '<span class="text-muted">No processes</span>'
+                : actionProcesses.map(ap => {
+                    const processName = ap.process_name || 'N/A';
+                    const action = ap.action || 'N/A';
+                    const processIri = ap.process_iri || '#';
 
-        const objectDisplay = (row.object_name && row.object_name !== 'N/A')
-            ? (row.object_iri && row.object_iri !== 'N/A'
-                ? `<a href="${row.object_iri}" target="_blank" class="object-link">${this.highlightMatch(row.object_name)}</a>`
-                : `<span class="object-text">${this.highlightMatch(row.object_name)}</span>`)
-            : '<span class="text-muted">N/A</span>';
+                    return `
+                        <div class="action-process-item">
+                            <div class="action-label">
+                                <strong>${this.highlightMatch(action)}</strong>
+                            </div>
+                            <div class="process-name">
+                                ${processIri !== '#' && processIri !== 'N/A'
+                            ? `<a href="${processIri}" target="_blank" class="process-link">${this.highlightMatch(processName)}</a>`
+                            : `<span class="process-text">${this.highlightMatch(processName)}</span>`
+                        }
+                            </div>
+                        </div>
+                    `;
+                }).join('');
 
-        return `
-            <tr data-ke-id="${row.ke_id}"
-                data-process-id="${row.process_id}"
-                data-object-id="${row.object_id}"
-                data-node-id="${row.node_id}"
-                data-row-index="${index}"
-                class="component-row clickable-row"
-                style="cursor: pointer;">
-                <td class="ke-cell">
-                    <div class="ke-content">
-                        ${keLink}
+            // Organs column
+            const organs = row.organs || [];
+            const organsDisplay = organs.length === 0
+                ? '<span class="text-muted">No organs</span>'
+                : organs.map(organ => {
+                    const organName = organ.organ_name || 'N/A';
+                    const organIri = organ.organ_iri || '#';
+
+                    return `
+                        <div class="organ-item">
+                            ${organIri !== '#' && organIri !== 'N/A'
+                            ? `<a href="${organIri}" target="_blank" class="organ-link">${this.highlightMatch(organName)}</a>`
+                            : `<span class="organ-text">${this.highlightMatch(organName)}</span>`
+                        }
+                        </div>
+                    `;
+                }).join('');
+
+            // Counts column
+            const processCount = row.action_process_count || 0;
+            const organCount = row.organ_count || 0;
+            const countsDisplay = `
+                <div class="counts-info">
+                    <div class="count-item">
+                        <span class="badge badge-primary">${processCount}</span> 
+                        <small>Processes</small>
                     </div>
-                </td>
-                <td class="process-cell" data-node-id="${row.node_id}">
-                    <div class="process-content">
-                        ${processLink}
+                    <div class="count-item">
+                        <span class="badge badge-secondary">${organCount}</span> 
+                        <small>Organs</small>
                     </div>
-                </td>
-                <td class="action-cell">
-                    <div class="action-content">
-                        ${actionDisplay}
-                    </div>
-                </td>
-                <td class="object-cell">
-                    <div class="object-content">
-                        ${objectDisplay}
-                    </div>
-                </td>
-            </tr>
-        `;
-    }
+                </div>
+            `;
 
-    _getKEType(keId) {
-        if (!window.cy || !keId) return 'ke';
-        const n = window.cy.getElementById(keId);
-        if (n && n.length > 0) {
-            const d = n.data();
-            if (d.is_mie || d.type === 'mie') return 'mie';
-            if (d.is_ao || d.type === 'ao') return 'ao';
-        }
-        return 'ke';
+            html += `
+                <tr data-ke-id="${row.ke_id}" 
+                    data-ke-number="${row.ke_number}"
+                    data-row-index="${index}"
+                    style="cursor: pointer;">
+                    <td>${keDisplay}</td>
+                    <td>${actionProcessDisplay}</td>
+                    <td>${organsDisplay}</td>
+                    <td>${countsDisplay}</td>
+                </tr>
+            `;
+        });
+
+        html += '</tbody>';
+
+        // Add summary
+        const totalRows = this.currentData.length;
+        const filteredRows = this.filteredData.length;
+
+        html += `<tfoot><tr><td colspan="4" class="text-muted small">
+            Showing ${filteredRows} of ${totalRows} key events
+            ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
+        </td></tr></tfoot>`;
+
+        return html;
     }
 
     renderTable() {
-        const tableBody = $("#component_table tbody");
-        const table = document.querySelector('#component_table');
+        const tableContainer = document.querySelector('#component_table')?.closest('.table-responsive') ||
+            document.querySelector('#component_table')?.parentElement ||
+            document.querySelector(this.containerSelector);
 
-        if (!tableBody.length || !table) {
+        if (!tableContainer) {
+            console.warn("Component table container not found");
+            return;
+        }
+
+        let table = document.querySelector('#component_table');
+        if (!table) {
             console.warn("Component table not found");
             return;
         }
@@ -2931,144 +2966,59 @@ class ComponentTableManager extends DataTableManager {
             return;
         }
 
-        // Clear the entire table body first
-        tableBody.empty();
-
-        this.filteredData.forEach((row, index) => {
-            const rowHTML = this.generateComponentRowHTML(row, index);
-            tableBody.append(rowHTML);
-        });
-
-        // Add summary to tfoot
-        const tfoot = table.querySelector('tfoot') || table.createTFoot();
-        const totalRows = this.currentData.length;
-        const filteredRows = this.filteredData.length;
-
-        tfoot.innerHTML = `
-            <tr>
-                <td colspan="4" class="text-muted small">
-                    Showing ${filteredRows} of ${totalRows} components
-                    ${this.filterText ? ` - Filtered by: "${this.filterText}"` : ''}
-                </td>
-            </tr>
-        `;
-
+        const html = this.generateTableHTML();
+        table.innerHTML = html;
         this.setupComponentTableEventHandlers();
-        console.log(`Component table updated with ${this.filteredData.length} components.`);
     }
 
-    setupTableStyles() {
-        super.setupTableStyles();
+    setupComponentTableEventHandlers() {
+        const table = document.querySelector('#component_table');
+        if (!table) return;
 
-        if (!document.querySelector('#component-table-styles')) {
-            const styles = document.createElement('style');
-            styles.id = 'component-table-styles';
-            styles.textContent = `
-                .component-table-container {
-                    max-height: 600px;
-                    overflow-y: auto;
-                }
-                
-                .node-type-badge {
-                    display: inline-block;
-                    padding: 2px 6px;
-                    border-radius: 4px;
-                    font-size: 0.8em;
-                    font-weight: 500;
-                    margin-right: 4px;
-                }
-                
-                .node-type-mie { background-color: #ccffcc; color: rgb(139, 192, 155); }
-                .node-type-ao { background-color: #ffe6e6; color: #c62828; }
-                .node-type-ke { background-color: #ffff99; color: rgb(180, 180, 56); }
-                .node-type-unknown { background-color: #f5f5f5; color: #666; }
+        // Remove existing listeners
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
 
-                .ke-link, .process-link, .object-link {
-                    color: #007bff;
-                    text-decoration: none;
-                    font-weight: 500;
-                }
+        const newTbody = tbody.cloneNode(true);
+        tbody.parentNode.replaceChild(newTbody, tbody);
 
-                .ke-link:hover, .process-link:hover, .object-link:hover {
-                    text-decoration: underline;
+        // Row click handlers for network highlighting
+        newTbody.querySelectorAll('tr').forEach(row => {
+            row.addEventListener('click', (e) => {
+                // Don't trigger if clicking on links
+                if (e.target.closest('a')) return;
+
+                const keId = row.dataset.keId;
+                const rowIndex = row.dataset.rowIndex;
+
+                if (!keId) return;
+
+                // Selection handling
+                if (e.ctrlKey || e.metaKey) {
+                    this.toggleRowSelection(row, { ke: keId });
+                } else {
+                    this.clearTableSelection();
+                    row.classList.add('table-selected');
+                    this.selectedRows.add(parseInt(rowIndex));
                 }
 
-                .ke-number {
-                    font-size: 0.75em;
-                    font-weight: 500;
-                    margin-top: 2px;
-                    opacity: 0.7;
-                }
+                // Network highlighting
+                if (window.cy) {
+                    const keNode = window.cy.getElementById(keId);
+                    if (keNode.length) {
+                        // Highlight KE and connected nodes
+                        window.cy.elements().removeClass('highlighted');
+                        keNode.addClass('highlighted');
+                        keNode.connectedEdges().addClass('highlighted');
+                        keNode.neighborhood().addClass('highlighted');
 
-                .action-text, .object-text {
-                    font-weight: 500;
-                    color: #495057;
+                        // Center on the KE node
+                        window.cy.center(keNode);
+                        window.cy.fit(keNode.closedNeighborhood(), 100);
+                    }
                 }
-
-                .action-text {
-                    font-style: italic;
-                    color: #6c757d;
-                }
-
-                #component_table thead th {
-                    background-color: #f8f9fa;
-                    font-weight: 600;
-                    color: #495057;
-                    border-bottom: 2px solid #dee2e6;
-                }
-
-                #component_table tbody tr {
-                    cursor: pointer;
-                    transition: background-color 0.2s ease;
-                }
-
-                #component_table tbody tr:hover {
-                    background-color: #f8f9fa !important;
-                }
-
-                #component_table tbody td {
-                    padding: 8px 12px;
-                    vertical-align: middle;
-                }
-
-                .ke-cell {
-                    font-weight: 600;
-                    color: #155724;
-                }
-
-                .process-cell, .object-cell {
-                    transition: all 0.2s ease;
-                    padding: 8px 12px;
-                    border-radius: 4px;
-                }
-
-                .process-cell:hover, .object-cell:hover {
-                    background-color: #e7f3ff !important;
-                    transform: translateY(-1px);
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-
-                .clickable-row {
-                    transition: all 0.2s ease;
-                }
-
-                .clickable-row:hover {
-                    background-color: #f8f9fa !important;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                }
-
-                .table-selected {
-                    background-color: #e3f2fd !important;
-                    border-left: 4px solid #2196F3 !important;
-                }
-
-                .missing-label {
-                    color: #dc3545;
-                    font-style: italic;
-                }
-            `;
-            document.head.appendChild(styles);
-        }
+            });
+        });
     }
 
     async performTableUpdate() {
@@ -3085,16 +3035,6 @@ class ComponentTableManager extends DataTableManager {
         this.isUpdating = true;
 
         try {
-            // Get component elements from the load_and_show_components endpoint
-            const keyEventUris = this.getKeyEventsFromNetwork();
-
-            if (keyEventUris.length === 0) {
-                this.currentData = [];
-                this.filteredData = [];
-                this.showEmptyTable();
-                return;
-            }
-
             const cyElements = window.cy.elements().jsons();
 
             const response = await fetch('/populate_component_table', {
@@ -3108,10 +3048,8 @@ class ComponentTableManager extends DataTableManager {
             }
 
             const responseData = await response.json();
-
-            // Get component data
             const data = Array.isArray(responseData) ? responseData[0] : responseData;
-            console.log("data component table", data);
+            
             if (data.error) {
                 console.error("Error loading components:", data.error);
                 this.currentData = [];
@@ -3122,11 +3060,13 @@ class ComponentTableManager extends DataTableManager {
 
             if (data.component_data && data.component_data.length > 0) {
                 this.updateTable(data.component_data);
-                console.log(`Component table updated with ${data.component_data.length} components.`);
+                console.log(`Component table updated with ${data.component_data.length} Key Events with component associations.`);
             } else {
+                // No component associations found
                 this.currentData = [];
                 this.filteredData = [];
                 this.showEmptyTable();
+                console.log("No component associations found for KEs in network");
             }
 
         } catch (error) {
@@ -3137,30 +3077,6 @@ class ComponentTableManager extends DataTableManager {
         }
     }
 
-    getKeyEventsFromNetwork() {
-        if (!window.cy) return [];
-
-        const keyEventUris = [];
-
-        window.cy.nodes().forEach(node => {
-            const nodeData = node.data();
-            const nodeId = nodeData.id || node.id();
-            const nodeType = nodeData.type;
-            const isMie = nodeData.is_mie;
-            const isAo = nodeData.is_ao;
-
-            if (nodeId && (nodeId.includes('aop.events') || isMie || isAo || nodeType === 'mie' || nodeType === 'key_event' || nodeType === 'ao')) {
-                if (nodeId.startsWith('http')) {
-                    keyEventUris.push(`<${nodeId}>`);
-                } else if (nodeId.includes('aop.events')) {
-                    keyEventUris.push(`<${nodeId}>`);
-                }
-            }
-        });
-
-        return keyEventUris;
-    }
-
     showEmptyTable() {
         const tableBody = $("#component_table tbody");
         const table = document.querySelector('#component_table');
@@ -3168,19 +3084,56 @@ class ComponentTableManager extends DataTableManager {
         if (!tableBody.length) return;
 
         tableBody.empty();
-        tableBody.append(`
-            <tr id="default-component-row">
-                <td colspan="4" style="text-align: center; padding: 30px;">
-                    <div style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
-                        <i class="fas fa-cogs" style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
-                        No components in network. See https://doi.org/10.1089/aivt.2017.0017 for more information.
-                    </div>
-                    <button id="get-components-table-btn" class="btn btn-primary btn-lg">
-                        <i class="fas fa-cogs"></i> Get Components
-                    </button>
-                </td>
-            </tr>
-        `);
+        
+        // Check if we have KEs in the network but no component associations
+        const hasKEs = window.cy && window.cy.nodes().some(node => {
+            const nodeData = node.data();
+            const nodeId = nodeData.id || node.id();
+            const nodeType = nodeData.type;
+            const isMie = nodeData.is_mie;
+            const isAo = nodeData.is_ao;
+            return nodeId && (nodeId.includes('aop.events') || isMie || isAo || 
+                             nodeType === 'mie' || nodeType === 'key_event' || nodeType === 'ao');
+        });
+
+        if (hasKEs) {
+            // We have KEs but no component associations were found
+            tableBody.append(`
+                <tr id="no-components-row">
+                    <td colspan="4" style="text-align: center; padding: 30px;">
+                        <div style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
+                            <i class="fas fa-info-circle" style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
+                            No component associations found for Key Events in the current network.
+                            <br><small>Components show Process-Object-Action relationships for Key Events.</small>
+                        </div>
+                    </td>
+                </tr>
+            `);
+        } else {
+            // No KEs in network at all
+            tableBody.append(`
+                <tr id="default-component-row">
+                    <td colspan="4" style="text-align: center; padding: 30px;">
+                        <div style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
+                            <i class="fas fa-cogs" style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
+                            No components in network. See https://doi.org/10.1089/aivt.2017.0017 for more information.
+                        </div>
+                        <button id="get-components-table-btn" class="btn btn-primary btn-lg">
+                            <i class="fas fa-cogs"></i> Get Components
+                        </button>
+                    </td>
+                </tr>
+            `);
+
+            // Add click handler for the table button
+            $("#get-components-table-btn").off("click").on("click", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.toggleComponents) {
+                    window.toggleComponents();
+                }
+            });
+        }
 
         // Clear tfoot when showing empty table
         const tfoot = table?.querySelector('tfoot');
@@ -3192,15 +3145,6 @@ class ComponentTableManager extends DataTableManager {
             filterInput.value = '';
             this.filterText = '';
         }
-
-        // Add click handler for the table button
-        $("#get-components-table-btn").off("click").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.toggleComponents) {
-                window.toggleComponents();
-            }
-        });
     }
 
     showErrorTable() {
@@ -3216,58 +3160,7 @@ class ComponentTableManager extends DataTableManager {
             </tr>
         `);
     }
-
-    // Added: row/event handlers for component table
-    setupComponentTableEventHandlers() {
-        const tableBody = $("#component_table tbody");
-        if (!tableBody.length) return;
-
-        // Remove previous handlers to avoid duplicates
-        tableBody.off('click', 'tr');
-
-        tableBody.on('click', 'tr', (e) => {
-            // Ignore clicks on links
-            if ($(e.target).is('a') || $(e.target).closest('a').length) return;
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            const rowEl = $(e.currentTarget);
-            const rowIndex = rowEl.data('row-index');
-            if (rowIndex === undefined || this.filteredData[rowIndex] === undefined) return;
-
-            // Selection logic
-            if (e.ctrlKey || e.metaKey) {
-                this.toggleRowSelection(rowEl[0], this.filteredData[rowIndex]);
-            } else {
-                this.clearTableSelection();
-                rowEl.addClass('table-selected');
-                this.selectedRows.add(parseInt(rowIndex));
-            }
-
-            // Network highlighting preference: KE node > process node > object node
-            const keId = rowEl.data('ke-id');
-            const processNodeId = rowEl.data('node-id');
-            const objectId = rowEl.data('object-id');
-
-            let targetId = null;
-            if (window.cy) {
-                if (keId && window.cy.getElementById(keId).length) {
-                    targetId = keId;
-                } else if (processNodeId && window.cy.getElementById(processNodeId).length) {
-                    targetId = processNodeId;
-                } else if (objectId && window.cy.getElementById(objectId).length) {
-                    targetId = objectId;
-                }
-            }
-
-            if (targetId) {
-                this.highlightNodeInNetwork(targetId);
-            }
-        });
-    }
 }
-
 
 // Initialize the managers with proper delay to ensure DOM is ready
 console.log('Initializing Data Table Managers...');

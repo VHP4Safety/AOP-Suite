@@ -12,12 +12,13 @@ from backend.models.core.aop import AOPNetwork, AOPKeyEvent, AOPInfo
 
 from backend.models.constants import NodeType
 
-from backend.models.converters.cy_to_model import CytoscapeNetworkParser
+from backend.models.converters.cy_to_aop import CytoscapeNetworkParser
 
-from backend.models.core.data_tables.gene import GeneTableBuilder, GeneExpressionTableBuilder
-from backend.models.core.data_tables.aop import AOPTableBuilder
-from backend.models.core.data_tables.compound import CompoundTableBuilder
-from backend.models.core.data_tables.component import ComponentTableBuilder
+from backend.models.data_tables.gene import (
+    GeneTableBuilder, GeneExpressionTableBuilder)
+from backend.models.data_tables.aop import AOPTableBuilder
+from backend.models.data_tables.compound import CompoundTableBuilder
+from backend.models.data_tables.component import ComponentTableBuilder
 
 logger = logging.getLogger(__name__)
 
