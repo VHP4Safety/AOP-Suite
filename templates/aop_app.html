@@ -41,6 +41,26 @@
                 <div class="panel">
                     <div class="panel-header">
                         <h3><i class="fas fa-project-diagram"></i> Network Visualization</h3>
+                        <details class="download-dropdown">
+                            <summary class="btn btn-sm btn-secondary">
+                                <i class="fas fa-download"></i> Download as...
+                            </summary>
+                            <div class="download-menu">
+                                <button id="download_network" class="download-option">
+                                    <i class="fas fa-file-code"></i> Cytoscape JSON
+                                </button>
+                                <button id="download_ndex" class="download-option">
+                                    <i class="fas fa-cloud"></i> NDEx (CX2)
+                                </button>
+                                <div class="download-divider"></div>
+                                <button id="download_png" class="download-option">
+                                    <i class="fas fa-image"></i> Screenshot (PNG)
+                                </button>
+                                <button id="download_svg" class="download-option">
+                                    <i class="fas fa-file-image"></i> Screenshot (SVG)
+                                </button>
+                            </div>
+                        </details>
                         <div class="network-stats">
                             <div class="network-stat">
                                 <i class="fas fa-circle"></i>
@@ -50,7 +70,7 @@
                             <div class="network-stat">
                                 <i class="fas fa-link"></i>
                                 <span class="network-stat-value" id="edge-count">0</span>
-                                <span>edges</span>
+                                <span>edges</span>            
                             </div>
                         </div>
                         <div class="network-controls">
@@ -59,9 +79,6 @@
                             </button>
                             <button id="reset_layout" class="btn btn-sm btn-secondary">
                                 <i class="fas fa-sync"></i> Reset Layout
-                            </button>
-                            <button id="download_network" class="btn btn-sm btn-secondary">
-                                <i class="fas fa-download"></i> Download
                             </button>
                             <div class="selection-controls" id="selection-controls" style="display: none;">
                                 <span class="selection-info" id="selection-info">0 selected</span>
@@ -282,7 +299,19 @@
                                 </div>
                                 <!-- Genes and compound cards -->
                                 <div class="querygc-card" id="genes-compound-card">
-                                    <h4 class="enhance-card-title"> Genes and Compounds</h4>
+                                    <h4 class="enhance-card-title"> Expand network from AOP Wiki </h4>
+                                    <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2" onclick="toggleOrgans()" title="Toggle organ visibility in the network">
+                                        Query Organs
+                                    </button>
+                                    <div class="form-group mt-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="include-proteins-checkbox">
+                                            <label class="form-check-label" for="include-proteins-checkbox">
+                                                <small>Include UniProt proteins</small>
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">When unchecked, genes link directly to Key Events</small>
+                                    </div>
                                     <button id="see_genes" class="btn btn-info btn-block mt-2">
                                         <i class="fas fa-dna"></i> Get gene sets
                                     </button>
@@ -310,8 +339,8 @@
                                     <select id="node-type" class="form-control">
                                         <option value="ke">Key Event</option>
                                         <option value="chemical">Chemical</option>
-                                        <option value="uniprot">UniProt</option>
-                                        <option value="ensembl">Ensembl</option>
+                                        <option value="protein">Protein</option>
+                                        <option value="gene">Gene</option>
                                         <option value="component_process">Component Process</option>
                                         <option value="component_object">Component Object</option>
                                         <option value="organ">Organ</option>
@@ -408,25 +437,6 @@
                     </div>
 
                     <div class="enhance-grid">
-                        <!-- GO Processes Card -->
-                        <div class="enhance-card" id="go-processes-card">
-                            <div class="enhance-card-header">
-                                <i class="fas fa-project-diagram"></i>
-                                <h4 class="enhance-card-title">GO Processes</h4>
-                            </div>
-                            <div class="enhance-card-content">
-                                Add Gene Ontology biological processes to your network. Show hierarchical relationships
-                                and process annotations.
-                            </div>
-                            <div class="enhance-card-controls">
-                                <button id="toggle_go_processes" class="btn btn-primary btn-sm w-100">
-                                    <i class="fas fa-hexagon"></i> Show GO Processes
-                                </button>
-                                <button id="show_go_hierarchy" class="btn btn-secondary btn-sm w-100 mt-1">
-                                    <i class="fas fa-sitemap"></i> Show Hierarchy
-                                </button>
-                            </div>
-                        </div>
 
                         <!-- OpenTargets Card -->
                         <div class="enhance-card" id="opentargets-card">
@@ -452,13 +462,34 @@
                                 <h4 class="enhance-card-title">Bgee Expression</h4>
                             </div>
                             <div class="enhance-card-content">
-                                Add gene expression data from Bgee database. Explore tissue-specific and developmental
-                                expression patterns.
+                                Add gene expression data from Bgee database. Query by both genes and organs with customizable confidence levels.
+                                <div class="alert alert-info mt-2" style="font-size: 0.75rem; padding: 0.5rem;">
+                                    <i class="fas fa-info-circle"></i> <strong>Note:</strong> Network must contain both genes (Ensembl nodes) and organs to query Bgee expression data.
+                                </div>
                             </div>
                             <div class="enhance-card-controls">
-                                <button id="query_bgee" class="btn btn-primary btn-sm w-100">
-                                    <i class="fas fa-dna"></i> Query Bgee
+                                <div class="form-group mb-2">
+                                    <label for="bgee-confidence-level">Expression Confidence Level:</label>
+                                    <div class="confidence-level-selector">
+                                        <div class="btn-group w-100" role="group" aria-label="Confidence Level">
+                                            <button type="button" class="btn btn-outline-warning confidence-btn" data-confidence="20">
+                                                <i class="fas fa-exclamation-triangle"></i> Low
+                                            </button>
+                                            <button type="button" class="btn btn-outline-primary confidence-btn active" data-confidence="50">
+                                                <i class="fas fa-balance-scale"></i> Medium
+                                            </button>
+                                            <button type="button" class="btn btn-outline-success confidence-btn" data-confidence="80">
+                                                <i class="fas fa-check-circle"></i> High
+                                            </button>
+                                        </div>
+                                        <input type="hidden" id="bgee-confidence-level" value="50">
+                                    </div>
+                                    <small class="form-text text-muted">Higher levels include only more reliable expression data</small>
+                                </div>
+                                <button id="bgee_query_expression" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-dna"></i> Query Gene Expression
                                 </button>
+                                <div id="bgee-status" class="mt-2"></div>
                             </div>
                         </div>
 
@@ -513,8 +544,8 @@
                             <select id="node-type-select" class="form-control">
                                 <option value="ke">Key Event</option>
                                 <option value="chemical">Chemical</option>
-                                <option value="uniprot">UniProt</option>
-                                <option value="ensembl">Ensembl</option>
+                                <option value="protein">UniProt</option>
+                                <option value="gene">Ensembl</option>
                                 <option value="component_process">Component Process</option>
                                 <option value="component_object">Component Object</option>
                                 <option value="organ">Organ</option>
@@ -1267,8 +1298,8 @@
     function setupGeneTableHandlers() {
         $(document).off('click', '#gene_table tbody tr').on('click', '#gene_table tbody tr', function () {
             const geneSymbol = $(this).data('gene');
-            const uniprotId = $(this).data('uniprot-id');
-            const ensemblId = $(this).data('ensembl-id');
+            const proteinId = $(this).data('protein-id');
+            const geneId = $(this).data('gene-id');
 
             if (!geneSymbol) return;
 
@@ -1284,25 +1315,25 @@
                 window.cy.elements().removeClass('highlighted');
 
                 // Find and highlight gene nodes
-                const ensemblNode = window.cy.getElementById(ensemblId);
-                const uniprotNode = window.cy.$(`[uniprot_id="${uniprotId}"]`);
+                const geneNode = window.cy.getElementById(geneId);
+                const proteinNode = window.cy.$(`[protein_id="${proteinId}"]`);
 
-                if (ensemblNode.length > 0) {
-                    ensemblNode.addClass('highlighted');
+                if (geneNode.length > 0) {
+                    geneNode.addClass('highlighted');
                     // Center on the node
-                    window.cy.center(ensemblNode);
+                    window.cy.center(geneNode);
                 }
 
-                if (uniprotNode.length > 0) {
-                    uniprotNode.addClass('highlighted');
+                if (proteinNode.length > 0) {
+                    proteinNode.addClass('highlighted');
                 }
 
                 // Also highlight connecting edges
-                const connectedEdges = ensemblNode.connectedEdges().union(uniprotNode.connectedEdges());
+                const connectedEdges = geneNode.connectedEdges().union(proteinNode.connectedEdges());
                 connectedEdges.addClass('highlighted');
             }
 
-            console.log(`Clicked gene: ${geneSymbol}, UniProt: ${uniprotId}`);
+            console.log(`Clicked gene: ${geneSymbol}, UniProt: ${proteinId}`);
         });
     }
 
@@ -1375,6 +1406,11 @@
     if (typeof AOPTableManager !== 'undefined') {
         window.aopTableManager = new AOPTableManager();
         console.log('AOP Table Manager initialized');
+    }
+
+    if (typeof GeneExpressionTableManager !== 'undefined') {
+        window.geneExpressionTableManager = new GeneExpressionTableManager();
+        console.log('Gene Expression Table Manager initialized');
     }
 
     if (typeof ComponentTableManager !== 'undefined') {

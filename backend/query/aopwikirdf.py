@@ -1,14 +1,12 @@
 import requests
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, Any
 
-from backend.model.aop_data_model import (
-    AOPNetworkBuilder,
-    AOPNetwork,
-    AOPKeyEvent,
-    NodeType,
-    GeneAssociation,
-)
+
+from backend.models.converters.sparql_to_aop import AOPNetworkBuilder
+
+from backend.models.core.aop import AOPNetwork
+
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -58,7 +56,7 @@ class AOPQueryService:
             logger.error(f"Failed to query AOP network: {e}")
             raise AOPDataError(str(e))
 
-    def query_genes_for_network(self, network: AOPNetwork) -> AOPNetwork:
+    def query_genes_for_network(self, network: AOPNetwork, include_proteins: bool = True) -> AOPNetwork:
         """Query gene associations for all KEs in the network"""
         try:
             ke_uris = network.get_ke_uris()
@@ -76,18 +74,50 @@ class AOPQueryService:
             builder = AOPNetworkBuilder()
             builder.network = network  # Use existing network
             builder.add_gene_associations(
-                gene_results.get("results", {}).get("bindings", [])
+                gene_results.get("results", {}).get("bindings", []), include_proteins
             )
 
             updated_network = builder.build()
             logger.info(
-                f"Added gene associations: {len(updated_network.component_associations)} genes"
+                f"Added gene associations: {len(updated_network.gene_associations)} genes (include_proteins: {include_proteins})"
             )
 
             return updated_network, gene_query
 
         except Exception as e:
             logger.error(f"Failed to query genes for network: {e}")
+            # Return original network if gene query fails
+            return network
+
+    def query_organs_for_network(self, network: AOPNetwork) -> AOPNetwork:
+        """Query gene associations for all KEs in the network"""
+        try:
+            ke_uris = network.get_ke_uris()
+            if not ke_uris:
+                logger.warning("No Key Events found for gene querying")
+                return network
+
+            # Format KE URIs for SPARQL
+            formatted_uris = " ".join([f"<{uri}>" for uri in ke_uris])
+            organ_query = self._build_organ_sparql_query(formatted_uris)
+
+            organ_results = self._execute_sparql_query(organ_query)
+
+            # Add gene associations to network using the builder
+            builder = AOPNetworkBuilder()
+            builder.network = network  # Use existing network
+            builder.add_organ_associations(
+                organ_results.get("results", {}).get("bindings", [])
+            )
+
+            updated_network = builder.build()
+            logger.info(
+                f"Added organ associations: {len(updated_network.organ_associations)} organs"
+            )
+
+            return updated_network, organ_query
+        except Exception as e:
+            logger.error(f"Failed to query organs for network: {e}")
             # Return original network if gene query fails
             return network
 
@@ -172,7 +202,7 @@ class AOPQueryService:
         formatted_values = " ".join(processed_values)
 
         # Base query template
-        base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?ao_title ?KE_upstream ?KE_upstream_title ?KE_upstream_organ ?KE_downstream_organ
+        base_query = """SELECT DISTINCT ?aop ?aop_title ?MIEtitle ?MIE ?KE_downstream ?KE_downstream_title ?KER ?ao ?ao_title ?KE_upstream ?KE_upstream_title
         WHERE {
           %VALUES_CLAUSE%
           ?aop a aopo:AdverseOutcomePathway ;
@@ -188,7 +218,6 @@ class AOPQueryService:
                  aopo:has_downstream_key_event ?KE_downstream .
             ?KE_upstream dc:title ?KE_upstream_title .
             ?KE_downstream dc:title ?KE_downstream_title .
-            OPTIONAL { ?KE_upstream aopo:OrganContext ?KE_upstream_organ . ?KE_downstream aopo:OrganContext ?KE_downstream_organ . }
           }
         }"""
 
@@ -210,21 +239,31 @@ class AOPQueryService:
 
         return final_query
 
-    def _build_gene_sparql_query(self, ke_uris: str) -> str:
+    def _build_gene_sparql_query(self, ke_uris: str, include_proteins: bool = True) -> str:
         """Build SPARQL query for gene data"""
-        return f"""
-            SELECT DISTINCT ?ke ?ensembl ?uniprot WHERE {{
-                VALUES ?ke {{ {ke_uris} }}
-                ?ke a aopo:KeyEvent; edam:data_1025 ?object .
-                ?object skos:exactMatch ?id .
-                ?id a edam:data_1033; edam:data_1033 ?ensembl .
-                OPTIONAL {{
-                    ?object skos:exactMatch ?prot .
-                    ?prot a edam:data_2291 ;
-                          edam:data_2291 ?uniprot .
+        if include_proteins:
+            return f"""
+                SELECT DISTINCT ?ke ?gene ?protein WHERE {{
+                    VALUES ?ke {{ {ke_uris} }}
+                    ?ke a aopo:KeyEvent; edam:data_1025 ?object .
+                    ?object skos:exactMatch ?id .
+                    ?id a edam:data_1033; edam:data_1033 ?gene .
+                    OPTIONAL {{
+                        ?object skos:exactMatch ?prot .
+                        ?prot a edam:data_2291 ;
+                              edam:data_2291 ?protein .
+                    }}
                 }}
-            }}
-        """
+            """
+        else:
+            return f"""
+                SELECT DISTINCT ?ke ?gene WHERE {{
+                    VALUES ?ke {{ {ke_uris} }}
+                    ?ke a aopo:KeyEvent; edam:data_1025 ?object .
+                    ?object skos:exactMatch ?id .
+                    ?id a edam:data_1033; edam:data_1033 ?gene .
+                }}
+            """
 
     def _build_compound_sparql_query(self, aop_uris: str) -> str:
         """Build SPARQL query for compound data"""
@@ -242,6 +281,16 @@ class AOPQueryService:
             ORDER BY ?compound_name
         """
 
+    def _build_organ_sparql_query(self, ke_uris: str) -> str:
+        """Build SPARQL query for organ data"""
+        return f"""
+        SELECT DISTINCT ?ke ?organ ?organ_name WHERE {{
+                    VALUES ?ke {{ {ke_uris} }}
+                    ?ke a aopo:KeyEvent; aopo:OrganContext ?organ .
+                    ?organ dc:title ?organ_name .
+        }}
+        """
+
     def _build_components_sparql_query(self, go_only: bool, ke_uris: str) -> str:
         """Build SPARQL query for GO process data"""
         if go_only:
@@ -249,14 +298,14 @@ class AOPQueryService:
         else:
             go_filter = ""
         return f"""
-            SELECT DISTINCT ?ke ?keTitle ?bioEvent ?process ?processName ?object ?objectName ?action
+            SELECT DISTINCT ?ke ?keTitle ?bioEvent ?process ?processName ?object ?objectName ?action ?objectType
             WHERE {{
                 {go_filter}
                 VALUES ?ke {{ {ke_uris } }}
                 ?ke a aopo:KeyEvent ;
                     dc:title ?keTitle .
                 OPTIONAL {{ ?ke aopo:hasBiologicalEvent ?bioEvent. ?bioEvent aopo:hasProcess ?process . ?process dc:title ?processName.}}
-                OPTIONAL {{ ?ke aopo:hasBiologicalEvent ?bioEvent. ?bioEvent aopo:hasObject ?object . ?object dc:title ?objectName.}}
+                OPTIONAL {{ ?ke aopo:hasBiologicalEvent ?bioEvent. ?bioEvent aopo:hasObject ?object . ?object dc:title ?objectName ; a ?objectType . }}
                 OPTIONAL {{ ?ke aopo:hasBiologicalEvent ?bioEvent. ?bioEvent aopo:hasAction ?action . }}
             }}
             ORDER BY ?ke

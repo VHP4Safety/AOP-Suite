@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", function () {
     window.compoundsVisible = false;
     window.componentsVisible = false;
     window.goProcessesVisible = false;
+    window.organsVisible = false; // Add organ visibility tracking
     window.fetched_preds = false;
     window.compound_data = {};
     window.modelToProteinInfo = {};
@@ -156,9 +157,13 @@ document.addEventListener("DOMContentLoaded", function () {
                 return;
             }
             const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
-            console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for gene loading:`, keyEventUris);
-            // Call the load_and_show_genes endpoint with the extracted KEs
-            fetch(`/load_and_show_genes?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
+            
+            // Check if proteins should be included
+            const includeProteins = document.getElementById('include-proteins-checkbox')?.checked ?? true;
+            
+            console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for gene loading (include proteins: ${includeProteins}):`, keyEventUris);
+            // Call the load_and_show_genes endpoint with the extracted KEs and include_proteins parameter
+            fetch(`/load_and_show_genes?kes=${encodeURIComponent(keyEventUris.join(' '))}&include_proteins=${includeProteins}`, {
                 method: 'GET'
             })
                 .then(response => {
@@ -201,7 +206,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         const selectedNodes = window.cy.$(':selected').nodes();
                         const geneNodesToShow = window.cy.collection();
                         selectedNodes.forEach(node => {
-                            const connectedGenes = node.connectedEdges().connectedNodes('.uniprot-node, .ensembl-node');
+                            const connectedGenes = node.connectedEdges().connectedNodes('.protein-node, .gene-node');
                             geneNodesToShow.merge(connectedGenes);
                         });
                         geneNodesToShow.show();
@@ -209,12 +214,12 @@ document.addEventListener("DOMContentLoaded", function () {
                         console.log(`Showed ${geneNodesToShow.length} genes connected to selected nodes`);
                     } else {
                         // Show all genes
-                        window.cy.elements(".uniprot-node, .ensembl-node").show();
+                        window.cy.elements(".protein-node, .gene-node").show();
                         window.cy.edges().forEach(function (edge) {
                             const source = edge.source();
                             const target = edge.target();
-                            const sourceIsGene = source.hasClass("uniprot-node") || source.hasClass("ensembl-node");
-                            const targetIsGene = target.hasClass("uniprot-node") || target.hasClass("ensembl-node");
+                            const sourceIsGene = source.hasClass("protein-node") || source.hasClass("gene-node");
+                            const targetIsGene = target.hasClass("protein-node") || target.hasClass("gene-node");
                             if (source.visible() && target.visible() && (sourceIsGene || targetIsGene)) {
                                 edge.show();
                             }
@@ -223,7 +228,8 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
 
                     // Update button and state - set to hide mode when showing genes
-                    $("#see_genes").text("Remove gene sets");
+                    const buttonText = includeProteins ? "Remove gene sets" : "Remove genes";
+                    $("#see_genes").html(`<i class="fas fa-dna"></i> ${buttonText}`);
                     window.genesVisible = true;
 
                     // Update gene table
@@ -252,8 +258,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 const genesToHide = window.cy.collection();
                 const proteinsToHide = window.cy.collection();
                 selectedNodes.forEach(node => {
-                    const connectedProts = node.connectedEdges().connectedNodes('.uniprot-node');
-                    const connectedGenes = connectedProts.connectedEdges().connectedNodes('.ensembl-node');
+                    const connectedProts = node.connectedEdges().connectedNodes('.protein-node');
+                    const connectedGenes = connectedProts.connectedEdges().connectedNodes('.gene-node');
                     genesToHide.merge(connectedGenes);
                     proteinsToHide.merge(connectedProts);
                 });
@@ -265,7 +271,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.log(`Removed ${genesToHide.length} genes and ${proteinsToHide.length} proteins connected to selected nodes`);
             } else {
                 // Hide all genes
-                const allGenes = window.cy.elements(".uniprot-node, .ensembl-node");
+                const allGenes = window.cy.elements(".protein-node, .gene-node");
                 allGenes.remove();
                 allGenes.connectedEdges().remove();
 
@@ -461,7 +467,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (data.sparql_query && window.historyTableManager) {
                         window.historyTableManager.addHistoryEntry(
                             'Components Query',
-                            'AOP-Wiki SPARQL',
+                            'AOP-Wiki RDF',
                             data.sparql_query,
                             null,
                             data.component_elements
@@ -569,6 +575,139 @@ document.addEventListener("DOMContentLoaded", function () {
         }
     }
 
+    // ===== ORGAN VISIBILITY FUNCTIONS =====
+    
+    // Add organ visibility control functions
+    function toggleOrgans() {
+        const action = window.organsVisible ? 'hide' : 'show';
+        if (action === 'show') {
+            // Check if there are selected elements
+            const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+            // Extract Key Event URIs from either selected nodes or all nodes
+            const keyEventUris = getKeyEventsFromNetwork(hasSelection);
+            if (keyEventUris.length === 0) {
+                const scopeMessage = hasSelection ? "selected elements" : "network";
+                console.log(`No Key Events found in ${scopeMessage} for organ loading`);
+                updateOrganToggleButton();
+                window.organsVisible = true;
+                return;
+            }
+            const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
+            console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for organ loading:`, keyEventUris);
+            
+            // Call the load_and_show_organs endpoint with the extracted KEs
+            fetch(`/load_and_show_organs?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
+                method: 'GET'
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.error) {
+                        console.error("Organ loading error:", data.error);
+                        showStatus(`Error loading organs: ${data.error}`, 'error');
+                        return;
+                    }
+
+                    const fontSlider = document.getElementById('font-size-slider');
+                    const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                    
+                    // Add query to history table
+                    if (data.sparql_query && window.historyTableManager) {
+                        window.historyTableManager.addHistoryEntry('organ', 'AOP-Wiki RDF', data.sparql_query, null, data.organ_elements);
+                    }
+
+                    // Add only new organ elements
+                    data.organ_elements.forEach(element => {
+                        console.log(element.data);
+                        const elementId = element.data?.id;
+                        if (elementId && !window.cy.getElementById(elementId).length) {
+                            try {
+                                window.cy.add(element);
+                            } catch (error) {
+                                console.warn("Error adding organ element:", elementId, error.message);
+                            }
+                        }
+                    });
+
+                    // Show organs based on selection
+                    if (hasSelection) {
+                        // Only show organs connected to selected nodes
+                        const selectedNodes = window.cy.$(':selected').nodes();
+                        const organNodesToShow = window.cy.collection();
+                        selectedNodes.forEach(node => {
+                            const connectedOrgans = node.connectedEdges().connectedNodes('[type="organ"]');
+                            organNodesToShow.merge(connectedOrgans);
+                        });
+                        organNodesToShow.show();
+                        organNodesToShow.connectedEdges().show();
+                        console.log(`Showed ${organNodesToShow.length} organs connected to selected nodes`);
+                    } else {
+                        // Show all organs
+                        window.cy.elements('[type="organ"]').show();
+                        window.cy.edges('[type="associated_with"], [type="expression_in"]').show();
+                        console.log(`Showed all organ nodes`);
+                    }
+
+                    // Update button and state
+                    window.organsVisible = true;
+                    updateOrganToggleButton();
+
+                    // Layout update
+                    setTimeout(() => {
+                        positionNodes(window.cy, fontSizeMultiplier, true);
+                    }, 150);
+                    window.resetNetworkLayout();
+                })
+                .catch(error => {
+                    console.error("Error loading organs:", error);
+                    showStatus(`Error loading organs: ${error.message}`, 'error');
+                });
+        } else {
+            // Remove organs
+            const hasSelection = window.cy && window.cy.$(':selected').length > 0;
+            if (hasSelection) {
+                // Hide only organs connected to selected nodes
+                const selectedNodes = window.cy.$(':selected').nodes();
+                const organsToHide = window.cy.collection();
+                selectedNodes.forEach(node => {
+                    const connectedOrgans = node.connectedEdges().connectedNodes('[type="organ"]');
+                    organsToHide.merge(connectedOrgans);
+                });
+                organsToHide.remove();
+                organsToHide.connectedEdges().remove();
+                console.log(`Removed ${organsToHide.length} organs connected to selected nodes`);
+            } else {
+                // Hide all organs
+                const allOrgans = window.cy.elements('[type="organ"]');
+                allOrgans.remove();
+                allOrgans.connectedEdges().remove();
+                console.log(`Removed all organ nodes`);
+            }
+
+            // Reset layout and update state
+            window.resetNetworkLayout();
+            window.organsVisible = false;
+            updateOrganToggleButton();
+        }
+    }
+
+    function updateOrganToggleButton() {
+        const button = document.getElementById('toggle-organs-btn');
+        if (button) {
+            button.textContent = window.organsVisible ? 'Remove Organs' : 'Query Organs';
+            button.classList.toggle('active', window.organsVisible);
+        }
+    }
+
+    // Make toggleOrgans available globally
+    window.toggleOrgans = toggleOrgans;
+
+    // ===== EXISTING TOGGLE FUNCTIONS =====
+
     // ===== CORE NETWORK FUNCTIONS =====
     function renderAOPNetwork(elements) {
         console.debug("Rendering AOP network with elements:", elements);
@@ -595,96 +734,8 @@ document.addEventListener("DOMContentLoaded", function () {
                         ...ele.data
                     }
                 })),
-                style: [
-                    {
-                        selector: 'node',
-                        style: {
-                            'label': 'data(label)',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'color': 'white',
-                            'font-size': '10px',
-                            'font-weight': 'bold',
-                            'width': 40,
-                            'height': 40,
-                            'shape': 'circle',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '30px'
-                        }
-                    },
-                    {
-                        selector: '.uniprot-node',
-                        style: {
-                            'background-color': '#3498DB',
-                            'border-color': '#2980B9',
-                            'border-width': 2
-                        }
-                    },
-                    {
-                        selector: '.ensembl-node',
-                        style: {
-                            'background-color': '#2ECC71',
-                            'border-color': '#27AE60',
-                            'border-width': 2
-                        }
-                    },
-                    {
-                        selector: '.chemical-node',
-                        style: {
-                            'background-color': '#E67E22',
-                            'border-color': '#D35400',
-                            'border-width': 2
-                        }
-                    },
-                    {
-                        selector: '.go-process-node',
-                        style: {
-                            'background-color': '#8E44AD',
-                            'border-color': '#6C3483',
-                            'border-width': 2,
-                            'label': 'data(label)',
-                            'text-valign': 'center',
-                            'text-halign': 'center',
-                            'color': 'white',
-                            'font-size': '10px',
-                            'font-weight': 'bold',
-                            'width': 60,
-                            'height': 60,
-                            'shape': 'hexagon',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '50px'
-                        }
-                    },
-                    {
-                        selector: 'edge',
-                        style: {
-                            'width': 2,
-                            'opacity': 0.7
-                        }
-                    },
-                    {
-                        selector: 'edge[type="aop_relationship"]',
-                        style: {
-                            'line-color': '#3498DB',
-                            'target-arrow-color': '#3498DB',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'arrow-scale': 1.2
-                        }
-                    },
-                    {
-                        selector: 'edge[type="go_hierarchy"]',
-                        style: {
-                            'line-color': '#8E44AD',
-                            'target-arrow-color': '#8E44AD',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'arrow-scale': 1.2,
-                            'width': 2,
-                            'opacity': 0.7
-                        }
-                    }
-                ]
+                // Styles are handled by the backend AOPStyleManager
+                style: []
             });
             console.debug("Cytoscape instance created with elements:", window.cy.elements());
 
@@ -1013,7 +1064,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     'border-color': '#ff6b35',
                     'border-opacity': 1,
                     'overlay-color': '#ff6b35',
-                    'overlay-opacity': 0.3,
+                    //'overlay-opacity': 0.3,
                     'overlay-padding': '4px'
                 })
                 .selector('edge.element-selected')
@@ -1215,10 +1266,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Update gene table if genes were deleted
         const deletedGenes = deletedNodes.filter(node =>
-            node.classes.includes("uniprot-node") ||
-            node.classes.includes("ensembl-node") ||
-            node.data.type === "uniprot" ||
-            node.data.type === "ensembl"
+            node.classes.includes("protein-node") ||
+            node.classes.includes("gene-node") ||
+            node.data.type === "protein" ||
+            node.data.type === "gene"
         );
         if (deletedGenes.length > 0) {
             console.log(`Updating gene table after deleting ${deletedGenes.length} genes`);
@@ -1268,9 +1319,9 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log(`Network change detected: ${action} - ${nodeId} (type: ${nodeType}, classes: ${nodeClasses})`);
         
         // Check if it's a gene node (Ensembl)
-        if (nodeClasses.includes("ensembl-node") ||
-            nodeType === "ensembl" ||
-            nodeId.startsWith("ensembl_")) {
+        if (nodeClasses.includes("gene-node") ||
+            nodeType === "gene" ||
+            nodeId.startsWith("gene_")) {
             console.log(`Gene node ${action}: ${nodeData.label || nodeId}`);
             populateGeneTable();
         }
@@ -1462,23 +1513,48 @@ document.addEventListener("DOMContentLoaded", function () {
             queryOpenTargetsDiseases();
         });
 
-        // Bgee dropdown handlers
+        // Bgee confidence level selector (replace slider handler)
+        $(".confidence-btn").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Remove active class from all buttons
+            $(".confidence-btn").removeClass("active");
+            // Add active class to clicked button
+            $(this).addClass("active");
+            
+            // Update hidden input value
+            const confidenceLevel = $(this).data("confidence");
+            $("#bgee-confidence-level").val(confidenceLevel);
+            
+            console.log("Bgee confidence level set to:", confidenceLevel);
+        });
+
+        // Bgee dropdown handlers - remove developmental
         $("#bgee_query_expression").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
             queryBgeeExpression();
         });
 
-        $("#bgee_query_developmental").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            queryBgeeDevelopmental();
-        });
-
         $("#bgee_query_anatomical").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
             queryBgeeAnatomical();
+        });
+
+        // Populate gene expression table
+        $("#populate_gene_expression_table").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            populateGeneExpressionTable();
+        });
+
+        // Gene expression table button handler
+        $("#get-gene-expression-table-btn").on("click", function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            queryBgeeExpression();
         });
 
         // Setup component table button handler
@@ -1603,174 +1679,6 @@ document.addEventListener("DOMContentLoaded", function () {
     window.resetNetworkLayout = resetNetworkLayout;
     window.populateaopTable = populateaopTable;
 
-    // ===== GO PROCESS FUNCTIONS =====
-
-    function toggleGOProcesses() {
-        if (!window.cy) {
-            console.warn("Cytoscape not available");
-            showGOProcessStatus("Network not initialized", "error");
-            return;
-        }
-
-        const currentElements = window.cy.elements().jsons();
-        const params = new URLSearchParams({
-            cy_elements: JSON.stringify(currentElements),
-            include_hierarchy: 'false'
-        });
-
-        showGOProcessStatus("Fetching GO processes...", "loading");
-
-        fetch(`/get_go_processes?${params}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showGOProcessStatus(`Error: ${data.error}`, "error");
-                    return;
-                }
-
-                if (!data.processes || data.processes.length === 0) {
-                    showGOProcessStatus(data.message || "No GO processes found for current Key Events", "warning");
-                    return;
-                }
-
-                data.processes.forEach(process => {
-                    if (!window.cy.getElementById(process.id).length) {
-                        window.cy.add({
-                            data: {
-                                id: process.id,
-                                label: process.label,
-                                uri: process.uri,
-                                type: 'go_process'
-                            },
-                            classes: 'go-process-node'
-                        });
-                    }
-                });
-
-                window.cy.elements(".go-process-node").show();
-                window.goProcessesVisible = true;
-                $("#toggle_go_processes").text("Hide GO Processes");
-
-                showGOProcessStatus(`Added ${data.processes.length} GO processes to network`, "success");
-                if (window.positionNodes) {
-                    window.positionNodes(window.cy);
-                }
-            })
-            .catch(error => {
-                console.error("Error:", error);
-                showGOProcessStatus("Error fetching GO processes", "error");
-            });
-    }
-
-    function showGOProcessHierarchy() {
-        if (!window.cy) {
-            console.warn("Cytoscape not available");
-            showGOProcessStatus("Network not initialized", "error");
-            return;
-        }
-
-        const currentElements = window.cy.elements().jsons();
-        const params = new URLSearchParams({
-            cy_elements: JSON.stringify(currentElements),
-            include_hierarchy: 'true'
-        });
-
-        showGOProcessStatus("Fetching GO process hierarchy...", "loading");
-
-        fetch(`/get_go_processes?${params}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showGOProcessStatus(`Error: ${data.error}`, "error");
-                    return;
-                }
-                const nodes = data.processes.nodes || data.processes;
-                const edges = data.processes.edges || [];
-                if (!nodes || nodes.length === 0) {
-                    showGOProcessStatus("No GO process hierarchy found for current Key Events", "warning");
-                    return;
-                }
-
-                nodes.forEach(process => {
-                    if (!window.cy.getElementById(process.id).length) {
-                        window.cy.add({
-                            data: {
-                                id: process.id,
-                                label: process.label,
-                                uri: process.uri,
-                                type: 'go_process'
-                            },
-                            classes: 'go-process-node'
-                        });
-                    }
-                });
-
-                edges.forEach(edge => {
-                    if (!window.cy.getElementById(edge.id).length) {
-                        window.cy.add({
-                            data: {
-                                id: edge.id,
-                                source: edge.source,
-                                target: edge.target,
-                                type: edge.type,
-                                label: edge.label
-                            }
-                        });
-                    }
-                });
-
-                window.cy.elements(".go-process-node").show();
-                window.cy.edges('[type="go_hierarchy"]').show();
-                window.goProcessesVisible = true;
-                $("#toggle_go_processes").text("Hide GO Processes");
-
-                showGOProcessStatus(`Added ${nodes.length} GO processes and ${edges.length} hierarchy relationships`, "success");
-                if (window.positionNodes) {
-                    window.positionNodes(window.cy);
-                }
-            })
-            .catch(error => {
-                console.error("Error:", error);
-                showGOProcessStatus("Error fetching GO process hierarchy", "error");
-            });
-    }
-
-    function showGOProcessStatus(message, type = 'info') {
-        const statusDiv = document.getElementById('go-processes-status');
-        if (!statusDiv) return;
-
-        const icons = {
-            'loading': 'fas fa-spinner fa-spin',
-            'success': 'fas fa-check',
-            'error': 'fas fa-exclamation-triangle',
-            'warning': 'fas fa-exclamation-circle',
-            'info': 'fas fa-info-circle'
-        };
-
-        const colors = {
-            'loading': '#6c757d',
-            'success': '#28a745',
-            'error': '#dc3545',
-            'warning': '#ffc107',
-            'info': '#17a2b8'
-        };
-
-        statusDiv.innerHTML = `
-            <div style="color: ${colors[type]}; font-size: 0.8rem; margin-top: 0.5rem;">
-                <i class="${icons[type]}"></i> ${message}
-            </div>
-        `;
-
-        // Auto-clear success/info messages after 5 seconds
-        if (type === 'success' || type === 'info') {
-            setTimeout(() => {
-                if (statusDiv.innerHTML.includes(message)) {
-                    statusDiv.innerHTML = '';
-                }
-            }, 5000);
-        }
-    }
-
     // ===== OPENTARGETS FUNCTIONS =====
 
     function queryOpenTargetsCompounds() {
@@ -1877,11 +1785,11 @@ document.addEventListener("DOMContentLoaded", function () {
                                     id: target.id,
                                     label: target.label,
                                     type: 'protein',
-                                    uniprot_id: target.uniprot_id,
-                                    ensembl_id: target.ensembl_id,
+                                    protein_id: target.protein_id,
+                                    gene_id: target.gene_id,
                                     target_class: target.target_class
                                 },
-                                classes: 'uniprot-node opentargets-target'
+                                classes: 'protein-node opentargets-target'
                             });
                         }
                     });
@@ -1998,12 +1906,40 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         const currentElements = window.cy.elements().jsons();
-        showBgeeStatus("Querying Bgee for gene expression data...", "loading");
+        const queryBy = "both"; // Always query by both genes and organs
+        const confidenceLevel = document.getElementById('bgee-confidence-level')?.value || 50;
+        
+        // Check if network has both genes and organs before proceeding
+        const hasGenes = currentElements.some(el => 
+            el.classes && el.classes.includes('gene-node') || 
+            (el.data && el.data.type === 'gene')
+        );
+        const hasOrgans = currentElements.some(el => 
+            el.classes && el.classes.includes('organ-node') || 
+            (el.data && el.data.type === 'organ')
+        );
+
+        if (!hasGenes && !hasOrgans) {
+            showBgeeStatus("Network must contain both genes (Ensembl nodes) and organs to query Bgee", "error");
+            return;
+        } else if (!hasGenes) {
+            showBgeeStatus("Network must contain genes (Ensembl nodes) to query Bgee", "error");
+            return;
+        } else if (!hasOrgans) {
+            showBgeeStatus("Network must contain organs to query Bgee", "error");
+            return;
+        }
+        
+        showBgeeStatus(`Querying Bgee for gene expression`, "loading");
 
         fetch('/query_bgee_expression', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: currentElements })
+            body: JSON.stringify({ 
+                cy_elements: currentElements,
+                query_by: queryBy,
+                confidence_level: parseInt(confidenceLevel)
+            })
         })
             .then(response => response.json())
             .then(data => {
@@ -2013,131 +1949,114 @@ document.addEventListener("DOMContentLoaded", function () {
                 }
 
                 if (data.expression_data && data.expression_data.length > 0) {
-                    // Update existing gene nodes with expression data
-                    data.expression_data.forEach(expr => {
-                        const geneNode = window.cy.getElementById(expr.gene_id);
-                        if (geneNode.length > 0) {
-                            geneNode.data('expression_level', expr.expression_level);
-                            geneNode.data('anatomical_entity', expr.anatomical_entity);
-                            geneNode.data('developmental_stage', expr.developmental_stage);
-                            geneNode.data('expression_score', expr.expression_score);
-                        }
-                    });
+                    // Add query to history table with proper type and content
+                    if (data.sparql_query && window.historyTableManager) {
+                        window.historyTableManager.addHistoryEntry(
+                            'gene', // Use 'gene' type instead of 'bgee' to match existing types
+                            'Bgee Expression Query', 
+                            data.sparql_query, 
+                            null, 
+                            data.expression_elements || []
+                        );
+                    }
 
-                    showBgeeStatus(`Updated ${data.expression_data.length} genes with Bgee expression data`, "success");
+                    // Add expression elements to network if provided
+                    if (data.expression_elements && data.expression_elements.length > 0) {
+                        data.expression_elements.forEach(element => {
+                            const elementId = element.data?.id;
+                            if (elementId && !window.cy.getElementById(elementId).length) {
+                                try {
+                                    window.cy.add(element);
+                                } catch (error) {
+                                    console.warn("Error adding expression element:", elementId, error.message);
+                                }
+                            }
+                        });
+                    }
+
+                    showBgeeStatus(`Added ${data.expression_data.length} expression patterns to network`, "success");
+
+                    // Update gene expression table
+                    setTimeout(() => {
+                        if (window.geneExpressionTableManager) {
+                            window.geneExpressionTableManager.performTableUpdate();
+                        }
+                    }, 200);
 
                     // Update gene table to show new expression data
                     setTimeout(() => {
-                        populateGeneTable();
-                    }, 200);
+                        if (window.geneTableManager) {
+                            window.geneTableManager.performTableUpdate();
+                        }
+                    }, 300);
+
+                    // Layout update
+                    setTimeout(() => {
+                        const fontSlider = document.getElementById('font-size-slider');
+                        const fontSizeMultiplier = fontSlider ? parseFloat(fontSlider.value) : 0.5;
+                        if (window.positionNodes) {
+                            window.positionNodes(window.cy, fontSizeMultiplier, true);
+                        }
+                    }, 400);
                 } else {
-                    showBgeeStatus("No expression data found in Bgee", "warning");
+                    // Still add to history even if no results found
+                    if (data.sparql_query && window.historyTableManager) {
+                        window.historyTableManager.addHistoryEntry(
+                            'gene', 
+                            'Bgee Expression Query (No Results)', 
+                            data.sparql_query, 
+                            null, 
+                            []
+                        );
+                    }
+                    showBgeeStatus(`No expression data found in Bgee for ${queryBy}`, "warning");
                 }
             })
             .catch(error => {
                 console.error("Error querying Bgee expression:", error);
                 showBgeeStatus("Error querying Bgee expression data", "error");
+                
+                // Add error entry to history if possible
+                if (window.historyTableManager) {
+                    window.historyTableManager.addHistoryEntry(
+                        'gene', 
+                        'Bgee Expression Query (Error)', 
+                        `Error occurred while querying Bgee: ${error.message}`, 
+                        null, 
+                        []
+                    );
+                }
             });
     }
 
-    function queryBgeeDevelopmental() {
-        if (!window.cy) {
-            showBgeeStatus("Network not initialized", "error");
+    function populateGeneExpressionTable() {
+        if (!window.geneExpressionTableManager) {
+            showBgeeStatus("Gene expression table not initialized", "error");
             return;
         }
 
-        const currentElements = window.cy.elements().jsons();
-        showBgeeStatus("Querying Bgee for developmental stage data...", "loading");
-
-        fetch('/query_bgee_developmental', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: currentElements })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showBgeeStatus(`Error: ${data.error}`, "error");
-                    return;
-                }
-
-                if (data.developmental_data && data.developmental_data.length > 0) {
-                    // Update existing gene nodes with developmental data
-                    data.developmental_data.forEach(dev => {
-                        const geneNode = window.cy.getElementById(dev.gene_id);
-                        if (geneNode.length > 0) {
-                            const currentStages = geneNode.data('developmental_stages') || [];
-                            currentStages.push({
-                                stage: dev.stage,
-                                stage_name: dev.stage_name,
-                                expression_score: dev.expression_score
-                            });
-                            geneNode.data('developmental_stages', currentStages);
-                        }
-                    });
-
-                    showBgeeStatus(`Updated genes with developmental stage data from Bgee`, "success");
-                } else {
-                    showBgeeStatus("No developmental data found in Bgee", "warning");
-                }
+        showBgeeStatus("Updating gene expression table...", "loading");
+        window.geneExpressionTableManager.performTableUpdate()
+            .then(() => {
+                showBgeeStatus("Gene expression table updated", "success");
             })
             .catch(error => {
-                console.error("Error querying Bgee developmental:", error);
-                showBgeeStatus("Error querying Bgee developmental data", "error");
-            });
-    }
-
-    function queryBgeeAnatomical() {
-        if (!window.cy) {
-            showBgeeStatus("Network not initialized", "error");
-            return;
-        }
-
-        const currentElements = window.cy.elements().jsons();
-        showBgeeStatus("Querying Bgee for organ-specific expression...", "loading");
-
-        fetch('/query_bgee_anatomical', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ cy_elements: currentElements })
-        })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showBgeeStatus(`Error: ${data.error}`, "error");
-                    return;
-                }
-
-                if (data.anatomical_data && data.anatomical_data.length > 0) {
-                    // Update existing gene nodes with organ-specific expression
-                    data.anatomical_data.forEach(anat => {
-                        const geneNode = window.cy.getElementById(anat.gene_id);
-                        if (geneNode.length > 0) {
-                            const currentOrgans = geneNode.data('organ_expression') || [];
-                            currentOrgans.push({
-                                organ: anat.organ,
-                                organ_name: anat.organ_name,
-                                expression_level: anat.expression_level,
-                                confidence: anat.confidence
-                            });
-                            geneNode.data('organ_expression', currentOrgans);
-                        }
-                    });
-
-                    showBgeeStatus(`Updated genes with organ-specific expression from Bgee`, "success");
-                } else {
-                    showBgeeStatus("No organ-specific expression data found in Bgee", "warning");
-                }
-            })
-            .catch(error => {
-                console.error("Error querying Bgee anatomical:", error);
-                showBgeeStatus("Error querying Bgee anatomical data", "error");
+                console.error("Error updating gene expression table:", error);
+                showBgeeStatus("Error updating gene expression table", "error");
             });
     }
 
     function showBgeeStatus(message, type = 'info') {
+        console.log(`Bgee Status [${type}]:`, message);
+
         const statusDiv = document.getElementById('bgee-status');
-        if (!statusDiv) return;
+        if (!statusDiv) {
+            console.warn('Bgee status div not found');
+            return;
+        }
+
+        // Clear existing content
+        statusDiv.innerHTML = '';
 
         const icons = {
             'loading': 'fas fa-spinner fa-spin',
@@ -2161,8 +2080,8 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>
         `;
 
-        // Auto-clear success/info messages after 5 seconds
-        if (type === 'success' || type === 'info') {
+        // Auto-clear success messages after 5 seconds
+        if (type === 'success') {
             setTimeout(() => {
                 if (statusDiv.innerHTML.includes(message)) {
                     statusDiv.innerHTML = '';
