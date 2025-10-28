@@ -1,0 +1,1864 @@
+/* Professional Dashboard Layout */
+.dashboard-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    background-color: #f8f9fa;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    margin: 0;
+    padding: 0;
+    position: fixed;
+    top: 0;
+    left: 0;
+    overflow: hidden;
+}
+
+/* Top Navigation */
+.top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    border-bottom: 1px solid #e9ecef;
+    padding: 0.75rem 1rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
+    min-height: 60px;
+}
+
+.nav-section h1 {
+    margin: 0;
+    color: #495057;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.nav-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.control-group {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.control-group label {
+    font-size: 0.8rem;
+    color: #6c757d;
+    margin: 0;
+}
+
+/* Main Content Layout */
+.main-content {
+    display: flex;
+    flex: 1;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 0;
+    height: calc(100vh - 60px);
+}
+
+/* Central Area Layout */
+.central-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    height: 100%;
+    gap: 0.75rem;
+}
+
+/* Network Area (now takes 60% of central area) */
+.network-area {
+    height: 60%;
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+    overflow: hidden;
+    transition: height 0.1s ease-out;
+}
+
+/* Bottom Panel Area (tables - 40% of central area) */
+.bottom-panel-area {
+    height: 40%;
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+    overflow: hidden;
+    border-top: 3px solid #e9ecef;
+    position: relative;
+    background: white;
+}
+
+/* Bottom Panel Header with Tabs */
+.bottom-panel-header {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    padding: 0.5rem 0.75rem;
+    flex-shrink: 0;
+    cursor: row-resize;
+    position: relative;
+}
+
+.bottom-panel-tabs {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.bottom-tab-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid #ced4da;
+    background: white;
+    color: #495057;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.bottom-tab-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.bottom-tab-btn.active {
+    background: white;
+    border-color: #007bff;
+    border-bottom-color: white;
+    color: #007bff;
+    font-weight: 600;
+    margin-bottom: -1px;
+    z-index: 1;
+    position: relative;
+}
+
+/* Bottom Panel Content */
+.bottom-panel-content {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    position: relative;
+}
+
+/* Table panels in bottom area - now stacked */
+.table-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: white;
+    border-radius: 0;
+    box-shadow: none;
+    border: none;
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.table-panel.active {
+    display: flex;
+}
+
+.network-table-panel,
+.compound-table-panel,
+.gene-table-panel {
+    width: 100%;
+    min-width: auto;
+    max-width: none;
+    border: none;
+    cursor: default;
+}
+
+/* Remove resize handles for table panels */
+.compound-table-panel::after,
+.gene-table-panel::before {
+    display: none;
+}
+
+/* Bottom Panel Area (tables - 40% of central area) */
+.bottom-panel-area {
+    height: 40%;
+    display: flex;
+    flex-direction: column;
+    min-height: 200px;
+    overflow: hidden;
+    border-top: 3px solid #e9ecef;
+    position: relative;
+    background: white;
+}
+
+/* Make resize handle only on the header, not the entire panel */
+.bottom-panel-header {
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    padding: 0.5rem 0.75rem;
+    flex-shrink: 0;
+    cursor: row-resize;
+    position: relative;
+}
+
+/* Remove the problematic ::before pseudo-element */
+/* .bottom-panel-area::before - REMOVED */
+
+/* Visual feedback for resize area only on header */
+.bottom-panel-header:hover {
+    background: rgba(0, 123, 255, 0.1);
+}
+
+/* Tab buttons should not have resize cursor */
+.bottom-tab-btn {
+    cursor: pointer !important;
+}
+
+/* Ensure table content areas don't have resize cursor */
+.bottom-panel-content {
+    flex: 1;
+    overflow: hidden;
+    min-height: 0;
+    position: relative;
+    cursor: default;
+}
+
+.table-panel {
+    cursor: default;
+}
+
+.table-wrapper {
+    cursor: default;
+}
+
+/* Ensure table rows maintain pointer cursor for interaction */
+.table tbody tr {
+    cursor: pointer;
+}
+
+/* Make sure compound and gene links maintain proper cursor */
+.compound-link, 
+.table tbody tr td {
+    cursor: pointer;
+}
+
+/* Active resizing state - more specific */
+.resizing-vertical .bottom-panel-header {
+    background: rgba(0, 123, 255, 0.2);
+}
+
+/* Bottom panel resizing */
+.bottom-panel-area {
+    transition: height 0.1s ease-out;
+}
+
+/* Disable transitions during active resizing */
+.resizing-vertical .network-area,
+.resizing-vertical .bottom-panel-area {
+    transition: none;
+}
+
+/* Ensure Cytoscape container resizes properly */
+.resizing-vertical #cy {
+    transition: none;
+}
+
+/* Table wrapper should fill available space */
+.table-wrapper {
+    flex: 1;
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 100px;
+}
+
+/* Panel content should expand to fill space */
+.table-panel .panel-content {
+    padding: 0.75rem;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Collapsed table panels */
+.table-panel.collapsed {
+    width: 40px !important;
+    min-width: 40px !important;
+    overflow: hidden;
+}
+
+.table-panel.collapsed .panel-content {
+    display: none;
+}
+
+.table-panel.collapsed .panel-header {
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    height: 100%;
+    justify-content: center;
+    padding: 0.5rem 0.25rem;
+}
+
+.table-panel.collapsed .panel-header h3 {
+    transform: rotate(180deg);
+    font-size: 0.8rem;
+}
+
+/* Sidebar Styling */
+.left-sidebar, .right-sidebar {
+    width: 280px;
+    min-width: 260px;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+    flex-shrink: 0;
+    height: 100%; /* Full height of main content */
+}
+
+/* Make right sidebar 300% wider */
+.right-sidebar {
+    width: 840px; /* 280px * 3 = 840px */
+    min-width: 780px; /* 260px * 3 = 780px */
+    max-width: 960px; /* 320px * 3 = 960px */
+}
+
+.network-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    height: 100%; /* Full height of main content */
+}
+
+/* Panel Component */
+.panel {
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border: 1px solid #e9ecef;
+    overflow: hidden;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Network panel should take all available space */
+.network-area .panel {
+    flex: 1;
+    height: 100%;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    flex-shrink: 0;
+}
+
+.panel-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.panel-content {
+    padding: 0.75rem;
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Network Controls */
+.network-controls {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+/* Download dropdown styling */
+.download-dropdown {
+    position: relative;
+    display: inline-block;
+    padding-left: 1.5%;
+}
+
+.download-dropdown summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.download-dropdown summary::-webkit-details-marker {
+    display: none;
+}
+
+.download-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    z-index: 9999;
+    padding: 4px 0;
+}
+
+.download-divider {
+    height: 1px;
+    background: #e9ecef;
+    margin: 4px 0;
+}
+
+.download-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 0.8rem;
+    color: #495057;
+}
+
+.download-option:hover {
+    background-color: #f8f9fa;
+}
+
+.download-option i {
+    width: 16px;
+    text-align: center;
+    color: #6c757d;
+}
+
+/* Close dropdown when clicking outside */
+.download-dropdown:not([open]) .download-menu {
+    display: none;
+}
+
+.network-container {
+    padding: 0;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Loading overlay - moved from inline styles */
+.loading-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    color: #6c757d;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    background: rgba(255,255,255,0.8);
+}
+
+/* Cytoscape container - moved from inline styles */
+#cy {
+    width: 100%;
+    height: 100%;
+    min-height: 500px;
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    position: relative;
+    box-sizing: border-box;
+    flex: 1;
+}
+
+/* Loading indicators - moved from inline styles */
+.loading-indicator {
+    display: none;
+    text-align: center;
+    padding: 1rem;
+    color: #6c757d;
+}
+
+#loading_aop_table {
+    display: none;
+}
+
+/* Form Controls */
+.form-select, .form-control {
+    width: 100%;
+    padding: 0.4rem;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    box-sizing: border-box;
+}
+
+.form-select:focus, .form-control:focus {
+    border-color: #80bdff;
+    outline: 0;
+    box-shadow: 0 0 0 0.15rem rgba(0, 123, 255, 0.25);
+}
+
+.form-group {
+    margin-bottom: 0.5rem; /* Reduced from 0.75rem */
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    color: #495057;
+    font-size: 0.8rem;
+}
+
+.form-text {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+    line-height: 1.3;
+}
+
+.form-text strong {
+    color: #495057;
+    font-weight: 600;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.75rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s ease-in-out;
+    box-sizing: border-box;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    border-color: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+    border-color: #545b62;
+}
+
+.btn-success {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #1e7e34;
+    border-color: #1e7e34;
+}
+
+.btn-sm {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.7rem;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+.mb-2 {
+    margin-bottom: 0.5rem;
+}
+
+/* Tables */
+.table-wrapper {
+    max-height: 300px; /* Increased from 200px to accommodate both tables */
+    overflow-y: auto;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+    flex: 1;
+}
+
+.table {
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+}
+
+.table th,
+.table td {
+    padding: 0.4rem;
+    border-bottom: 1px solid #e9ecef;
+    text-align: left;
+    word-wrap: break-word;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+    color: #495057;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Compound table selections */
+#compound_table tbody tr.selected {
+    background-color: #e3f2fd !important;
+    border-left: 4px solid #2196f3;
+}
+
+#compound_table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+#compound_table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+#compound_table tbody tr .compound-link {
+    transition: all 0.2s ease;
+}
+
+/* Network compound styling */
+.network-compound {
+    border-left: 3px solid #28a745 !important;
+    background-color: #f8fff9 !important;
+}
+
+.network-compound-link {
+    color: #155724 !important;
+    font-weight: bold;
+}
+
+.has-network-node {
+    border-left: 3px solid #007bff !important;
+    background-color: #f8f9ff !important;
+}
+
+/* Enhanced compound selection styling */
+.compound-link.selected {
+    background-color: #007bff !important;
+    color: white !important;
+    font-weight: bold;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.network-compound-link.selected {
+    background-color: #28a745 !important;
+    color: white !important;
+}
+
+/* Gene table auto-update indicator */
+.gene-table-updated {
+    border-left: 3px solid #28a745;
+    background-color: #f8fff9;
+    transition: all 0.3s ease;
+}
+
+/* Gene table styling */
+#gene_table tbody tr {
+    transition: background-color 0.2s ease;
+}
+
+#gene_table tbody tr:hover {
+    background-color: #f8f9fa !important;
+    cursor: pointer;
+}
+
+#gene_table tbody tr.table-success {
+    background-color: #d1edff !important;
+    border-left: 4px solid #007bff;
+}
+
+/* Clickable cell styling */
+.clickable-cell {
+    transition: all 0.2s ease;
+    padding: 8px 12px;
+    border-radius: 4px;
+}
+
+.clickable-cell:hover {
+    background-color: #e7f3ff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+.highlighted-cell {
+    background-color: #fff3cd !important;
+    border: 2px solid #ffc107 !important;
+    font-weight: bold;
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.5);
+}
+
+/* Network highlighting for genes (enhanced) */
+.cy-container .highlighted {
+    border-width: 4px !important;
+    border-color: #007bff !important;
+    border-style: solid !important;
+    z-index: 9999 !important;
+}
+
+.cy-container .highlighted[type="gene"] {
+    background-color: #e3f2fd !important;
+    border-color: #2196f3 !important;
+}
+
+.cy-container .highlighted[type="protein"] {
+    background-color: #e8f5e8 !important;
+    border-color: #4caf50 !important;
+}
+
+/* Add a subtle glow effect */
+.cy-container .highlighted {
+    box-shadow: 0 0 20px rgba(0, 123, 255, 0.6) !important;
+}
+
+/* Utility Classes */
+.text-center {
+    text-align: center;
+}
+
+.loading-row td {
+    padding: 1.5rem;
+    color: #6c757d;
+    font-style: italic;
+}
+
+/* Slider */
+.slider {
+    -webkit-appearance: none;
+    width: 120px;
+    height: 4px;
+    border-radius: 2px;
+    background: #ddd;
+    outline: none;
+}
+
+.slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: none;
+}
+
+/* Collapsible Sections */
+.collapsible-section {
+    margin-bottom: 0.75rem;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: #f8f9fa;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s ease;
+}
+
+.collapsible-header:hover {
+    background-color: #e9ecef;
+}
+
+.collapsible-header h4 {
+    margin: 0;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.collapse-icon {
+    font-size: 0.75rem;
+    transition: transform 0.2s ease;
+    color: #6c757d;
+}
+
+.collapsible-header.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+}
+
+.collapsible-content {
+    padding: 0.75rem;
+    border-top: 1px solid #e9ecef;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    overflow: hidden;
+}
+
+.collapsible-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-top: none;
+}
+
+/* Enhanced form controls for collapsible sections */
+.collapsible-content .form-group {
+    margin-bottom: 0.5rem;
+}
+
+.collapsible-content .btn {
+    width: 100%;
+    margin-top: 0.25rem;
+}
+
+/* Sidebar Toggle and Collapse Functionality */
+.sidebar-toggle {
+    background: none;
+    border: none;
+    color: #495057;
+    font-size: 1rem;
+    padding: 0.5rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.sidebar-toggle:hover {
+    color: #007bff;
+}
+
+/* Sidebar Headers */
+.sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.sidebar-close {
+    background: none;
+    border: none;
+    color: #6c757d;
+    font-size: 1rem;
+    padding: 0.25rem;
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.sidebar-close:hover {
+    color: #495057;
+}
+
+/* Collapsible Sidebar Styles */
+.left-sidebar, .right-sidebar {
+    position: relative;
+    transition: transform 0.3s ease, width 0.3s ease, opacity 0.3s ease;
+    overflow: visible;
+    z-index: 50;
+}
+
+.left-sidebar.collapsed {
+    transform: translateX(-100%);
+    width: 0;
+    min-width: 0;
+    margin-right: 0;
+    opacity: 0;
+}
+
+.right-sidebar.collapsed {
+    transform: translateX(100%);
+    width: 0;
+    min-width: 0;
+    margin-left: 0;
+    opacity: 0;
+}
+
+/* When sidebars are collapsed, network takes full width */
+.main-content:has(.left-sidebar.collapsed) .network-area {
+    margin-left: 0;
+}
+
+.main-content:has(.right-sidebar.collapsed) .network-area {
+    margin-right: 0;
+}
+
+.main-content:has(.left-sidebar.collapsed):has(.right-sidebar.collapsed) .network-area {
+    width: 100%;
+    margin: 0;
+}
+
+/* Network area smooth transitions */
+.network-area {
+    transition: margin 0.3s ease, width 0.3s ease;
+}
+
+/* Enhanced smooth transitions for all UI elements */
+* {
+    transition: margin 0.3s ease, width 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
+}
+
+/* Better visual feedback for buttons with hover animations */
+.btn {
+    transition: all 0.2s ease-in-out;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.btn:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Smooth table updates */
+.table tbody tr {
+    transition: background-color 0.2s ease, border-left 0.2s ease;
+}
+
+/* AOP table updating state */
+.table tbody.updating {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+}
+
+/* Enhanced sidebar collapse animation improvements */
+.left-sidebar, .right-sidebar {
+    position: relative;
+    transition: transform 0.3s ease, width 0.3s ease, opacity 0.3s ease;
+    overflow: visible;
+    z-index: 50;
+}
+
+.left-sidebar.collapsed {
+    transform: translateX(-100%);
+    width: 0;
+    min-width: 0;
+    margin-right: 0;
+    opacity: 0;
+}
+
+.right-sidebar.collapsed {
+    transform: translateX(100%);
+    width: 0;
+    min-width: 0;
+    margin-left: 0;
+    opacity: 0;
+}
+
+/* Network container adjustments */
+.network-container {
+    height: 100%;
+    position: relative;
+}
+
+/* Ensure network resizes properly when sidebars toggle */
+.network-area .panel {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.network-area .panel-content {
+    flex: 1;
+    min-height: 0;
+}
+
+/* Ensure proper scrolling and no page-level scroll */
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* Make sure the base template doesn't interfere */
+.container {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+
+/* Add visual feedback for Ctrl+click instruction */
+.compound-selection-hint {
+    font-size: 0.8em;
+    color: #6c757d;
+    font-style: italic;
+    margin-top: 5px;
+}
+
+/* Searchable Dropdown Styles */
+.searchable-dropdown {
+    position: relative;
+    width: 100%;
+}
+
+.dropdown-search {
+    width: 100%;
+    margin-bottom: 0.25rem;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom: none;
+    font-size: 0.8rem;
+    z-index: 10;
+    position: relative;
+}
+
+.searchable-select {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    border-top: 1px solid #ced4da;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 0.8rem;
+}
+
+.searchable-select option {
+    padding: 0.25rem;
+    font-size: 0.8rem;
+}
+
+.searchable-select option:hover {
+    background-color: #e9ecef;
+}
+
+.dropdown-search:focus {
+    border-bottom: 1px solid #80bdff;
+    z-index: 11;
+}
+
+.searchable-select:focus {
+    border-top: 1px solid #80bdff;
+    outline: none;
+    box-shadow: 0 0 0 0.15rem rgba(0, 123, 255, 0.25);
+}
+
+/* Hide options that don't match search */
+.searchable-select option.hidden {
+    display: none;
+}
+
+/* Enhanced form group spacing for searchable dropdowns */
+.searchable-dropdown .form-control {
+    transition: border-color 0.15s ease-in-out;
+}
+
+/* Manual controls status messages */
+#manual-controls-status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    transition: opacity 0.3s ease;
+    opacity: 0;
+}
+
+/* AOP network data status */
+#aop-data-status {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    min-height: 20px;
+}
+
+#aop-data-status.loading {
+    background-color: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+#aop-data-status.success {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+#aop-data-status.warning {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+#aop-data-status.error {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* GO Processes Styles */
+.go-processes-controls {
+    padding: 1rem;
+}
+
+.go-processes-controls .help-text {
+    background-color: #f8f9fa;
+    border-left: 4px solid #17a2b8;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0 4px 4px 0;
+    font-size: 0.9rem;
+}
+
+.go-processes-controls .help-text i {
+    color: #17a2b8;
+    margin-right: 0.5rem;
+}
+
+.go-processes-controls .button-group {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.go-processes-controls .button-group .btn {
+    flex: 1;
+    min-width: 120px;
+}
+
+.go-processes-controls .form-text {
+    background-color: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+/* GO Process node styles for network */
+.go-process-node {
+    background-color: #8E44AD !important;
+    border-color: #6C3483 !important;
+    color: white !important;
+    shape: hexagon !important;
+}
+
+/* GO hierarchy edge styles */
+edge[type="go_hierarchy"] {
+    line-color: #8E44AD !important;
+    target-arrow-color: #8E44AD !important;
+}
+
+/* Workspace Sidebar (formerly right sidebar) */
+.workspace-sidebar {
+    width: 400px;
+    min-width: 300px;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+    flex-shrink: 0;
+    height: 100%;
+    border-left: 3px solid #e9ecef;
+    cursor: col-resize;
+    position: relative;
+}
+
+/* Workspace resize handle */
+.workspace-sidebar::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -3px;
+    width: 6px;
+    background: transparent;
+    cursor: col-resize;
+    z-index: 100;
+}
+
+.workspace-sidebar:hover::before {
+    background: rgba(0, 123, 255, 0.3);
+}
+
+.workspace-sidebar.collapsed {
+    transform: translateX(100%);
+    width: 0;
+    min-width: 0;
+    margin-left: 0;
+    opacity: 0;
+}
+
+/* Workspace Header */
+.workspace-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #e9ecef;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    gap: 0.5rem;
+}
+
+.workspace-title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.workspace-controls {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.workspace-mode-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    border-radius: 3px;
+    border: 1px solid #ced4da;
+    background: white;
+    color: #495057;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.workspace-mode-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.workspace-mode-btn.active {
+    background: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+/* Workspace Content Areas */
+.workspace-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.75rem;
+}
+
+.workspace-mode {
+    display: none;
+}
+
+.workspace-mode.active {
+    display: block;
+}
+
+/* Query Mode Styles */
+.query-mode {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Query genes and compounds */
+.querygc-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    height: 3%;
+    font-size: smaller;
+}
+
+.querygc-card-title {
+    margin: 0;
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Enhance Mode Grid */
+.enhance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    height: 100%;
+}
+
+.enhance-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 200px;
+}
+
+.enhance-card:hover {
+    border-color: #007bff;
+    box-shadow: 0 2px 8px rgba(0,123,255,0.15);
+    transform: translateY(-1px);
+}
+
+.enhance-card.active {
+    border-color: #007bff;
+    background: #f8f9ff;
+}
+
+.enhance-card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid #e9ecef;
+    padding-bottom: 0.5rem;
+}
+
+.enhance-card-header i {
+    font-size: 1.2rem;
+    color: #007bff;
+}
+
+.enhance-card-title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #495057;
+}
+
+.enhance-card-content {
+    flex: 1;
+    font-size: 0.8rem;
+    color: #6c757d;
+    line-height: 1.4;
+}
+
+.enhance-card-controls {
+    margin-top: auto;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e9ecef;
+}
+
+/* Network Stats */
+.network-stats {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: auto;
+    padding-right: 2%;
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.network-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.network-stat-value {
+    font-weight: 600;
+    color: #495057;
+}
+
+/* Table Panel Toggle Buttons */
+.table-toggle-controls {
+    position: absolute;
+    top: 0.75rem;
+    right: 0.75rem;
+    display: flex;
+    gap: 0.25rem;
+    z-index: 10;
+}
+
+.table-toggle-btn {
+    width: 24px;
+    height: 24px;
+    border: 1px solid #ced4da;
+    background: white;
+    border-radius: 3px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: #495057;
+    transition: all 0.2s ease;
+}
+
+.table-toggle-btn:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+}
+
+.table-toggle-btn.active {
+    background: #007bff;
+    border-color: #007bff;
+    color: white;
+}
+
+/* Table panel animations */
+.table-panel {
+    transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease;
+}
+
+.table-panel.collapsed {
+    transition: width 0.3s ease, min-width 0.3s ease, opacity 0.3s ease;
+}
+
+/* Enhanced smooth transitions for workspace */
+.workspace-sidebar {
+    transition: width 0.3s ease, min-width 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
+}
+
+.central-area {
+    transition: margin 0.3s ease, width 0.3s ease;
+}
+
+.network-area, .bottom-panel-area {
+    transition: height 0.3s ease;
+}
+
+/* Resizing states */
+.resizing {
+    user-select: none;
+    pointer-events: none;
+}
+
+.resizing * {
+    cursor: col-resize !important;
+}
+
+.resizing-vertical {
+    user-select: none;
+    pointer-events: none;
+}
+
+.resizing-vertical * {
+    cursor: row-resize !important;
+}
+
+/* Status indicators for workspace modes */
+.mode-status {
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    margin-bottom: 1rem;
+}
+
+.mode-status.info {
+    background: #d1ecf1;
+    color: #0c5460;
+    border: 1px solid #bee5eb;
+}
+
+.mode-status.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+/* Workspace Mode Visibility Fix */
+.workspace-mode {
+    display: none !important;
+}
+
+.workspace-mode.active {
+    display: block !important;
+}
+
+/* Remove Left Sidebar Styles */
+.left-sidebar {
+    display: none;
+}
+
+/* Remove sidebar toggle styles for left sidebar */
+#toggle-left-sidebar {
+    display: none;
+}
+
+/* Workspace sidebar toggle functionality */
+#toggle-workspace-sidebar {
+    display: inline-flex;
+}
+
+/* Gene Expression Table Styling */
+.gene-expression-table-panel .table {
+    font-size: 0.8rem;
+}
+
+.gene-expression-table-panel .table th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    color: #495057;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.gene-expression-table-panel .table tbody tr {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.gene-expression-table-panel .table tbody tr:hover {
+    background-color: #f8f9fa !important;
+}
+
+.gene-expression-cell, .organ-cell, .expression-level-cell {
+    transition: all 0.2s ease;
+    padding: 8px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.gene-expression-cell:hover, .organ-cell:hover, .expression-level-cell:hover {
+    background-color: #e7f3ff !important;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 123, 255, 0.2);
+}
+
+/* Expression level badges */
+.expression-level-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.expression-level-high {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.expression-level-medium {
+    background-color: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
+.expression-level-low {
+    background-color: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+/* Confidence level indicators */
+.confidence-indicator {
+    display: inline-block;
+    width: 20px;
+    height: 8px;
+    border-radius: 4px;
+    margin-left: 5px;
+}
+
+.confidence-high {
+    background-color: #28a745;
+}
+
+.confidence-medium {
+    background-color: #ffc107;
+}
+
+.confidence-low {
+    background-color: #dc3545;
+}
+
+/* Network styling for expression edges */
+.cy-container edge[type="expression_in"] {
+    line-color: #e74c3c !important;
+    target-arrow-color: #e74c3c !important;
+    target-arrow-shape: triangle !important;
+    curve-style: bezier !important;
+    arrow-scale: 1.2 !important;
+    width: 2px !important;
+    opacity: 0.8 !important;
+}
+
+.cy-container edge[type="expression_in"]:selected {
+    line-color: #c0392b !important;
+    target-arrow-color: #c0392b !important;
+    width: 4px !important;
+    opacity: 1 !important;
+}
+
+/* Organ nodes styling */
+.cy-container node[type="organ"] {
+    background-color: #9b59b6 !important;
+    border-color: #8e44ad !important;
+    border-width: 2px !important;
+    color: white !important;
+    font-weight: bold !important;
+    shape: octagon !important;
+}
+
+.cy-container .organ-node {
+    background-color: #9b59b6 !important;
+    border-color: #8e44ad !important;
+    border-width: 2px !important;
+}
+
+/* Bgee controls styling */
+.slider-container {
+    position: relative;
+    margin: 10px 0;
+}
+
+.slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+.slider-labels span:nth-child(2) {
+    font-weight: bold;
+    color: #495057;
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid #dee2e6;
+}
+
+#bgee-status {
+    min-height: 20px;
+    font-size: 0.8rem;
+}
+
+/* Gene expression filter */
+.gene-expression-table-panel .table-filter-container {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+/* Gene table expression styling */
+.gene-table-panel .expression-cell,
+.gene-table-panel .expression-level-cell,
+.gene-table-panel .expression-id-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.gene-table-panel .expression-cell:hover,
+.gene-table-panel .expression-level-cell:hover,
+.gene-table-panel .expression-id-cell:hover {
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+.gene-table-panel .expression-id-cell {
+    font-family: monospace;
+    font-size: 0.8em;
+    color: #495057;
+}
+
+/* Gene table expression styling */
+.gene-table-panel .expression-cell,
+.gene-table-panel .expression-level-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: help;
+}
+
+.gene-table-panel .expression-cell:hover,
+.gene-table-panel .expression-level-cell:hover {
+    white-space: normal;
+    word-wrap: break-word;
+}
+
+/* Bgee confidence slider styling */
+.confidence-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 5px;
+    position: relative;
+}
+
+.confidence-label {
+    flex: 1;
+    text-align: center;
+    padding: 2px 4px;
+    border-radius: 3px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.confidence-label:first-child {
+    text-align: left;
+}
+
+.confidence-label:last-child {
+    text-align: right;
+}
+
+.confidence-label.active {
+    background-color: #007bff;
+    color: white;
+    font-weight: bold;
+}
+
+.confidence-current {
+    text-align: center;
+    margin-top: 5px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: #495057;
+    background: #f8f9fa;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+}
+
+#bgee-confidence-slider {
+    background: linear-gradient(to right, #ffc107 0%, #fd7e14 50%, #28a745 100%);
+    height: 8px;
+    border-radius: 4px;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+#bgee-confidence-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+#bgee-confidence-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Organ toggle button styling - match other buttons in genes/compounds section */
+#toggle-organs-btn {
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+    /* Remove custom colors to match btn-info styling */
+}
+
+/* Remove custom organ button styling to use default btn-info class */
+#toggle-organs-btn:hover {
+    /* Let Bootstrap btn-info handle hover state */
+}
+
+#toggle-organs-btn.active {
+    /* Let Bootstrap btn-info handle active state */
+}
+
+/* Button container styling for consistent spacing */
+.querygc-card .btn {
+    margin-bottom: 8px;
+}

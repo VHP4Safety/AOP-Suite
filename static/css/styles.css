@@ -1,0 +1,24 @@
+/* 
+VHP4Safety Brand Colors: 
+Dark Blue: #29235C 
+Blue: #307BBF 
+Pink: #E6007E 
+*/
+
+/* Define color variables */
+:root {
+  --dark-blue: #29235c;
+  --pink: #e6007e;
+  --blue: #307bbf;
+  --light-blue: #93d5f6;
+  --white: #ffffff;
+  --table-row-light-gray: #f2f2f2; /* For alternating table row colors */
+}
+
+/* Define fonts */
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700&display=swap");
+
+html {
+  scroll-behavior: smooth;
+}
+

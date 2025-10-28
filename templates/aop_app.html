@@ -1,0 +1,1434 @@
+{% extends "base.html" %}
+{% block content %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/aop_app.css') }}">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+
+<div class="dashboard-container" data-mies="{{ mie_query if mie_query is defined else '' }}"
+    data-qid="{{ qid if qid is defined else '' }}" data-qid-wd="{{ qid_wd if qid_wd is defined else '' }}"
+    data-title="{{ title if title is defined else 'AOP-Suite' }}" id="compound-container">
+    <!-- Top Navigation Bar -->
+    <header class="top-nav">
+        <div class="nav-section">
+            <h1><img width="40px" alt="icon" src="{{ url_for('static', filename='images/aopapp_favicon.ico') }}" /> {{
+                title if title is defined else 'AOP-Suite' }}</h1>
+        </div>
+        <div class="nav-controls">
+            <div class="control-group">
+                <label>Font Size:</label>
+                <input type="range" id="font-size-slider" min="0.1" max="1" step=".1" value="0.5" class="slider">
+            </div>
+            <button id="save_network" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save Network
+            </button>
+            <button id="load_network" class="btn btn-secondary">
+                <i class="fas fa-upload"></i> Load Network
+            </button>
+            <button id="toggle-workspace-sidebar" class="sidebar-toggle btn-secondary">
+                <i class="fas fa-briefcase"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+        <!-- Central Area -->
+        <div class="central-area">
+            <!-- Network Area -->
+            <div class="network-area">
+                <div class="panel">
+                    <div class="panel-header">
+                        <h3><i class="fas fa-project-diagram"></i> Network Visualization</h3>
+                        <details class="download-dropdown">
+                            <summary class="btn btn-sm btn-secondary">
+                                <i class="fas fa-download"></i> Download as...
+                            </summary>
+                            <div class="download-menu">
+                                <button id="download_network" class="download-option">
+                                    <i class="fas fa-file-code"></i> Cytoscape JSON
+                                </button>
+                                <button id="download_ndex" class="download-option">
+                                    <i class="fas fa-cloud"></i> NDEx (CX2)
+                                </button>
+                                <div class="download-divider"></div>
+                                <button id="download_png" class="download-option">
+                                    <i class="fas fa-image"></i> Screenshot (PNG)
+                                </button>
+                                <button id="download_svg" class="download-option">
+                                    <i class="fas fa-file-image"></i> Screenshot (SVG)
+                                </button>
+                            </div>
+                        </details>
+                        <div class="network-stats">
+                            <div class="network-stat">
+                                <i class="fas fa-circle"></i>
+                                <span class="network-stat-value" id="node-count">0</span>
+                                <span>nodes</span>
+                            </div>
+                            <div class="network-stat">
+                                <i class="fas fa-link"></i>
+                                <span class="network-stat-value" id="edge-count">0</span>
+                                <span>edges</span>            
+                            </div>
+                        </div>
+                        <div class="network-controls">
+                            <button id="toggle_bounding_boxes" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-layer-group"></i> Group by AOP
+                            </button>
+                            <button id="reset_layout" class="btn btn-sm btn-secondary">
+                                <i class="fas fa-sync"></i> Reset Layout
+                            </button>
+                            <div class="selection-controls" id="selection-controls" style="display: none;">
+                                <span class="selection-info" id="selection-info">0 selected</span>
+                                <button id="delete_selected" class="btn btn-sm btn-danger">
+                                    <i class="fas fa-trash"></i> Delete Selected
+                                </button>
+                                <button id="clear_selection" class="btn btn-sm btn-secondary">
+                                    <i class="fas fa-times"></i> Clear Selection
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel-content network-container">
+                        <div class="loading-overlay">
+                            <div class="text-center">
+                                <i class="fas fa-spinner fa-spin fa-3x"></i>
+                                <p>Loading network...</p>
+                            </div>
+                        </div>
+                        <div id="cy"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Panel Area (Tables) -->
+            <div class="bottom-panel-area" id="bottom-panel-area">
+                <div class="bottom-panel-header">
+                    <div class="bottom-panel-tabs">
+                        <button class="bottom-tab-btn active" data-table="aop">
+                            <i class="fas fa-network-wired"></i> AOP
+                        </button>
+                        <button class="bottom-tab-btn" data-table="compounds">
+                            <i class="fas fa-flask"></i> Compounds
+                        </button>
+                        <button class="bottom-tab-btn" data-table="genes">
+                            <i class="fas fa-dna"></i> Genes
+                        </button>
+                        <button class="bottom-tab-btn" data-table="components">
+                            <i class="fas fa-cogs"></i> Components
+                        </button>
+                        <button class="bottom-tab-btn" data-table="history">
+                            <i class="fas fa-history"></i> Query History
+                        </button>
+                    </div>
+                </div>
+                <div class="bottom-panel-content">
+                    <!-- AOP Table Panel -->
+                    <div class="table-panel network-table-panel active" id="aop-table-container-panel">
+                        <div class="panel-content">
+                            <div id="loading_aop_table" class="loading-indicator" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i> Loading AOP data...
+                            </div>
+                            <div id="aop-table-container" class="table-wrapper">
+                                <!-- Filter and table will be dynamically inserted here by data_tables.js -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Compounds Table Panel -->
+                    <div class="table-panel compound-table-panel" id="compounds-table-container-panel">
+                        <div class="panel-content">
+                            <div class="table-wrapper">
+                                <div id="loading_compound" class="loading-indicator">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading compounds...
+                                </div>
+                                <table id="compound_table" class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Compound</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr id="default-compound-row">
+                                            <td style="text-align: center; padding: 20px;">
+                                                <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
+                                                    No compounds in network. You can query the AOP-Wiki RDF for
+                                                    compounds associated with Key Events or draw your own
+                                                    PubChem nodes.
+                                                </div>
+                                                <button id="toggle_compounds" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-flask"></i> Get chemical stressors for the network
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Genes Table Panel -->
+                    <div class="table-panel gene-table-panel" id="genes-table-container-panel">
+                        <div class="panel-content">
+                            <div class="table-wrapper">
+                                <table id="gene_table" class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Gene</th>
+                                            <th>Protein</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr id="default-gene-row">
+                                            <td colspan="2" style="text-align: center; padding: 20px;">
+                                                <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
+                                                    No genes in network. You can query the AOP-Wiki RDF for gene sets
+                                                    associated with Key Events or draw your own Ensembl
+                                                    identifiers.
+                                                </div>
+                                                <button id="get-genes-table-btn" class="btn btn-primary btn-sm">
+                                                    <i class="fas fa-dna"></i> Get gene sets
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Components Table Panel -->
+                    <div class="table-panel component-table-panel" id="components-table-container-panel">
+                        <div class="panel-content">
+                            <div class="table-wrapper">
+                                <div id="loading_component" class="loading-indicator">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading components...
+                                </div>
+                                <table id="component_table" class="table table-striped table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 25%;">Key Event</th>
+                                            <th style="width: 35%;">Process</th>
+                                            <th style="width: 20%;">Action</th>
+                                            <th style="width: 20%;">Object</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr id="default-component-row">
+                                            <td colspan="4" style="text-align: center; padding: 30px;">
+                                                <div
+                                                    style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
+                                                    <i class="fas fa-cogs"
+                                                        style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
+                                                    No components in network. See https://doi.org/10.1089/aivt.2017.0017 for more information.
+                                                </div>
+                                                <button id="get-components-table-btn" class="btn btn-primary btn-lg">
+                                                    <i class="fas fa-cogs"></i> Get Components
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History Table Panel -->
+                    <div class="table-panel history-table-panel" id="history-table-container-panel">
+                        <div class="panel-content">
+                            <div id="history-table-container" class="table-wrapper">
+                                <!-- History table will be dynamically created by HistoryTableManager -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Workspace Sidebar -->
+        <aside class="workspace-sidebar" id="workspace-sidebar">
+            <div class="workspace-header">
+                <div class="workspace-controls">
+                    <button class="workspace-mode-btn active" data-mode="query">
+                        <i class="fas fa-search"></i> Populate network
+                    </button>
+                    <button class="workspace-mode-btn" data-mode="enhance">
+                        <i class="fas fa-magic"></i> Enrich network
+                    </button>
+                </div>
+            </div>
+
+            <div class="workspace-content">
+                <!-- Query Mode -->
+                <div class="workspace-mode query-mode active" id="query-mode">
+                    <div class="mode-status info">
+                        <i class="fas fa-info-circle"></i> Build your network by querying data sources or adding
+                        elements manually.
+                    </div>
+
+                    <!-- Query AOP WIKI Section -->
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" data-target="aop-network-content">
+                            <h4><i class="fas fa-plus-circle"></i> Query AOP-WIKI RDF</h4>
+                            <i class="fas fa-chevron-down collapse-icon"></i>
+                        </div>
+                        <div class="collapsible-content" id="aop-network-content">
+                            <div class="aop-network-controls">
+                                <!-- Get by AOP, KE, MIE name or identifier -->
+                                <div class="form-group">
+                                    <label for="query-type">Query Type:</label>
+                                    <select id="query-type" class="form-control">
+                                        <option value="mie">Add by MIE</option>
+                                        <option value="aop">Add by AOP</option>
+                                        <option value="ke_upstream">Add by Upstream KE</option>
+                                        <option value="ke_downstream">Add by Downstream KE</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="query-values">AOP Identifiers or Names:</label>
+                                    <textarea id="query-values" class="form-control" rows="4"
+                                        placeholder="Search by AOP name or enter identifiers (one per line)&#10;Examples:&#10;liver fibrosis&#10;1&#10;aop:2&#10;https://identifiers.org/aop/3"></textarea>
+                                    <button id="add-aop-data" class="btn btn-primary" type="button">
+                                        <i class="fas fa-plus"></i> Add to Network
+                                    </button>
+                                    <div id="aop-data-status" class="mt-2"></div>
+                                </div>
+                                <!-- Genes and compound cards -->
+                                <div class="querygc-card" id="genes-compound-card">
+                                    <h4 class="enhance-card-title"> Expand network from AOP Wiki </h4>
+                                    <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2" onclick="toggleOrgans()" title="Toggle organ visibility in the network">
+                                        Query Organs
+                                    </button>
+                                    <div class="form-group mt-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="include-proteins-checkbox">
+                                            <label class="form-check-label" for="include-proteins-checkbox">
+                                                <small>Include UniProt proteins</small>
+                                            </label>
+                                        </div>
+                                        <small class="form-text text-muted">When unchecked, genes link directly to Key Events</small>
+                                    </div>
+                                    <button id="see_genes" class="btn btn-info btn-block mt-2">
+                                        <i class="fas fa-dna"></i> Get gene sets
+                                    </button>
+                                    <button id="sidebar_toggle_compounds" class="btn btn-info btn-block mt-2">
+                                        <i class="fas fa-flask"></i> Get chemical stressors
+                                    </button>
+                                    <button id="sidebar_toggle_components" class="btn btn-info btn-block mt-2">
+                                        <i class="fas fa-cogs"></i> Get components
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Nodes Section -->
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" data-target="add-nodes-content">
+                            <h4><i class="fas fa-circle"></i> Add Nodes</h4>
+                            <i class="fas fa-chevron-down collapse-icon"></i>
+                        </div>
+                        <div class="collapsible-content" id="add-nodes-content">
+                            <div class="node-controls">
+                                <div class="form-group">
+                                    <label for="node-type">Node Type:</label>
+                                    <select id="node-type" class="form-control">
+                                        <option value="ke">Key Event</option>
+                                        <option value="chemical">Chemical</option>
+                                        <option value="protein">Protein</option>
+                                        <option value="gene">Gene</option>
+                                        <option value="component_process">Component Process</option>
+                                        <option value="component_object">Component Object</option>
+                                        <option value="organ">Organ</option>
+                                        <option value="custom">Custom</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="node-label">Node Labels:</label>
+                                    <input type="text" id="node-label" class="form-control"
+                                        placeholder="Enter node labels (space or comma separated)">
+                                </div>
+                                <div class="form-group">
+                                    <label for="node-id">Node IDs (optional):</label>
+                                    <input type="text" id="node-id" class="form-control"
+                                        placeholder="Auto-generated if empty (space or comma separated)">
+                                </div>
+                                <button id="add-node" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Add Node
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Edges Section -->
+                    <div class="collapsible-section">
+                        <div class="collapsible-header" data-target="add-edges-content">
+                            <h4><i class="fas fa-link"></i> Add Edges</h4>
+                            <i class="fas fa-chevron-down collapse-icon"></i>
+                        </div>
+                        <div class="collapsible-content" id="add-edges-content">
+                            <div class="connection-controls">
+                                <div class="form-group">
+                                    <label for="source-node">Source Node:</label>
+                                    <div class="searchable-dropdown">
+                                        <input type="text" id="source-node-search" class="form-control dropdown-search"
+                                            placeholder="Search source nodes...">
+                                        <select id="source-node" class="form-control searchable-select" size="5">
+                                            <option value="">Select source...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="target-node">Target Node:</label>
+                                    <div class="searchable-dropdown">
+                                        <input type="text" id="target-node-search" class="form-control dropdown-search"
+                                            placeholder="Search target nodes...">
+                                        <select id="target-node" class="form-control searchable-select" size="5">
+                                            <option value="">Select target...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edge-type">Connection Type:</label>
+                                    <select id="edge-type" class="form-control">
+                                        <option value="ker">Key Event Relationship</option>
+                                        <option value="interaction">Interaction</option>
+                                        <option value="part_of">Part Of</option>
+                                        <option value="translates_to">Translates To</option>
+                                        <option value="has_process">Has Process</option>
+                                        <option value="has_object">Has Object</option>
+                                        <option value="is_stressor_of">Is Stressor Of</option>
+                                        <option value="expression_in">Expression In</option>
+                                        <option value="increased_process_quality">Increased Process Quality</option>
+                                        <option value="decreased_process_quality">Decreased Process Quality</option>
+                                        <option value="delayed">Delayed</option>
+                                        <option value="occurrence">Occurrence</option>
+                                        <option value="abnormal">Abnormal</option>
+                                        <option value="premature">Premature</option>
+                                        <option value="disrupted">Disrupted</option>
+                                        <option value="functional_change">Functional Change</option>
+                                        <option value="morphological_change">Morphological Change</option>
+                                        <option value="pathological">Pathological</option>
+                                        <option value="arrested">Arrested</option>
+                                        <option value="custom">Custom</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="edge-label">Connection Label (optional):</label>
+                                    <input type="text" id="edge-label" class="form-control"
+                                        placeholder="Enter connection label">
+                                </div>
+                                <button id="add-connection" class="btn btn-success">
+                                    <i class="fas fa-link"></i> Add Edge
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Enhance Mode -->
+                <div class="workspace-mode enhance-mode" id="enhance-mode">
+                    <div class="mode-status info">
+                        <i class="fas fa-magic"></i> Enhance your network with additional data sources and annotations.
+                    </div>
+
+                    <div class="enhance-grid">
+
+                        <!-- OpenTargets Card 
+                        <div class="enhance-card" id="opentargets-card">
+                            <div class="enhance-card-header">
+                                <i class="fas fa-bullseye"></i>
+                                <h4 class="enhance-card-title">OpenTargets</h4>
+                            </div>
+                            <div class="enhance-card-content">
+                                Query OpenTargets for drug-target associations, disease associations, and therapeutic
+                                hypotheses.
+                            </div>
+                            <div class="enhance-card-controls">
+                                <button id="query_opentargets" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-bullseye"></i> Query OpenTargets
+                                </button>
+                            </div>
+                        </div> -->
+
+                        <!-- Bgee Expression Card -->
+                        <div class="enhance-card" id="bgee-card">
+                            <div class="enhance-card-header">
+                                <i class="fas fa-dna"></i>
+                                <h4 class="enhance-card-title">Bgee Expression</h4>
+                            </div>
+                            <div class="enhance-card-content">
+                                Add gene expression data from Bgee database. Query by both genes and organs with customizable confidence levels.
+                                <div class="alert alert-info mt-2" style="font-size: 0.75rem; padding: 0.5rem;">
+                                    <i class="fas fa-info-circle"></i> <strong>Note:</strong> Network must contain both genes (Ensembl nodes) and organs to query Bgee expression data.
+                                </div>
+                            </div>
+                            <div class="enhance-card-controls">
+                                <div class="form-group mb-2">
+
+                                    <div class="confidence-level-selector">
+                                    <div class="form-group mb-2">
+                                        <label for="bgee-confidence-level">Confidence level:</label>
+                                        <input type="number" step="0.1" class="form-control" id="bgee-confidence-level" value="80">
+                                    </div>
+                                    </div>
+                                    <small class="form-text text-muted">Higher levels include only more reliable expression data</small>
+                                </div>
+                                <button id="bgee_query_expression" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-dna"></i> Query Gene Expression
+                                </button>
+                                <div id="bgee-status" class="mt-2"></div>
+                            </div>
+                        </div>
+
+                        <!-- QSPR Predictions Card -->
+                        <div class="enhance-card" id="qspr-card">
+                            <div class="enhance-card-header">
+                                <i class="fas fa-flask"></i>
+                                <h4 class="enhance-card-title">QSPR Predictions</h4>
+                            </div>
+                            <div class="enhance-card-content">
+                                Generate QSPR predictions for compounds in your network. Set activity thresholds and
+                                fetch bioactivity predictions.
+                            </div>
+                            <div class="enhance-card-controls">
+                                <div class="form-group mb-2">
+                                    <label for="threshold_pchembl">pChEMBL Threshold:</label>
+                                    <input type="number" step="0.1" class="form-control" id="threshold_pchembl"
+                                        value="6.5">
+                                    <small class="form-text">Activity of 10<sup id="activity_display">-6.5</sup>
+                                        M</small>
+                                </div>
+                                <button id="fetch_predictions" type="button" class="btn btn-primary btn-sm w-100">
+                                    <i class="fas fa-flask"></i> Fetch Predictions
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- Table Mapping Modal -->
+<div class="modal fade" id="table-mapping-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Map Table to Network</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Node Creation</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create-nodes-checkbox">
+                            <label class="form-check-label" for="create-nodes-checkbox">Create nodes from table</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="node-type-select">Node Type:</label>
+                            <select id="node-type-select" class="form-control">
+                                <option value="ke">Key Event</option>
+                                <option value="chemical">Chemical</option>
+                                <option value="protein">UniProt</option>
+                                <option value="gene">Ensembl</option>
+                                <option value="component_process">Component Process</option>
+                                <option value="component_object">Component Object</option>
+                                <option value="organ">Organ</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="node-id-column">ID Column:</label>
+                            <select id="node-id-column" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="node-label-column">Label Column:</label>
+                            <select id="node-label-column" class="form-control"></select>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6">
+                        <h6>Edge Creation</h6>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="create-edges-checkbox">
+                            <label class="form-check-label" for="create-edges-checkbox">Create edges from table</label>
+                        </div>
+                        <div class="form-group">
+                            <label for="edge-type-select">Edge Type:</label>
+                            <select id="edge-type-select" class="form-control">
+                                <option value="ker">Key Event Relationship</option>
+                                <option value="interaction">Interaction</option>
+                                <option value="part_of">Part Of</option>
+                                <option value="translates_to">Translates To</option>
+                                <option value="has_process">Has Process</option>
+                                <option value="has_object">Has Object</option>
+                                <option value="is_stressor_of">Is Stressor Of</option>
+                                <option value="expression_in">Expression In</option>
+                                <option value="increased_process_quality">Increased Process Quality</option>
+                                <option value="decreased_process_quality">Decreased Process Quality</option>
+                                <option value="delayed">Delayed</option>
+                                <option value="occurrence">Occurrence</option>
+                                <option value="abnormal">Abnormal</option>
+                                <option value="premature">Premature</option>
+                                <option value="disrupted">Disrupted</option>
+                                <option value="functional_change">Functional Change</option>
+                                <option value="morphological_change">Morphological Change</option>
+                                <option value="pathological">Pathological</option>
+                                <option value="arrested">Arrested</option>
+                                <option value="custom">Custom</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edge-source-column">Source Column:</label>
+                            <select id="edge-source-column" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edge-target-column">Target Column:</label>
+                            <select id="edge-target-column" class="form-control"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="edge-label-column">Label Column:</label>
+                            <select id="edge-label-column" class="form-control"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-12">
+                        <h6>Property Columns</h6>
+                        <div id="property-columns">
+                            <!-- Dynamically populated checkboxes -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="apply-mapping-btn">Apply Mapping</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="delete-confirmation-modal" tabindex="-1" role="dialog" aria-labelledby="deleteModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">
+                    <i class="fas fa-exclamation-triangle text-warning"></i> Confirm Deletion
+                </h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="delete-message">Are you sure you want to delete the selected element(s)?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-info-circle"></i> This action cannot be undone.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">
+                    <i class="fas fa-times"></i> Cancel
+                </button>
+                <button type="button" class="btn btn-danger" id="confirm-delete-btn">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global variables
+    let compound_data = {};
+    let compoundMapping = {};
+    let modelToProteinInfo = {};
+    let fetched_preds = false;
+    let genesVisible = false;
+    let boundingBoxesVisible = false;
+    let compoundsVisible = false;
+    let selectedElements = []; // Track selected elements
+
+    // Make sure cy is available globally from the start
+    window.cy = null;
+
+    // Update activity display
+    function updateActivity() {
+        const value = document.getElementById('threshold_pchembl').value;
+        const activityDisplay = document.getElementById('activity_display');
+        if (activityDisplay) {
+            activityDisplay.textContent = `-${value}`;
+        }
+    }
+
+    // Selection management functions
+    function updateSelectionControls() {
+        const selectionControls = document.getElementById('selection-controls');
+        const selectionInfo = document.getElementById('selection-info');
+
+        if (window.cy) {
+            const selected = window.cy.$(':selected');
+            selectedElements = selected.map(ele => ele.id());
+
+            if (selected.length > 0) {
+                selectionControls.style.display = 'flex';
+                selectionInfo.textContent = `${selected.length} selected`;
+            } else {
+                selectionControls.style.display = 'none';
+                selectedElements = [];
+            }
+        }
+    }
+
+    function initializeNetworkSelection() {
+        if (!window.cy) return;
+
+        // Enable box selection for multi-select
+        window.cy.boxSelectionEnabled(true);
+
+        // Handle single click selection
+        window.cy.on('tap', function (evt) {
+            const target = evt.target;
+
+            // If clicking on background, clear selection unless shift is held
+            if (target === window.cy) {
+                if (!evt.originalEvent.shiftKey) {
+                    window.cy.$(':selected').unselect();
+                }
+                return;
+            }
+
+            // Handle node/edge selection
+            if (target.isNode() || target.isEdge()) {
+                evt.stopPropagation();
+
+                if (evt.originalEvent.shiftKey) {
+                    // Shift+click: toggle selection
+                    if (target.selected()) {
+                        target.unselect();
+                    } else {
+                        target.select();
+                    }
+                } else {
+                    // Regular click: select only this element
+                    window.cy.$(':selected').unselect();
+                    target.select();
+                }
+            }
+        });
+
+        // Update selection controls when selection changes
+        window.cy.on('select unselect', function () {
+            updateSelectionControls();
+        });
+
+        // Prevent default href behavior on nodes/edges
+        window.cy.on('tap', 'node, edge', function (evt) {
+            evt.preventDefault();
+            evt.stopPropagation();
+        });
+    }
+
+    function deleteSelectedElements() {
+        if (!window.cy) return;
+
+        const selected = window.cy.$(':selected');
+        const selectedElements = selected.map(ele => ele.id());
+
+        if (selectedElements.length === 0) return;
+
+        // Update modal message with count
+        const deleteMessage = document.getElementById('delete-message');
+        const confirmButton = document.getElementById('confirm-delete-btn');
+
+        deleteMessage.textContent = `Are you sure you want to delete ${selectedElements.length} selected element(s)?`;
+
+        // Remove any existing event listeners to prevent duplicates
+        const newConfirmButton = confirmButton.cloneNode(true);
+        confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
+
+        // Set up one-time event listener for confirmation
+        newConfirmButton.addEventListener('click', function() {
+            const elementsToRemove = window.cy.$(':selected');
+
+            // Remove elements from the network
+            elementsToRemove.remove();
+
+            // Update network stats
+            updateNetworkStats();
+
+            // Update selection controls
+            updateSelectionControls();
+
+            // Update any related tables/data if needed
+            if (window.updateTables) {
+                window.updateTables();
+            }
+
+            // Hide modal
+            $('#delete-confirmation-modal').modal('hide');
+
+            console.log(`Deleted ${selectedElements.length} elements from network`);
+        });
+
+        // Show modal
+        $('#delete-confirmation-modal').modal('show');
+    }
+
+    function clearSelection() {
+        if (window.cy) {
+            window.cy.$(':selected').unselect();
+            selectedElements = [];
+            updateSelectionControls();
+        }
+    }
+
+    // Initialize selection event handlers
+    function initializeSelectionHandlers() {
+        // Use event delegation to avoid conflicts with dynamically created elements
+        $(document).off('click', '#delete_selected').on('click', '#delete_selected', deleteSelectedElements);
+        $(document).off('click', '#clear_selection').on('click', '#clear_selection', clearSelection);
+
+        // Add keyboard shortcuts
+        document.addEventListener('keydown', function (e) {
+            // Only process shortcuts if we're not in an input field
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            // Skip if modal is open
+            if (document.querySelector('.modal.show')) {
+                return;
+            }
+
+            // Delete key to remove selected elements
+            if (e.key === 'Delete' && window.cy && window.cy.$(':selected').length > 0) {
+                e.preventDefault();
+                deleteSelectedElements();
+            }
+
+            // Escape key to clear selection
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                clearSelection();
+            }
+
+            // Ctrl+A to select all
+            if (e.ctrlKey && e.key === 'a') {
+                e.preventDefault();
+                if (window.cy) {
+                    window.cy.elements().select();
+                }
+            }
+        });
+    }
+
+    // Update network stats
+    function updateNetworkStats() {
+        if (window.cy) {
+            const nodeCount = window.cy.nodes().length;
+            const edgeCount = window.cy.edges().length;
+
+            document.getElementById('node-count').textContent = nodeCount;
+            document.getElementById('edge-count').textContent = edgeCount;
+        }
+    }
+
+    // Bottom panel tab switching
+    function switchBottomTab(tableName) {
+        // Update button states
+        document.querySelectorAll('.bottom-tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('data-table') === tableName) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Update table panel visibility
+        document.querySelectorAll('.table-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+        document.getElementById(tableName + '-table-container-panel').classList.add('active');
+
+        // Update table heights after tab switch
+        setTimeout(() => {
+            updateTableContainerHeights();
+            redrawDataTables();
+        }, 50);
+    }
+
+    // Workspace mode switching (fixed to properly hide/show)
+    function switchWorkspaceMode(mode) {
+        console.log('Switching to mode:', mode); // Debug log
+
+        // Update button states
+        document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('data-mode') === mode) {
+                btn.classList.add('active');
+            }
+        });
+
+        // Hide all workspace modes first
+        document.querySelectorAll('.workspace-mode').forEach(modeDiv => {
+            modeDiv.classList.remove('active');
+            modeDiv.style.display = 'none'; // Explicitly hide all modes
+        });
+
+        // Show the selected mode
+        const selectedMode = document.getElementById(mode + '-mode');
+        if (selectedMode) {
+            console.log('Showing mode element:', selectedMode.id); // Debug log
+            selectedMode.style.display = 'block'; // Explicitly show selected mode
+            selectedMode.classList.add('active');
+        } else {
+            console.error('Mode element not found:', mode + '-mode'); // Debug log
+        }
+    }
+
+    // Resizing functionality
+    function initializeResizing() {
+        // Workspace sidebar resizing
+        let isResizing = false;
+        let startX = 0;
+        let startWidth = 0;
+
+        const workspaceSidebar = document.getElementById('workspace-sidebar');
+        const resizeHandle = workspaceSidebar.querySelector('::before');
+
+        workspaceSidebar.addEventListener('mousedown', function (e) {
+            if (e.offsetX <= 6) { // Within resize handle area
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = parseInt(window.getComputedStyle(workspaceSidebar).width, 10);
+                document.body.classList.add('resizing');
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('mousemove', function (e) {
+            if (!isResizing) return;
+
+            const width = startWidth - (e.clientX - startX);
+            const minWidth = 300;
+            const maxWidth = 1200;
+
+            if (width >= minWidth && width <= maxWidth) {
+                workspaceSidebar.style.width = width + 'px';
+                if (window.cy) {
+                    window.cy.resize();
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', function () {
+            if (isResizing) {
+                isResizing = false;
+                document.body.classList.remove('resizing');
+            }
+        });
+
+        // Bottom panel resizing
+        let isResizingVertical = false;
+        let startY = 0;
+        let startNetworkHeight = 0;
+        let startBottomHeight = 0;
+
+        const bottomPanel = document.getElementById('bottom-panel-area');
+        const bottomPanelHeader = bottomPanel.querySelector('.bottom-panel-header');
+
+        // Resize from the header area
+        bottomPanelHeader.addEventListener('mousedown', function (e) {
+            // Prevent resize if clicking on tab buttons
+            if (e.target.closest('.bottom-tab-btn')) {
+                return;
+            }
+
+            isResizingVertical = true;
+            startY = e.clientY;
+
+            const networkArea = document.querySelector('.network-area');
+            const centralArea = document.querySelector('.central-area');
+            startNetworkHeight = networkArea.offsetHeight;
+            startBottomHeight = bottomPanel.offsetHeight;
+
+            document.body.classList.add('resizing-vertical');
+            document.body.style.cursor = 'row-resize';
+            e.preventDefault();
+            e.stopPropagation();
+        });
+
+        // Global mousemove for resize
+        document.addEventListener('mousemove', function (e) {
+            if (!isResizingVertical) return;
+
+            const deltaY = e.clientY - startY;
+            const networkArea = document.querySelector('.network-area');
+            const centralArea = document.querySelector('.central-area');
+            const totalHeight = centralArea.offsetHeight;
+
+            // Calculate new heights - Fixed direction logic
+            const newNetworkHeight = startNetworkHeight + deltaY;
+            const newBottomHeight = totalHeight - newNetworkHeight;
+
+            const minHeight = 150;
+            const maxNetworkHeight = totalHeight - minHeight;
+            const maxBottomHeight = totalHeight - minHeight;
+
+            // Ensure minimum and maximum heights are respected
+            if (newNetworkHeight >= minHeight &&
+                newNetworkHeight <= maxNetworkHeight &&
+                newBottomHeight >= minHeight &&
+                newBottomHeight <= maxBottomHeight) {
+
+                // Apply new heights immediately
+                networkArea.style.height = newNetworkHeight + 'px';
+                bottomPanel.style.height = newBottomHeight + 'px';
+
+                // Update table container heights immediately during drag
+                updateTableContainerHeights();
+
+                // Trigger Cytoscape resize immediately
+                if (window.cy) {
+                    window.cy.resize();
+                }
+            }
+
+            e.preventDefault();
+        });
+
+        // Global mouseup for resize
+        document.addEventListener('mouseup', function () {
+            if (isResizingVertical) {
+                isResizingVertical = false;
+                document.body.classList.remove('resizing-vertical');
+                document.body.style.cursor = '';
+
+                // Convert to percentages for responsive behavior
+                const networkArea = document.querySelector('.network-area');
+                const centralArea = document.querySelector('.central-area');
+                const totalHeight = centralArea.offsetHeight;
+
+                if (totalHeight > 0) {
+                    const networkPercent = Math.max(20, Math.min(80, (networkArea.offsetHeight / totalHeight) * 100));
+                    const bottomPercent = 100 - networkPercent;
+
+                    networkArea.style.height = networkPercent + '%';
+                    bottomPanel.style.height = bottomPercent + '%';
+                }
+
+                // Final table updates with a slight delay to ensure DOM is stable
+                setTimeout(() => {
+                    updateTableContainerHeights();
+                    redrawDataTables();
+                }, 50);
+
+                // Final Cytoscape resize
+                if (window.cy) {
+                    setTimeout(() => {
+                        window.cy.resize();
+                        window.cy.fit();
+                    }, 100);
+                }
+
+                //console.log('Ended vertical resize'); // Debug
+            }
+        });
+
+        // Table panel resizing and toggling
+        initializeTablePanelControls();
+    }
+
+    // Update table container heights to fill available space - Enhanced version
+    function updateTableContainerHeights() {
+        const bottomPanel = document.getElementById('bottom-panel-area');
+        const bottomPanelContent = bottomPanel.querySelector('.bottom-panel-content');
+        const bottomPanelHeader = bottomPanel.querySelector('.bottom-panel-header');
+
+        if (bottomPanelContent && bottomPanelHeader) {
+            const headerHeight = bottomPanelHeader.offsetHeight;
+            // Use the actual pixel height of the bottom panel
+            const totalHeight = bottomPanel.offsetHeight;
+            // Remove padding to allow full use of the panel
+            const availableHeight = Math.max(50, totalHeight - headerHeight);
+
+            // Update all table panel heights
+            const tablePanels = bottomPanelContent.querySelectorAll('.table-panel');
+            tablePanels.forEach(panel => {
+                const panelContent = panel.querySelector('.panel-content');
+                if (panelContent) {
+                    panelContent.style.height = availableHeight + 'px';
+                    panelContent.style.overflowY = 'auto';
+
+                    // Update table wrapper heights
+                    const tableWrapper = panelContent.querySelector('.table-wrapper');
+                    if (tableWrapper) {
+                        // Get height of other elements in panel content (hints, controls, etc.)
+                        const otherElements = Array.from(panelContent.children).filter(
+                            el => !el.classList.contains('table-wrapper')
+                        );
+                        let otherElementsHeight = 0;
+                        otherElements.forEach(el => {
+                            const computedStyle = window.getComputedStyle(el);
+                            const marginTop = parseInt(computedStyle.marginTop) || 0;
+                            const marginBottom = parseInt(computedStyle.marginBottom) || 0;
+                            otherElementsHeight += el.offsetHeight + marginTop + marginBottom;
+                        });
+
+                        // Use ALL available space for the table wrapper - no buffer needed
+                        const tableHeight = Math.max(100, availableHeight - otherElementsHeight);
+                        tableWrapper.style.height = tableHeight + 'px';
+                        tableWrapper.style.overflowY = 'auto';
+                        tableWrapper.style.overflowX = 'auto';
+
+                        // Ensure the wrapper expands to use full height
+                        tableWrapper.style.minHeight = tableHeight + 'px';
+                        tableWrapper.style.maxHeight = tableHeight + 'px';
+
+                        // Make sure the table inside uses full wrapper height
+                        const actualTable = tableWrapper.querySelector('table');
+                        if (actualTable) {
+                            actualTable.style.height = '100%';
+                            actualTable.style.minHeight = '100%';
+                        }
+
+                        // Force immediate layout recalculation
+                        tableWrapper.offsetHeight; // Trigger reflow
+                    }
+                }
+            });
+
+        }
+    }
+
+    // Redraw DataTables to adjust to new container sizes
+    function redrawDataTables() {
+        // Redraw any DataTables that might be present
+        if (window.$.fn.DataTable) {
+            window.$('.table').each(function () {
+                const table = window.$(this);
+                if (table.hasClass('dataTable')) {
+                    const dataTable = table.DataTable();
+                    setTimeout(() => {
+                        dataTable.columns.adjust();
+                        dataTable.draw();
+                    }, 50);
+                }
+            });
+        }
+
+    }
+
+    // Table panel controls
+    function initializeTablePanelControls() {
+        // Toggle buttons
+        document.getElementById('toggle-compound-table')?.addEventListener('click', function () {
+            toggleTablePanel('compound-table-panel');
+        });
+
+        document.getElementById('toggle-gene-table')?.addEventListener('click', function () {
+            toggleTablePanel('gene-table-panel');
+        });
+
+        document.getElementById('toggle-history-table')?.addEventListener('click', function () {
+            toggleTablePanel('history-table-panel');
+        });
+
+        // Initial table height setup
+        setTimeout(updateTableContainerHeights, 100);
+    }
+
+    function toggleTablePanel(panelId) {
+        const panel = document.getElementById(panelId);
+        const button = panel.querySelector('.table-toggle-btn');
+
+        if (panel.classList.contains('collapsed')) {
+            panel.classList.remove('collapsed');
+            button.classList.add('active');
+        } else {
+            panel.classList.add('collapsed');
+            button.classList.remove('active');
+        }
+
+        // Trigger layout update
+        setTimeout(() => {
+            if (window.cy) {
+                window.cy.resize();
+            }
+        }, 300);
+    }
+
+    // Sidebar collapse functionality
+    document.addEventListener('DOMContentLoaded', function () {
+        // Initialize threshold input event listener
+        const thresholdInput = document.getElementById('threshold_pchembl');
+        if (thresholdInput) {
+            thresholdInput.addEventListener('input', updateActivity);
+        }
+        initializeSelectionHandlers();
+
+        // Bottom panel tab buttons
+        document.querySelectorAll('.bottom-tab-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const tableName = this.getAttribute('data-table');
+                switchBottomTab(tableName);
+            });
+        });
+
+        // Workspace mode buttons (fixed)
+        document.querySelectorAll('.workspace-mode-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const mode = this.getAttribute('data-mode');
+                console.log('Button clicked for mode:', mode); // Debug log
+                switchWorkspaceMode(mode);
+            });
+        });
+
+        // Close buttons in sidebars
+        document.querySelectorAll('.sidebar-close').forEach(button => {
+            button.addEventListener('click', function () {
+                const targetId = this.getAttribute('data-target');
+                toggleSidebar(targetId);
+            });
+        });
+
+        // Collapsible sections functionality
+        document.querySelectorAll('.collapsible-header').forEach(header => {
+            header.addEventListener('click', function () {
+                const targetId = this.getAttribute('data-target');
+                const content = document.getElementById(targetId);
+                const icon = this.querySelector('.collapse-icon');
+
+                if (content && icon) {
+                    // Toggle the content visibility
+                    if (content.style.display === 'none' || content.style.display === '') {
+                        content.style.display = 'block';
+                        icon.classList.remove('fa-chevron-down');
+                        icon.classList.add('fa-chevron-up');
+                    } else {
+                        content.style.display = 'none';
+                        icon.classList.remove('fa-chevron-up');
+                        icon.classList.add('fa-chevron-down');
+                    }
+                }
+            });
+        });
+
+        // Initialize all collapsible content as hidden
+        document.querySelectorAll('.collapsible-content').forEach(content => {
+            content.style.display = 'none';
+        });
+
+        // Initialize default workspace mode (query mode should be visible by default)
+        setTimeout(() => {
+            switchWorkspaceMode('query');
+        }, 100);
+
+        // Initialize network stats update
+        if (window.cy) {
+            updateNetworkStats();
+            window.cy.on('add remove', updateNetworkStats);
+        }
+
+        // Initialize network selection when cy is ready
+        if (window.cy) {
+            initializeNetworkSelection();
+            updateNetworkStats();
+            window.cy.on('add remove', updateNetworkStats);
+        } else {
+            // Wait for cy to be initialized and then set up selection
+            const checkCy = setInterval(() => {
+                if (window.cy) {
+                    initializeNetworkSelection();
+                    updateNetworkStats();
+                    window.cy.on('add remove', updateNetworkStats);
+                    clearInterval(checkCy);
+                }
+            }, 100);
+        }
+
+        // Initialize table heights
+        setTimeout(updateTableContainerHeights, 200);
+    });
+
+    // Toggle buttons in nav - Fixed workspace toggle
+    document.getElementById('toggle-workspace-sidebar')?.addEventListener('click', function () {
+        toggleSidebar('workspace-sidebar');
+    });
+
+    function toggleSidebar(sidebarId) {
+        const sidebar = document.getElementById(sidebarId);
+        if (!sidebar) return;
+
+        sidebar.classList.toggle('collapsed');
+
+        // Trigger resize event for Cytoscape to adjust
+        setTimeout(() => {
+            if (window.cy) {
+                window.cy.resize();
+                if (window.positionNodes) {
+                    window.positionNodes(window.cy);
+                }
+            }
+            // Also update table heights when sidebar toggles
+            updateTableContainerHeights();
+            redrawDataTables();
+        }, 300);
+    }
+
+    // Gene table row click handler
+    function setupGeneTableHandlers() {
+        $(document).off('click', '#gene_table tbody tr').on('click', '#gene_table tbody tr', function () {
+            const geneSymbol = $(this).data('gene');
+            const proteinId = $(this).data('protein-id');
+            const geneId = $(this).data('gene-id');
+
+            if (!geneSymbol) return;
+
+            // Remove previous highlights
+            $('#gene_table tbody tr').removeClass('table-success');
+
+            // Highlight clicked row
+            $(this).addClass('table-success');
+
+            // Highlight corresponding nodes in the network
+            if (window.cy) {
+                // Remove previous highlights
+                window.cy.elements().removeClass('highlighted');
+
+                // Find and highlight gene nodes
+                const geneNode = window.cy.getElementById(geneId);
+                const proteinNode = window.cy.$(`[protein_id="${proteinId}"]`);
+
+                if (geneNode.length > 0) {
+                    geneNode.addClass('highlighted');
+                    // Center on the node
+                    window.cy.center(geneNode);
+                }
+
+                if (proteinNode.length > 0) {
+                    proteinNode.addClass('highlighted');
+                }
+
+                // Also highlight connecting edges
+                const connectedEdges = geneNode.connectedEdges().union(proteinNode.connectedEdges());
+                connectedEdges.addClass('highlighted');
+            }
+
+            console.log(`Clicked gene: ${geneSymbol}, UniProt: ${proteinId}`);
+        });
+    }
+
+    // Also reinitialize handlers when gene table is updated
+    window.populateGeneTable = function () {
+        if (window.updateGeneTable) {
+            return window.updateGeneTable().then(() => {
+                // Ensure handlers are set up after table update
+                if (window.setupGeneCellClickHandlers) {
+                    window.setupGeneCellClickHandlers();
+                }
+            });
+        }
+    };
+
+    // Initialize table managers and their filters when DOM is ready
+    document.addEventListener('DOMContentLoaded', function () {
+        // Ensure table managers are initialized with proper delay
+        setTimeout(() => {
+            // Initialize gene table filter if not already done
+            if (window.geneTableManager && window.geneTableManager.setupFilterInput) {
+                window.geneTableManager.setupFilterInput();
+            }
+
+            // Initialize compound table filter if not already done  
+            if (window.compoundTableManager && window.compoundTableManager.setupFilterInput) {
+                window.compoundTableManager.setupFilterInput();
+            }
+
+            // Initial population of tables
+            if (window.populateGeneTable) {
+                window.populateGeneTable();
+            }
+
+            if (window.populateCompoundTable) {
+                window.populateCompoundTable();
+            }
+        }, 500);
+    });
+
+    // Gene table button handler - ensure filter is maintained
+    $(document).on('click', '#get-genes-table-btn', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.toggleGenes) {
+            window.toggleGenes();
+        }
+    });
+
+    // Compound table button handler - ensure filter is maintained  
+    $(document).on('click', '#toggle_compounds, #sidebar_toggle_compounds', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (window.toggleCompounds) {
+            window.toggleCompounds();
+        }
+    });
+
+    // Initialize table managers
+    if (typeof CompoundTableManager !== 'undefined') {
+        window.compoundTableManager = new CompoundTableManager();
+        console.log('Compound Table Manager initialized');
+    }
+
+    if (typeof GeneTableManager !== 'undefined') {
+        window.geneTableManager = new GeneTableManager();
+        console.log('Gene Table Manager initialized');
+    }
+
+    if (typeof AOPTableManager !== 'undefined') {
+        window.aopTableManager = new AOPTableManager();
+        console.log('AOP Table Manager initialized');
+    }
+
+    if (typeof GeneExpressionTableManager !== 'undefined') {
+        window.geneExpressionTableManager = new GeneExpressionTableManager();
+        console.log('Gene Expression Table Manager initialized');
+    }
+
+    if (typeof ComponentTableManager !== 'undefined') {
+        window.componentTableManager = new ComponentTableManager();
+        console.log('Component Table Manager initialized');
+    }
+
+    // Initialize History Table Manager
+    if (typeof HistoryTableManager !== 'undefined') {
+        window.historyTableManager = new HistoryTableManager();
+        console.log('History Table Manager initialized');
+    }
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css">
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-qtip@2.7.0/cytoscape-qtip.js"></script>
+
+<script src="{{ url_for('static', filename='js/aop_app/aop_name.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_elements.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_styles.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/bdf.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/network_persistence.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/manual_controls.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/aop_network_data.js') }}"></script>
+<script src="{{ url_for('static', filename='js/aop_app/data_tables.js') }}"></script>
+
+{% endblock %}

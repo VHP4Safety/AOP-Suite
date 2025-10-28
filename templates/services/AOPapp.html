@@ -1,0 +1,37 @@
+{% extends "aop_app.html" %}
+{% block content %}
+{{ super() }}
+
+<script>
+// Initialize the AOP Network Builder application
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('AOP Network Builder initialized');
+    
+    // Get initial data from template variables
+    const containerData = document.getElementById('compound-container');
+    const initialMie = containerData?.getAttribute('data-mies') || '';
+    const initialQid = containerData?.getAttribute('data-qid') || '';
+    const initialQidWd = containerData?.getAttribute('data-qid-wd') || '';
+    
+    // Initialize with any provided parameters
+    if (initialMie) {
+        console.log('Loading initial MIE query:', initialMie);
+        // Auto-populate the query field if MIE is provided
+        const queryInput = document.getElementById('query-values');
+        if (queryInput) {
+            queryInput.value = initialMie;
+        }
+    }
+    
+    if (initialQid || initialQidWd) {
+        console.log('Loading with IDs:', initialQid, initialQidWd);
+        // Handle initial ID-based loading if needed
+    }
+    
+    // Initialize network if global cy is available
+    if (window.cy) {
+        console.log('Cytoscape network initialized');
+    }
+});
+</script>
+{% endblock %}
