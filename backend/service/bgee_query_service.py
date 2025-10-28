@@ -51,26 +51,3 @@ def query_anatomical_expression_data(gene_nodes: List[CytoscapeNode]) -> List[Di
     except Exception as e:
         logger.error(f"Error querying Bgee anatomical: {e}")
         return []
-
-def query_developmental_expression_data(gene_nodes: List[CytoscapeNode]) -> List[Dict[str, str]]:
-    """Query Bgee for developmental stage expression data"""
-    try:
-        gene_ids = []
-        for node in gene_nodes:
-            gene_id = node.properties.get("gene_id", node.id)
-            if gene_id.startswith("gene_"):
-                gene_id = gene_id.replace("gene_", "")
-            gene_ids.append(gene_id)
-
-        if not gene_ids:
-            return []
-
-        logger.info(f"Querying Bgee developmental for {len(gene_ids)} genes")
-        developmental_data = query_bgee_developmental_expression(gene_ids)
-
-        logger.info(f"Retrieved developmental data for {len(developmental_data)} entries")
-        return developmental_data
-
-    except Exception as e:
-        logger.error(f"Error querying Bgee developmental: {e}")
-        return []

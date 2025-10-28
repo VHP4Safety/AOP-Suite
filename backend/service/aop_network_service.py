@@ -224,8 +224,8 @@ class AOPNetworkService:
 
             return {
                 "expression_elements": expression_elements,
-                "expression_data": self.builder.network.gene_expression_table(),  # Return table data
-                "expression_table": self.builder.network.gene_expression_table(),
+                "expression_data": self.builder.network.gene_expression_table(),
+                "gene_table": self.builder.network.gene_table(),  # Add gene table like other methods
                 "sparql_query": query or "# Query failed",
             }, 200
 

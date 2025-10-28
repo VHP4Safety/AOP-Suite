@@ -1486,55 +1486,17 @@ document.addEventListener("DOMContentLoaded", function () {
             console.log("Bgee confidence level set to:", confidenceLevel);
         });
 
-        // Bgee dropdown handlers - remove developmental
+        // Bgee expression handler - updated to match other load_x patterns
         $("#bgee_query_expression").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
             queryBgeeExpression();
         });
 
-        $("#bgee_query_anatomical").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            queryBgeeAnatomical();
-        });
-
-        // Populate gene expression table
-        $("#populate_gene_expression_table").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            // No longer needed - data comes from query calls
-            console.log('populate_gene_expression_table deprecated - use query calls');
-        });
-
-        // Gene expression table button handler
-        $("#get-gene-expression-table-btn").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            queryBgeeExpression();
-        });
-
-        // Setup component table button handler
-        $("#get-components-table-btn").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.toggleComponents) {
-                window.toggleComponents();
-            }
-        });
-
-        // Set up selection control handlers using event delegation to avoid conflicts
-        $(document).off('click', '#delete_selected').on('click', '#delete_selected', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            deleteSelectedElements();
-        });
-
-        $(document).off('click', '#clear_selection').on('click', '#clear_selection', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            clearSelection();
-        });
+        // Remove deprecated handlers
+        // $("#bgee_query_anatomical").off("click"); 
+        // $("#populate_gene_expression_table").off("click");
+        // $("#get-gene-expression-table-btn").off("click");
     }
 
     // Enhanced function to handle sidebar toggles with smooth transitions
@@ -1913,7 +1875,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         // Extract elements array from the elements object
                         const elementsArray = data.expression_elements || [];
                         window.historyTableManager.addHistoryEntry(
-                            'gene', // Use 'gene' type instead of 'bgee' to match existing types
+                            'gene', 
                             'Bgee Expression Query', 
                             data.sparql_query, 
                             null, 
@@ -1922,7 +1884,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
 
                     // Add expression elements to network if provided - handle elements array structure
-                    const expressionElements = data.expression_elements || [];
+                    const expressionElements = data.expression_elements.elements || [];
                     if (expressionElements.length > 0) {
                         expressionElements.forEach(element => {
                             const elementId = element.data?.id;
@@ -1987,6 +1949,45 @@ document.addEventListener("DOMContentLoaded", function () {
                     );
                 }
             });
+    }
+
+    function showBgeeStatus(message, type = 'info') {
+        const statusDiv = document.getElementById('bgee-status');
+        if (!statusDiv) {
+            console.warn('Bgee status div not found');
+            return;
+        }
+
+        const icons = {
+            'loading': 'fas fa-spinner fa-spin',
+            'success': 'fas fa-check',
+            'error': 'fas fa-exclamation-triangle',
+            'warning': 'fas fa-exclamation-circle',
+            'info': 'fas fa-info-circle'
+        };
+
+        const colors = {
+            'loading': '#6c757d',
+            'success': '#28a745',
+            'error': '#dc3545',
+            'warning': '#ffc107',
+            'info': '#17a2b8'
+        };
+
+        statusDiv.innerHTML = `
+            <div style="color: ${colors[type]}; font-size: 0.8rem; margin-top: 0.5rem;">
+                <i class="${icons[type]}"></i> ${message}
+            </div>
+        `;
+
+        // Auto-clear success/info messages after 5 seconds
+        if (type === 'success' || type === 'info') {
+            setTimeout(() => {
+                if (statusDiv.innerHTML.includes(message)) {
+                    statusDiv.innerHTML = '';
+                }
+            }, 5000);
+        }
     }
 
     function populateGeneExpressionTable() {
