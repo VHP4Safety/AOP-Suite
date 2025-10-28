@@ -862,7 +862,8 @@ class AOPTableManager extends DataTableManager {
         }, delay);
     }
 
-    async performTableUpdate() {
+    async performTableUpdate(data = null) {
+        
         if (this.isUpdating) {
             console.log('Table update already in progress, skipping');
             return;
@@ -876,43 +877,48 @@ class AOPTableManager extends DataTableManager {
         this.isUpdating = true;
         console.log('Starting AOP table update...');
 
-        try {
-            const cyElements = window.cy.elements().jsons();
-            
-            const response = await fetch('/populate_aop_table', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cy_elements: cyElements })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const data = await response.json();
-            
-            if (data.error) {
-                console.error("Error populating AOP table:", data.error);
-                this.currentData = [];
-                this.filteredData = [];
-                this.renderTable();
-                return;
-            }
-            
-            if (data.aop_data && data.aop_data.length > 0) {
+        try {                       
+            if (data && data.aop_data && data.aop_data.length > 0) {
                 this.updateTable(data.aop_data);
                 console.log(`AOP table updated with ${data.aop_data.length} entries`);
+            } else if (data && Array.isArray(data)) {
+                // Data was provided as an array
+                this.updateTable(data);
+                console.log(`AOP table updated with ${data.length} entries`);
+            } else if (data) {
+                // Data was provided but doesn't have expected structure
+                this.updateTable(data);
+                console.log(`AOP table updated with provided data`);
             } else {
-                this.currentData = [];
-                this.filteredData = [];
-                this.renderTable();
+                // No data provided, try to fetch from backend with proper error handling
+                try {
+                    const response = await fetch('/add_aop_network_data', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestData)
+                    });
+
+                    if (!response.ok) {
+                        console.warn(`Backend response not OK: ${response.status} ${response.statusText}`);
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    
+                    if (response && response.aop_table && response.aop_table.length > 0) {
+                        this.updateTable(response.aop_table);
+                        console.log(`AOP table updated with ${response.aop_table.length} entries`);
+                    } else {
+                        console.log('No AOP table in response, using empty table');
+                    }
+                } catch (fetchError) {
+                    console.warn('Failed to fetch from backend, using empty data:', fetchError.message);
+                }
             }
             
         } catch (error) {
             console.error("Error updating AOP table:", error);
-            this.currentData = [];
-            this.filteredData = [];
-            this.renderTable();
         } finally {
             this.isUpdating = false;
         }
@@ -1053,11 +1059,6 @@ class GeneExpressionTableManager extends DataTableManager {
             return;
         }
 
-        if (this.filteredData.length === 0) {
-            this.showEmptyTable();
-            return;
-        }
-
         const html = this.generateTableHTML();
         table.innerHTML = html;
         this.setupGeneExpressionTableEventHandlers();
@@ -1175,56 +1176,14 @@ class GeneExpressionTableManager extends DataTableManager {
         this.isUpdating = true;
 
         try {
-            const response = await fetch('/populate_gene_expression_table', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
-            });
-
-            const data = await response.json();
-
-            if (data.expression_data && data.expression_data.length > 0) {
-                this.updateTable(data.expression_data);
-                console.log(`Gene expression table updated with ${data.expression_data.length} patterns.`);
-            } else {
-                this.currentData = [];
-                this.filteredData = [];
-                this.showEmptyTable();
-                console.log("No gene expression data found in network");
-            }
+            // Gene expression data is now updated directly from query calls
+            // No need for separate populate API call
+            console.log("Gene expression table update completed (data comes from query calls)");
         } catch (error) {
             console.error('Error updating gene expression table:', error);
-            this.showEmptyTable();
         } finally {
             this.isUpdating = false;
         }
-    }
-
-    showEmptyTable() {
-        const tableBody = document.querySelector("#gene_expression_table tbody");
-        if (!tableBody) return;
-
-        tableBody.innerHTML = `
-            <tr id="default-gene-expression-row">
-                <td colspan="5" style="text-align: center; padding: 30px;">
-                    <div style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
-                        <i class="fas fa-chart-bar" style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
-                        No gene expression data in network. Query Bgee to add organ-specific expression patterns.
-                    </div>
-                    <button id="get-gene-expression-table-btn" class="btn btn-primary btn-lg">
-                        <i class="fas fa-chart-bar"></i> Query Gene Expression
-                    </button>
-                </td>
-            </tr>
-        `;
-        
-        document.getElementById("get-gene-expression-table-btn")?.addEventListener("click", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.queryBgeeExpression) {
-                window.queryBgeeExpression();
-            }
-        });
     }
 }
 
@@ -1412,7 +1371,6 @@ class GeneTableManager extends DataTableManager {
         }
 
         if (this.filteredData.length === 0) {
-            this.showEmptyTable();
             return;
         }
 
@@ -1553,54 +1511,14 @@ class GeneTableManager extends DataTableManager {
         this.isUpdating = true;
 
         try {
-            const response = await fetch('/populate_gene_table', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
-            });
-
-            const data = await response.json();
-
-            if (data.gene_data && data.gene_data.length > 0) {
-                this.updateTable(data.gene_data);
-                console.log(`Gene table updated with ${data.gene_data.length} genes.`);
-            } else {
-                this.currentData = [];
-                this.filteredData = [];
-                this.showEmptyTable();
-            }
+            // Gene data is now updated directly from query calls
+            // No need for separate populate API call
+            console.log("Gene table update completed (data comes from query calls)");
         } catch (error) {
             console.error("Error updating gene table:", error);
-            this.showEmptyTable();
         } finally {
             this.isUpdating = false;
         }
-    }
-
-    showEmptyTable() {
-        const tableBody = document.querySelector("#gene_table tbody");
-        if (!tableBody) return;
-
-        tableBody.innerHTML = `
-            <tr id="default-gene-row">
-                <td colspan="2" style="text-align: center; padding: 20px;">
-                    <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                        No genes in network. You can query the AOP-Wiki RDF for gene sets associated with Key Events or draw your own Ensembl identifiers.
-                    </div>
-                    <button id="get-genes-table-btn" class="btn btn-primary btn-sm">
-                        <i class="fas fa-dna"></i> Get gene sets
-                    </button>
-                </td>
-            </tr>
-        `;
-        
-        document.getElementById("get-genes-table-btn")?.addEventListener("click", function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.toggleGenes) {
-                window.toggleGenes();
-            }
-        });
     }
 }
 
@@ -1760,7 +1678,6 @@ class CompoundTableManager extends DataTableManager {
         }
 
         if (this.filteredData.length === 0) {
-            this.showEmptyTable();
             return;
         }
 
@@ -1905,26 +1822,9 @@ class CompoundTableManager extends DataTableManager {
         this.isUpdating = true;
 
         try {
-            const response = await fetch('/populate_compound_table', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cy_elements: window.cy.elements().jsons() })
-            });
-
-            const responseData = await response.json();
-            
-            // Handle the case where response is an array [data, status_code]
-            const data = Array.isArray(responseData) ? responseData[0] : responseData;
-            console.log("Received compound table data:", data);
-
-            if (data.compound_data && data.compound_data.length > 0) {
-                this.updateTable(data.compound_data);
-                console.log(`Compound table updated with ${data.compound_data.length} compounds from network.`);
-            } else {
-                this.currentData = [];
-                this.filteredData = [];
-                this.showEmptyTable();
-            }
+            // Compound data is now updated directly from query calls
+            // No need for separate populate API call
+            console.log("Compound table update completed (data comes from query calls)");
         } catch (error) {
             console.error("Error updating compound table:", error);
             this.showErrorTable();
@@ -1932,63 +1832,7 @@ class CompoundTableManager extends DataTableManager {
             this.isUpdating = false;
         }
     }
-
-    showEmptyTable() {
-        const tableBody = $("#compound_table tbody");
-        const table = document.querySelector('#compound_table');
-        
-        if (!tableBody.length) return;
-
-        tableBody.empty();
-        tableBody.append(`
-            <tr id="default-compound-row">
-                <td style="text-align: center; padding: 20px;">
-                    <div style="color: #6c757d; font-style: italic; margin-bottom: 15px;">
-                        No compounds in network. You can query the AOP-Wiki RDF for compounds associated with Key Events or draw your own PubChem nodes.
-                    </div>
-                    <button id="get-compounds-table-btn" class="btn btn-primary btn-sm">
-                        <i class="fas fa-flask"></i> Get compounds
-                    </button>
-                </td>
-            </tr>
-        `);
-
-        // Clear tfoot when showing empty table
-        const tfoot = table?.querySelector('tfoot');
-        if (tfoot) tfoot.remove();
-
-        // Clear filter when showing empty table
-        const filterInput = document.getElementById(`${this.tableId}-filter`);
-        if (filterInput) {
-            filterInput.value = '';
-            this.filterText = '';
-        }
-
-        // Add click handler for the table button
-        $("#get-compounds-table-btn").off("click").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.toggleCompounds) {
-                window.toggleCompounds();
-            }
-        });
-    }
-
-    showErrorTable() {
-        const tableBody = $("#compound_table tbody");
-        if (!tableBody.length) return;
-
-        tableBody.empty();
-        tableBody.append(`
-            <tr>
-                <td style="text-align: center; padding: 20px; color: #dc3545;">
-                    <i class="fas fa-exclamation-triangle"></i> Error loading compound data
-                </td>
-            </tr>
-        `);
-    }
 }
-
 
 /**
  * History Table Manager - tracks query history across all operations
@@ -2054,7 +1898,6 @@ class HistoryTableManager extends DataTableManager {
         }
 
         this.setupFilterInput();
-        this.showEmptyTable();
     }
 
     addHistoryEntry(type, source, content, timestamp = null, elements = null) {
@@ -2091,14 +1934,25 @@ class HistoryTableManager extends DataTableManager {
     generateElementsSummary(elements) {
         if (!elements) return { total: 0, nodes: 0, edges: 0, types: {} };
 
+        // Handle different element structures
+        let elementsArray;
+        if (Array.isArray(elements)) {
+            elementsArray = elements;
+        } else if (elements.elements && Array.isArray(elements.elements)) {
+            elementsArray = elements.elements;
+        } else {
+            console.warn('Elements is not in expected format:', elements);
+            return { total: 0, nodes: 0, edges: 0, types: {} };
+        }
+
         const summary = {
-            total: elements.length,
+            total: elementsArray.length,
             nodes: 0,
             edges: 0,
             types: {}
         };
 
-        elements.forEach(element => {
+        elementsArray.forEach(element => {
             const group = element.group || (element.data ? (element.data.source ? 'edges' : 'nodes') : 'unknown');
 
             if (group === 'nodes') {
@@ -2195,7 +2049,6 @@ class HistoryTableManager extends DataTableManager {
         }
 
         if (this.filteredData.length === 0) {
-            this.showEmptyTable();
             return;
         }
 
@@ -2813,9 +2666,9 @@ class ComponentTableManager extends DataTableManager {
             console.log('Cytoscape not ready, will setup component table listeners later');
             return;
         }
-
+        
         console.log('Setting up component table network listeners');
-
+        
         window.cy.on('add remove', (event) => {
             console.log('Network changed, updating component table');
             this.debouncedUpdateTable();
@@ -3035,40 +2888,9 @@ class ComponentTableManager extends DataTableManager {
         this.isUpdating = true;
 
         try {
-            const cyElements = window.cy.elements().jsons();
-
-            const response = await fetch('/populate_component_table', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ cy_elements: cyElements })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-
-            const responseData = await response.json();
-            const data = Array.isArray(responseData) ? responseData[0] : responseData;
-            
-            if (data.error) {
-                console.error("Error loading components:", data.error);
-                this.currentData = [];
-                this.filteredData = [];
-                this.showEmptyTable();
-                return;
-            }
-
-            if (data.component_data && data.component_data.length > 0) {
-                this.updateTable(data.component_data);
-                console.log(`Component table updated with ${data.component_data.length} Key Events with component associations.`);
-            } else {
-                // No component associations found
-                this.currentData = [];
-                this.filteredData = [];
-                this.showEmptyTable();
-                console.log("No component associations found for KEs in network");
-            }
-
+            // Component data is now updated directly from query calls
+            // No need for separate populate API call
+            console.log("Component table update completed (data comes from query calls)");
         } catch (error) {
             console.error("Error updating component table:", error);
             this.showErrorTable();
@@ -3076,91 +2898,8 @@ class ComponentTableManager extends DataTableManager {
             this.isUpdating = false;
         }
     }
-
-    showEmptyTable() {
-        const tableBody = $("#component_table tbody");
-        const table = document.querySelector('#component_table');
-
-        if (!tableBody.length) return;
-
-        tableBody.empty();
-        
-        // Check if we have KEs in the network but no component associations
-        const hasKEs = window.cy && window.cy.nodes().some(node => {
-            const nodeData = node.data();
-            const nodeId = nodeData.id || node.id();
-            const nodeType = nodeData.type;
-            const isMie = nodeData.is_mie;
-            const isAo = nodeData.is_ao;
-            return nodeId && (nodeId.includes('aop.events') || isMie || isAo || 
-                             nodeType === 'mie' || nodeType === 'key_event' || nodeType === 'ao');
-        });
-
-        if (hasKEs) {
-            // We have KEs but no component associations were found
-            tableBody.append(`
-                <tr id="no-components-row">
-                    <td colspan="4" style="text-align: center; padding: 30px;">
-                        <div style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
-                            <i class="fas fa-info-circle" style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
-                            No component associations found for Key Events in the current network.
-                            <br><small>Components show Process-Object-Action relationships for Key Events.</small>
-                        </div>
-                    </td>
-                </tr>
-            `);
-        } else {
-            // No KEs in network at all
-            tableBody.append(`
-                <tr id="default-component-row">
-                    <td colspan="4" style="text-align: center; padding: 30px;">
-                        <div style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
-                            <i class="fas fa-cogs" style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
-                            No components in network. See https://doi.org/10.1089/aivt.2017.0017 for more information.
-                        </div>
-                        <button id="get-components-table-btn" class="btn btn-primary btn-lg">
-                            <i class="fas fa-cogs"></i> Get Components
-                        </button>
-                    </td>
-                </tr>
-            `);
-
-            // Add click handler for the table button
-            $("#get-components-table-btn").off("click").on("click", function (e) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (window.toggleComponents) {
-                    window.toggleComponents();
-                }
-            });
-        }
-
-        // Clear tfoot when showing empty table
-        const tfoot = table?.querySelector('tfoot');
-        if (tfoot) tfoot.remove();
-
-        // Clear filter when showing empty table
-        const filterInput = document.getElementById(`${this.tableId}-filter`);
-        if (filterInput) {
-            filterInput.value = '';
-            this.filterText = '';
-        }
-    }
-
-    showErrorTable() {
-        const tableBody = $("#component_table tbody");
-        if (!tableBody.length) return;
-
-        tableBody.empty();
-        tableBody.append(`
-            <tr>
-                <td colspan="4" style="text-align: center; padding: 20px; color: #dc3545;">
-                    <i class="fas fa-exclamation-triangle"></i> Error loading component data
-                </td>
-            </tr>
-        `);
-    }
 }
+
 
 // Initialize the managers with proper delay to ensure DOM is ready
 console.log('Initializing Data Table Managers...');
@@ -3228,72 +2967,3 @@ window.initializeAopTable = function () {
         }, 10000);
     }
 };
-
-window.populateAopTable = function(immediate = false) {
-    if (!window.aopTableManager) {
-        console.warn("AOP Table Manager not initialized");
-        return Promise.resolve();
-    }
-
-    if (immediate) {
-        return window.aopTableManager.performTableUpdate();
-    } else {
-        // Ensure debouncedUpdateTable exists before calling
-        if (typeof window.aopTableManager.debouncedUpdateTable === 'function') {
-            window.aopTableManager.debouncedUpdateTable();
-        } else {
-            console.warn("debouncedUpdateTable method not found, falling back to immediate update");
-            return window.aopTableManager.performTableUpdate();
-        }
-        return Promise.resolve();
-    }
-};
-
-window.populateGeneTable = function () {
-    if (window.geneTableManager) {
-        return window.geneTableManager.performTableUpdate();
-    }
-    return Promise.resolve();
-};
-
-window.populateCompoundTable = function () {
-    if (window.compoundTableManager) {
-        return window.compoundTableManager.performTableUpdate();
-    }
-    return Promise.resolve();
-};
-
-window.populateGeneExpressionTable = function () {
-    if (window.geneExpressionTableManager) {
-        return window.geneExpressionTableManager.performTableUpdate();
-    }
-    return Promise.resolve();
-};
-
-// Document ready initialization
-$(document).ready(function() {
-    if (!window.aopTableManager) {
-        window.aopTableManager = new AOPTableManager();
-    }
-    
-    window.initializeAopTable();
-
-    // Initialize other table managers after a short delay to ensure DOM is ready
-    setTimeout(() => {
-        if (!window.geneTableManager) {
-            window.geneTableManager = new GeneTableManager();
-        }
-        if (!window.compoundTableManager) {
-            window.compoundTableManager = new CompoundTableManager();
-        }
-        if (!window.geneExpressionTableManager) {
-            window.geneExpressionTableManager = new GeneExpressionTableManager();
-        }
-        if (!window.historyTableManager) {
-            window.historyTableManager = new HistoryTableManager();
-        }
-        if (!window.componentTableManager) {
-            window.componentTableManager = new ComponentTableManager();
-        }
-    }, 200);
-});

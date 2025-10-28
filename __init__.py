@@ -13,15 +13,8 @@ This allows absolute imports like:
 # instead of:
 #   from backend.model import aop_data_model
 
-from backend.query import aopwikirdf, pubchem, qsprpred, bgee
-from backend.service import aop_network_service
-from backend.routes import aop_app
+from backend.routes import aop_suite
 
 __all__ = [
-    "aopwikirdf",
-    "pubchem",
-    "qsprpred",
-    "aop_network_service",
-    "aop_app",
-    "bgee",
+
 ]

@@ -162,9 +162,15 @@ document.addEventListener("DOMContentLoaded", function () {
             const includeProteins = document.getElementById('include-proteins-checkbox')?.checked ?? true;
             
             console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for gene loading (include proteins: ${includeProteins}):`, keyEventUris);
-            // Call the load_and_show_genes endpoint with the extracted KEs and include_proteins parameter
-            fetch(`/load_and_show_genes?kes=${encodeURIComponent(keyEventUris.join(' '))}&include_proteins=${includeProteins}`, {
-                method: 'GET'
+            // Call the load_and_show_genes endpoint
+            fetch('/load_and_show_genes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cy_elements: window.cy ? { elements: window.cy.elements().jsons() } : { elements: [] },
+                    kes: keyEventUris.join(' '),
+                    include_proteins: includeProteins
+                })
             })
                 .then(response => {
                     if (!response.ok) {
@@ -184,11 +190,14 @@ document.addEventListener("DOMContentLoaded", function () {
                     
                     // Add query to history table
                     if (data.sparql_query && window.historyTableManager) {
-                        window.historyTableManager.addHistoryEntry('gene', 'AOP-Wiki RDF', data.sparql_query, null, data.gene_elements);
+                        // Extract elements array from the elements object
+                        const elementsArray = data.gene_elements || [];
+                        window.historyTableManager.addHistoryEntry('gene', 'AOP-Wiki RDF', data.sparql_query, null, elementsArray);
                     }
 
-                    // Add only new gene elements
-                    data.gene_elements.forEach(element => {
+                    // Add only new gene elements - handle elements array structure
+                    const geneElements = data.gene_elements.elements || [];
+                    geneElements.forEach(element => {
                         console.log(element.data);
                         const elementId = element.data?.id;
                         if (elementId && !window.cy.getElementById(elementId).length) {
@@ -199,6 +208,12 @@ document.addEventListener("DOMContentLoaded", function () {
                             }
                         }
                     });
+
+                    // Update gene table with new data from API response
+                    if (data.gene_table && window.geneTableManager) {
+                        window.geneTableManager.updateTable(data.gene_table);
+                        console.log('Updated gene table');
+                    }
 
                     // Show genes based on selection
                     if (hasSelection) {
@@ -231,13 +246,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     const buttonText = includeProteins ? "Remove gene sets" : "Remove genes";
                     $("#see_genes").html(`<i class="fas fa-dna"></i> ${buttonText}`);
                     window.genesVisible = true;
-
-                    // Update gene table
-                    setTimeout(() => {
-                        if (window.populateGeneTable) {
-                            window.populateGeneTable();
-                        }
-                    }, 100);
 
                     // Layout update
                     setTimeout(() => {
@@ -278,15 +286,10 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.log(`Removed all gene nodes`);
             }
 
-            // Reset layout and update table
+            // Reset layout and update state
             window.resetNetworkLayout();
             window.genesVisible = false;
             $("#see_genes").html('<i class="fas fa-dna"></i> Get gene sets');
-            setTimeout(() => {
-                if (window.populateGeneTable) {
-                    window.populateGeneTable();
-                }
-            }, 100);
         }
     }
 
@@ -307,8 +310,13 @@ document.addEventListener("DOMContentLoaded", function () {
             const scopeMessage = hasSelection ? `${window.cy.$(':selected').nodes().length} selected nodes` : "all network nodes";
             console.log(`Found ${aopUris.length} AOPs from ${scopeMessage} for compound loading:`, aopUris);
             // Call the load_and_show_compounds endpoint with the extracted AOPs
-            fetch(`/load_and_show_compounds?aops=${encodeURIComponent(aopUris.join(' '))}`, {
-                method: 'GET'
+            fetch('/load_and_show_compounds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cy_elements: window.cy ? { elements: window.cy.elements().jsons() } : { elements: [] },
+                    aops: aopUris.join(' ')
+                })
             })
                 .then(response => {
                     if (!response.ok) {
@@ -328,21 +336,45 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Add query to history table
                     if (data.sparql_query && window.historyTableManager) {
-                        window.historyTableManager.addHistoryEntry('compound', 'AOP-Wiki RDF', data.sparql_query, null, data.compound_elements);
+                        // Extract elements array from the elements object
+                        const elementsArray = data.compound_elements || [];
+                        window.historyTableManager.addHistoryEntry('compound', 'AOP-Wiki RDF', data.sparql_query, null, elementsArray);
                     }
 
-                    // Add only new compound elements
-                    data.compound_elements.forEach(element => {
-                        console.log(element.data);
+                    // Add only new compound elements - handle elements array structure
+                    let compoundElements = [];
+                    if (data.compound_elements) {
+                        if (data.compound_elements.elements && Array.isArray(data.compound_elements.elements)) {
+                            // Structure: { elements: [...] }
+                            compoundElements = data.compound_elements.elements;
+                        } else if (Array.isArray(data.compound_elements)) {
+                            // Structure: [...]
+                            compoundElements = data.compound_elements;
+                        }
+                    }
+
+                    console.log(`Processing ${compoundElements.length} compound elements:`, compoundElements);
+
+                    compoundElements.forEach(element => {
+                        console.log('Compound element data:', element.data);
                         const elementId = element.data?.id;
                         if (elementId && !window.cy.getElementById(elementId).length) {
                             try {
                                 window.cy.add(element);
+                                console.log(`Added compound element: ${elementId}`);
                             } catch (error) {
                                 console.warn("Error adding compound element:", elementId, error.message);
                             }
+                        } else if (elementId) {
+                            console.log(`Compound element already exists: ${elementId}`);
                         }
                     });
+
+                    // Update compound table with new data from API response
+                    if (data.compound_table && window.compoundTableManager) {
+                        window.compoundTableManager.updateTable(data.compound_table);
+                        console.log('Updated compound table');
+                    }
 
                     // Show compounds based on selection
                     if (hasSelection) {
@@ -377,11 +409,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     $("#sidebar_toggle_compounds").text(" Remove chemical stressors");
                     window.compoundsVisible = true;
 
-                    // Update compound table
-                    setTimeout(() => {
-                        populateCompoundTable();
-                    }, 100);
-
                     // Layout update
                     setTimeout(() => {
                         positionNodes(window.cy, fontSizeMultiplier, true);
@@ -414,14 +441,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.log(`Removed all compound nodes`);
             }
 
-            // Reset layout and update table
+            // Reset layout and update state
             window.resetNetworkLayout();
             window.compoundsVisible = false;
             $("#toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
             $("#sidebar_toggle_compounds").html('<i class="fas fa-flask"></i> Get chemical stressors for the network');
-            setTimeout(() => {
-                populateCompoundTable();
-            }, 100);
         }
     }
 
@@ -444,8 +468,14 @@ document.addEventListener("DOMContentLoaded", function () {
             console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for component loading:`, keyEventUris);
             
             // Call the load_and_show_components endpoint with the extracted KEs
-            fetch(`/load_and_show_components?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
-                method: 'GET'
+            fetch('/load_and_show_components', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cy_elements: window.cy ? { elements: window.cy.elements().jsons() } : { elements: [] },
+                    kes: keyEventUris.join(' '),
+                    go_only: false
+                })
             })
                 .then(response => {
                     if (!response.ok) {
@@ -465,19 +495,22 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Add query to history table
                     if (data.sparql_query && window.historyTableManager) {
+                        // Extract elements array from the elements object
+                        const elementsArray = data.component_elements || [];
                         window.historyTableManager.addHistoryEntry(
                             'Components Query',
                             'AOP-Wiki RDF',
                             data.sparql_query,
                             null,
-                            data.component_elements
+                            elementsArray
                         );
                     }
 
-                    // Add component elements to the network
-                    if (data.component_elements && data.component_elements.length > 0) {
+                    // Add component elements to the network - handle elements array structure
+                    const componentElements = data.component_elements.elements || data.component_elements || [];
+                    if (componentElements.length > 0) {
                         window.cy.batch(() => {
-                            data.component_elements.forEach(element => {
+                            componentElements.forEach(element => {
                                 // Check if element already exists
                                 if (!window.cy.getElementById(element.data.id).length) {
                                     window.cy.add(element);
@@ -485,8 +518,14 @@ document.addEventListener("DOMContentLoaded", function () {
                             });
                         });
 
-                        console.log(`Added ${data.component_elements.length} component elements to network`);
-                        showStatus(`Added ${data.component_elements.length} component elements from ${scopeMessage}`, 'success');
+                        console.log(`Added ${componentElements.length} component elements to network`);
+                        showStatus(`Added ${componentElements.length} component elements from ${scopeMessage}`, 'success');
+                    }
+
+                    // Update component table with new data from API response
+                    if (data.component_table && window.componentTableManager) {
+                        window.componentTableManager.updateTable(data.component_table);
+                        console.log('Updated component table');
                     }
 
                     // Show components based on selection
@@ -523,13 +562,6 @@ document.addEventListener("DOMContentLoaded", function () {
                     $("#sidebar_toggle_components").text("Remove components");
                     window.componentsVisible = true;
 
-                    // Update component table
-                    setTimeout(() => {
-                        if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
-                            window.componentTableManager.performTableUpdate();
-                        }
-                    }, 100);
-
                     // Layout update
                     setTimeout(() => {
                         positionNodes(window.cy, fontSizeMultiplier, true);
@@ -562,16 +594,11 @@ document.addEventListener("DOMContentLoaded", function () {
                 console.log(`Removed all component nodes`);
             }
 
-            // Reset layout and update table
+            // Reset layout and update state
             window.resetNetworkLayout();
             window.componentsVisible = false;
             $("#get-components-table-btn").text("Get components");
             $("#sidebar_toggle_components").text("Get components");
-            setTimeout(() => {
-                if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
-                    window.componentTableManager.performTableUpdate();
-                }
-            }, 100);
         }
     }
 
@@ -596,8 +623,13 @@ document.addEventListener("DOMContentLoaded", function () {
             console.log(`Found ${keyEventUris.length} Key Events from ${scopeMessage} for organ loading:`, keyEventUris);
             
             // Call the load_and_show_organs endpoint with the extracted KEs
-            fetch(`/load_and_show_organs?kes=${encodeURIComponent(keyEventUris.join(' '))}`, {
-                method: 'GET'
+            fetch('/load_and_show_organs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cy_elements: window.cy ? { elements: window.cy.elements().jsons() } : { elements: [] },
+                    kes: keyEventUris.join(' ')
+                })
             })
                 .then(response => {
                     if (!response.ok) {
@@ -621,7 +653,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     }
 
                     // Add only new organ elements
-                    data.organ_elements.forEach(element => {
+                    data.organ_elements.elements.forEach(element => {
                         console.log(element.data);
                         const elementId = element.data?.id;
                         if (elementId && !window.cy.getElementById(elementId).length) {
@@ -633,6 +665,11 @@ document.addEventListener("DOMContentLoaded", function () {
                         }
                     });
 
+                    // Update component table with new data from API response
+                    if (data.organ_table && window.componentTableManager) {
+                        window.componentTableManager.updateTable(data.organ_table);
+                        console.log('Updated component table');
+                    }
                     // Show organs based on selection
                     if (hasSelection) {
                         // Only show organs connected to selected nodes
@@ -707,8 +744,6 @@ document.addEventListener("DOMContentLoaded", function () {
     window.toggleOrgans = toggleOrgans;
 
     // ===== EXISTING TOGGLE FUNCTIONS =====
-
-    // ===== CORE NETWORK FUNCTIONS =====
     function renderAOPNetwork(elements) {
         console.debug("Rendering AOP network with elements:", elements);
         const loadingOverlay = document.querySelector(".loading-overlay");
@@ -776,7 +811,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 loadingOverlay.innerHTML = `
                     <div class="text-center">
                         <img width="100px" alt="icon" src="/static/images/aopapp_favicon.ico"/>
-                        <h4>AOP Network Builder</h4>
+                        <h4>AOP-Suite</h4>
                         <p>Start building your network by:</p>
                         <ul style="text-align: left; display: inline-block;">
                             <li>Adding nodes and edges manually</li>
@@ -1245,55 +1280,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function updateTablesAfterDeletion(deletedNodes, deletedEdges) {
-        // Update compound table if compounds were deleted
-        const deletedCompounds = deletedNodes.filter(node =>
-            node.classes.includes("chemical-node") ||
-            node.data.type === "chemical"
-        );
-        if (deletedCompounds.length > 0) {
-            console.log(`Updating compound table after deleting ${deletedCompounds.length} compounds`);
-            // Remove from compound_data if it exists
-            deletedCompounds.forEach(compound => {
-                if (window.compound_data && window.compound_data[compound.id]) {
-                    delete window.compound_data[compound.id];
-                }
-            });
-            // Update compound table
-            setTimeout(() => {
-                populateCompoundTable();
-            }, 100);
-        }
-
-        // Update gene table if genes were deleted
-        const deletedGenes = deletedNodes.filter(node =>
-            node.classes.includes("protein-node") ||
-            node.classes.includes("gene-node") ||
-            node.data.type === "protein" ||
-            node.data.type === "gene"
-        );
-        if (deletedGenes.length > 0) {
-            console.log(`Updating gene table after deleting ${deletedGenes.length} genes`);
-            setTimeout(() => {
-                window.populateGeneTable();
-            }, 100);
-        }
-
-        // Update component table if components were deleted
-        const deletedComponents = deletedNodes.filter(node =>
-            node.classes.includes("process-node") ||
-            node.classes.includes("object-node") ||
-            node.data.type === "component_process" ||
-            node.data.type === "component_object"
-        );
-        if (deletedComponents.length > 0) {
-            console.log(`Updating component table after deleting ${deletedComponents.length} components`);
-            setTimeout(() => {
-                if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
-                    window.componentTableManager.performTableUpdate();
-                }
-            }, 100);
-        }
-
         // Update AOP table for any network changes
         console.log("Updating AOP table after element deletion");
         setTimeout(() => {
@@ -1318,44 +1304,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
         console.log(`Network change detected: ${action} - ${nodeId} (type: ${nodeType}, classes: ${nodeClasses})`);
         
-        // Check if it's a gene node (Ensembl)
-        if (nodeClasses.includes("gene-node") ||
-            nodeType === "gene" ||
-            nodeId.startsWith("gene_")) {
-            console.log(`Gene node ${action}: ${nodeData.label || nodeId}`);
-            populateGeneTable();
-        }
-
-        // Check if it's a compound node (Chemical)
-        if (nodeClasses.includes("chemical-node") ||
-            nodeType === "chemical") {
-            console.log(`Compound node ${action}: ${nodeData.label || nodeId}`);
-            populateCompoundTable();
-        }
-
-        // Check if it's a component node (Process or Object)
-        if (nodeClasses.includes("process-node") ||
-            nodeClasses.includes("object-node") ||
-            nodeType === "component_process" ||
-            nodeType === "component_object" ||
-            nodeId.startsWith("process_") ||
-            nodeId.startsWith("object_")) {
-            console.log(`Component node ${action}: ${nodeData.label || nodeId}`);
-            if (window.componentTableManager && window.componentTableManager.performTableUpdate) {
-                setTimeout(() => {
-                    window.componentTableManager.performTableUpdate();
-                }, 100);
-            }
-            // Don't trigger AOP table update for component nodes
-            return;
-        }
-
         // Use debounced AOP table update for network changes (only for non-component nodes)
         console.log("Triggering debounced AOP table update");
-        if (window.populateAopTable) {
+        if (window.aopTableManager && window.aopTableManager.debouncedUpdateTable) {
+            window.aopTableManager.debouncedUpdateTable(); // Use the instance method
+        } else if (window.populateAopTable) {
             window.populateAopTable(false); // false = use debounced version
         } else {
-            console.error("populateAopTable function not available");
+            console.error("AOP table manager not available");
         }
     }
 
@@ -1530,54 +1486,17 @@ document.addEventListener("DOMContentLoaded", function () {
             console.log("Bgee confidence level set to:", confidenceLevel);
         });
 
-        // Bgee dropdown handlers - remove developmental
+        // Bgee expression handler - updated to match other load_x patterns
         $("#bgee_query_expression").on("click", function (e) {
             e.preventDefault();
             e.stopPropagation();
             queryBgeeExpression();
         });
 
-        $("#bgee_query_anatomical").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            queryBgeeAnatomical();
-        });
-
-        // Populate gene expression table
-        $("#populate_gene_expression_table").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            populateGeneExpressionTable();
-        });
-
-        // Gene expression table button handler
-        $("#get-gene-expression-table-btn").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            queryBgeeExpression();
-        });
-
-        // Setup component table button handler
-        $("#get-components-table-btn").on("click", function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (window.toggleComponents) {
-                window.toggleComponents();
-            }
-        });
-
-        // Set up selection control handlers using event delegation to avoid conflicts
-        $(document).off('click', '#delete_selected').on('click', '#delete_selected', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            deleteSelectedElements();
-        });
-
-        $(document).off('click', '#clear_selection').on('click', '#clear_selection', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            clearSelection();
-        });
+        // Remove deprecated handlers
+        // $("#bgee_query_anatomical").off("click"); 
+        // $("#populate_gene_expression_table").off("click");
+        // $("#get-gene-expression-table-btn").off("click");
     }
 
     // Enhanced function to handle sidebar toggles with smooth transitions
@@ -1744,8 +1663,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Update compound table
                     setTimeout(() => {
-                        populateCompoundTable();
-                    }, 200);
+                        // No longer needed - compound data comes from query calls
+                        console.log('Compound table updated via query call');
+                    }, 100);
                 } else {
                     showOpenTargetsStatus("No compound data found in OpenTargets", "warning");
                 }
@@ -1801,7 +1721,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     // Update gene table
                     setTimeout(() => {
-                        populateGeneTable();
+                        // No longer needed - gene data comes from query calls
+                        console.log('Gene table updated via query call');
                     }, 200);
                 } else {
                     showOpenTargetsStatus("No target data found in OpenTargets", "warning");
@@ -1951,18 +1872,21 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (data.expression_data && data.expression_data.length > 0) {
                     // Add query to history table with proper type and content
                     if (data.sparql_query && window.historyTableManager) {
+                        // Extract elements array from the elements object
+                        const elementsArray = data.expression_elements || [];
                         window.historyTableManager.addHistoryEntry(
-                            'gene', // Use 'gene' type instead of 'bgee' to match existing types
+                            'gene', 
                             'Bgee Expression Query', 
                             data.sparql_query, 
                             null, 
-                            data.expression_elements || []
+                            elementsArray
                         );
                     }
 
-                    // Add expression elements to network if provided
-                    if (data.expression_elements && data.expression_elements.length > 0) {
-                        data.expression_elements.forEach(element => {
+                    // Add expression elements to network if provided - handle elements array structure
+                    const expressionElements = data.expression_elements.elements || [];
+                    if (expressionElements.length > 0) {
+                        expressionElements.forEach(element => {
                             const elementId = element.data?.id;
                             if (elementId && !window.cy.getElementById(elementId).length) {
                                 try {
@@ -1974,21 +1898,19 @@ document.addEventListener("DOMContentLoaded", function () {
                         });
                     }
 
-                    showBgeeStatus(`Added ${data.expression_data.length} expression patterns to network`, "success");
-
-                    // Update gene expression table
-                    setTimeout(() => {
-                        if (window.geneExpressionTableManager) {
-                            window.geneExpressionTableManager.performTableUpdate();
-                        }
-                    }, 200);
+                    // Update gene expression table with new data from API response
+                    if (data.expression_data && window.geneExpressionTableManager) {
+                        window.geneExpressionTableManager.updateTable(data.expression_data);
+                        console.log('Updated gene expression table');
+                    }
 
                     // Update gene table to show new expression data
-                    setTimeout(() => {
-                        if (window.geneTableManager) {
-                            window.geneTableManager.performTableUpdate();
-                        }
-                    }, 300);
+                    if (data.gene_table && window.geneTableManager) {
+                        window.geneTableManager.updateTable(data.gene_table);
+                        console.log('Updated gene table');
+                    }
+
+                    showBgeeStatus(`Added ${data.expression_data.length} expression patterns to network`, "success");
 
                     // Layout update
                     setTimeout(() => {
@@ -2029,34 +1951,12 @@ document.addEventListener("DOMContentLoaded", function () {
             });
     }
 
-    function populateGeneExpressionTable() {
-        if (!window.geneExpressionTableManager) {
-            showBgeeStatus("Gene expression table not initialized", "error");
-            return;
-        }
-
-        showBgeeStatus("Updating gene expression table...", "loading");
-        window.geneExpressionTableManager.performTableUpdate()
-            .then(() => {
-                showBgeeStatus("Gene expression table updated", "success");
-            })
-            .catch(error => {
-                console.error("Error updating gene expression table:", error);
-                showBgeeStatus("Error updating gene expression table", "error");
-            });
-    }
-
     function showBgeeStatus(message, type = 'info') {
-        console.log(`Bgee Status [${type}]:`, message);
-
         const statusDiv = document.getElementById('bgee-status');
         if (!statusDiv) {
             console.warn('Bgee status div not found');
             return;
         }
-
-        // Clear existing content
-        statusDiv.innerHTML = '';
 
         const icons = {
             'loading': 'fas fa-spinner fa-spin',
@@ -2080,14 +1980,33 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>
         `;
 
-        // Auto-clear success messages after 5 seconds
-        if (type === 'success') {
+        // Auto-clear success/info messages after 5 seconds
+        if (type === 'success' || type === 'info') {
             setTimeout(() => {
                 if (statusDiv.innerHTML.includes(message)) {
                     statusDiv.innerHTML = '';
                 }
             }, 5000);
         }
+    }
+
+    function populateGeneExpressionTable() {
+        console.log('populateGeneExpressionTable deprecated - data updated directly from query calls');
+        showBgeeStatus("Gene expression data updated from query calls", "info");
+    }
+
+    // Remove the deprecated populate function
+    function populateaopTable() {
+        console.log('populateaopTable deprecated - using enhanced table manager');
+        // Redirect to the enhanced table manager
+        if (window.aopTableManager && window.aopTableManager.performTableUpdate) {
+            return window.aopTableManager.performTableUpdate();
+        } else if (window.populateAopTable) {
+            return window.populateAopTable();
+        }
+
+        console.warn("No AOP table manager available");
+        return Promise.resolve();
     }
 
     // ===== INITIALIZATION =====
@@ -2146,16 +2065,3 @@ $(document).ready(function () {
         }
     }, 3000); // Keep the delay to ensure everything is loaded
 });
-
-function populateaopTable() {
-    console.log('populateaopTable called - using enhanced table manager');
-    // Redirect to the enhanced table manager
-    if (window.aopTableManager && window.aopTableManager.performTableUpdate) {
-        return window.aopTableManager.performTableUpdate();
-    } else if (window.populateAopTable) {
-        return window.populateAopTable();
-    }
-
-    console.warn("No AOP table manager available");
-    return Promise.resolve();
-}

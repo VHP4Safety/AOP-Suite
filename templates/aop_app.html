@@ -8,12 +8,12 @@
 
 <div class="dashboard-container" data-mies="{{ mie_query if mie_query is defined else '' }}"
     data-qid="{{ qid if qid is defined else '' }}" data-qid-wd="{{ qid_wd if qid_wd is defined else '' }}"
-    data-title="{{ title if title is defined else 'AOP Network Builder' }}" id="compound-container">
+    data-title="{{ title if title is defined else 'AOP-Suite' }}" id="compound-container">
     <!-- Top Navigation Bar -->
     <header class="top-nav">
         <div class="nav-section">
             <h1><img width="40px" alt="icon" src="{{ url_for('static', filename='images/aopapp_favicon.ico') }}" /> {{
-                title if title is defined else 'AOP Network Builder' }}</h1>
+                title if title is defined else 'AOP-Suite' }}</h1>
         </div>
         <div class="nav-controls">
             <div class="control-group">
@@ -438,7 +438,7 @@
 
                     <div class="enhance-grid">
 
-                        <!-- OpenTargets Card -->
+                        <!-- OpenTargets Card 
                         <div class="enhance-card" id="opentargets-card">
                             <div class="enhance-card-header">
                                 <i class="fas fa-bullseye"></i>
@@ -453,7 +453,7 @@
                                     <i class="fas fa-bullseye"></i> Query OpenTargets
                                 </button>
                             </div>
-                        </div>
+                        </div> -->
 
                         <!-- Bgee Expression Card -->
                         <div class="enhance-card" id="bgee-card">
@@ -469,20 +469,12 @@
                             </div>
                             <div class="enhance-card-controls">
                                 <div class="form-group mb-2">
-                                    <label for="bgee-confidence-level">Expression Confidence Level:</label>
+
                                     <div class="confidence-level-selector">
-                                        <div class="btn-group w-100" role="group" aria-label="Confidence Level">
-                                            <button type="button" class="btn btn-outline-warning confidence-btn" data-confidence="20">
-                                                <i class="fas fa-exclamation-triangle"></i> Low
-                                            </button>
-                                            <button type="button" class="btn btn-outline-primary confidence-btn active" data-confidence="50">
-                                                <i class="fas fa-balance-scale"></i> Medium
-                                            </button>
-                                            <button type="button" class="btn btn-outline-success confidence-btn" data-confidence="80">
-                                                <i class="fas fa-check-circle"></i> High
-                                            </button>
-                                        </div>
-                                        <input type="hidden" id="bgee-confidence-level" value="50">
+                                    <div class="form-group mb-2">
+                                        <label for="bgee-confidence-level">Confidence level:</label>
+                                        <input type="number" step="0.1" class="form-control" id="bgee-confidence-level" value="80">
+                                    </div>
                                     </div>
                                     <small class="form-text text-muted">Higher levels include only more reliable expression data</small>
                                 </div>
