@@ -1,8 +1,7 @@
-from flask import Flask, render_template, jsonify, request, redirect, url_for
+from flask import Flask, render_template, redirect, url_for, request, jsonify
 import logging
 
-from backend.routes.aop_app import aop_app
-from backend.service import aop_network_service
+from backend.routes.aop_suite import aop_app
 
 
 # Set up logging
@@ -27,7 +26,6 @@ def index():
 def aop_redirect():
     """Redirect old AOP route to main page"""
     return redirect(url_for('index'))
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

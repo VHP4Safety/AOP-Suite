@@ -99,7 +99,8 @@ class AOPNetworkDataManager {
 
         const requestData = {
             query_type: queryType,
-            values: validValues.join(' ') // Join with spaces for backend
+            values: validValues.join(' '), // Join with spaces for backend
+            cy_elements: window.cy ? { elements: window.cy.elements().jsons() } : { elements: [] } // Wrap in object with elements key
         };
 
         console.log('Request data:', requestData);
@@ -132,9 +133,18 @@ class AOPNetworkDataManager {
                 console.error('Server returned error:', result.error);
                 throw new Error(result.error);
             }
-            // Add query to history table
-            if (result.success && result.sparql_query && window.historyTableManager && result.elements.elements) {
-                window.historyTableManager.addHistoryEntry('aop_network', 'AOP-Wiki RDF', result.sparql_query, null, result.elements.elements,);
+            
+            // Perform AOP table update immediately after successful response with API data
+            if (result.aop_table && window.aopTableManager) {
+                window.aopTableManager.updateTable(result.aop_table);
+                console.log('Updated AOP table with API data');
+            }
+            
+            // Add query to history table - fix elements structure
+            if (result.success && result.sparql_query && window.historyTableManager && result.elements) {
+                // Extract elements array from the elements object
+                const elementsArray = result.elements || result.elements;
+                window.historyTableManager.addHistoryEntry('aop_network', 'AOP-Wiki RDF', result.sparql_query, null, elementsArray);
             }            
             // Handle the backend response to get data
             if (result.success && result.elements) {
@@ -449,14 +459,7 @@ class AOPNetworkDataManager {
                     loadingOverlay.style.display = "none";
                 }
 
-                // Trigger immediate AOP table update after bulk network addition
-                if (window.populateAopTable) {
-                    console.log('Triggering immediate AOP table update after bulk network addition');
-                    setTimeout(() => {
-                        window.populateAopTable(true);
-                    }, 500);
-                }
-
+                // No longer call populateAopTable - table is updated above with API data
                 console.log(`Successfully processed ${newElements.length} new elements to the network`);
             } catch (cyError) {
                 console.error('Error adding elements to Cytoscape:', cyError);
@@ -615,15 +618,9 @@ class AOPNetworkDataManager {
             console.log('Network report:', result.report);
         }
 
-        // Trigger table updates if the functions are available
-        if (window.populateAopTable) {
-            setTimeout(() => window.populateAopTable(true), 100);
-        }
-
-        if (window.populateGeneTable) {
-            setTimeout(() => window.populateGeneTable(true), 100);
-        }
-
+        // No longer call deprecated populate functions
+        // Tables are updated directly from API response data
+        
         this.showStatus(`Successfully loaded ${result.elements_count || 'network'} elements`, 'success');
     }
 }
