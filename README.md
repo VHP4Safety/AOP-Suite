@@ -1,5 +1,5 @@
 # AOP-Suite
-<img src="https://github.com/VHP4Safety/AOP-Suite/blob/aop_app/static/images/app_screenshot.png" width="850px"/>
+<iframe src="https://aopsuite.cloud.vhp4safety.nl/" width="100%" height="600px" frameborder="0"></iframe>
 
 This repository contains a web-based tool for building, visualizing, and analyzing Adverse Outcome Pathway (AOP) networks. It serves as an extended user interface for [pyAOP](https://github.com/jmillanacosta/pyaop) and the [AOP-Wiki RDF SPARQL endpoint](https://aopwiki.rdf.bigcat-bioinformatics.org/sparql/).
 
