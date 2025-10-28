@@ -1,11 +1,12 @@
-# AOP Network Builder
-<img src="https://github.com/VHP4Safety/AOP-app/blob/aop_app/static/images/app_screenshot.png" width="850px"/>
+# AOP-Suite
+
+🌐 **[AOP-Suite](https://aopsuite.cloud.vhp4safety.nl/)**
 
 This repository contains a web-based tool for building, visualizing, and analyzing Adverse Outcome Pathway (AOP) networks. It serves as an extended user interface for [pyAOP](https://github.com/jmillanacosta/pyaop) and the [AOP-Wiki RDF SPARQL endpoint](https://aopwiki.rdf.bigcat-bioinformatics.org/sparql/).
 
 ## Overview
 
-The AOP Network Builder allows researchers to:
+The AOP Network Builder allows to:
 
 - **Build AOP Networks**: Query AOP Wiki RDF data and construct biological pathway networks
 - **Integrate Multiple Data Sources**: Combine data from AOP Wiki, UniProt, Ensembl, Bgee, OpenTargets, and more (work in progress)

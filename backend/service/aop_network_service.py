@@ -27,14 +27,16 @@ class AOPNetworkService:
                 return {"error": "JSON payload required"}, 400
 
             # Extract parameters from JSON payload
-            query_type = data.get("query_type", "")
+            query_type = data.get("query_type", None)
             values = data.get("values", "")
+            status = data.get("status", "")
             cy_elements = data.get("cy_elements", {"elements": []})
-
+            stype = type(status)
+            logger.debug(f"Status {stype}")
             self.builder.update_from_json(cy_elements)
 
             # Use the AOP data model via the query service
-            network, query = self.builder.query_by_identifier(query_type, values)
+            network, query = self.builder.query_by_identifier(query_type, values, status)
 
             # Get summary and elements
             summary = network.get_summary()

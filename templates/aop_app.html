@@ -70,7 +70,7 @@
                             <div class="network-stat">
                                 <i class="fas fa-link"></i>
                                 <span class="network-stat-value" id="edge-count">0</span>
-                                <span>edges</span>            
+                                <span>edges</span>
                             </div>
                         </div>
                         <div class="network-controls">
@@ -222,7 +222,8 @@
                                                     style="color: #6c757d; font-style: italic; margin-bottom: 20px; font-size: 1.1em;">
                                                     <i class="fas fa-cogs"
                                                         style="font-size: 2em; display: block; margin-bottom: 10px; color: #17a2b8;"></i>
-                                                    No components in network. See https://doi.org/10.1089/aivt.2017.0017 for more information.
+                                                    No components in network. See https://doi.org/10.1089/aivt.2017.0017
+                                                    for more information.
                                                 </div>
                                                 <button id="get-components-table-btn" class="btn btn-primary btn-lg">
                                                     <i class="fas fa-cogs"></i> Get Components
@@ -282,12 +283,30 @@
                                 <div class="form-group">
                                     <label for="query-type">Query Type:</label>
                                     <select id="query-type" class="form-control">
-                                        <option value="mie">Add by MIE</option>
-                                        <option value="aop">Add by AOP</option>
-                                        <option value="ke_upstream">Add by Upstream KE</option>
-                                        <option value="ke_downstream">Add by Downstream KE</option>
+                                        <option value="mie">Add by Molecular Initiating Event</option>
+                                        <option value="aop">Add by Adverse Outcome Pathway</option>
+                                        <option value="ao">Add by Adverse Outcome</option>
                                     </select>
                                 </div>
+                                
+                                <div class="form-group">
+                                    <label for="status-checkboxes">Status:</label>
+                                    <div id="status-checkboxes" class="checkbox-group">
+                                        <label class="checkbox-item">
+                                            <input type="checkbox" value="WPHA/WNT Endorsed" checked>
+                                            WPHA/WNT Endorsed
+                                        </label>
+                                        <label class="checkbox-item">
+                                            <input type="checkbox" value="Under Review">
+                                            Under Review
+                                        </label>
+                                        <label class="checkbox-item">
+                                            <input type="checkbox" value="Under Development">
+                                            Under Development
+                                        </label>
+                                    </div>
+                                </div>
+                                
                                 <div class="form-group">
                                     <label for="query-values">AOP Identifiers or Names:</label>
                                     <textarea id="query-values" class="form-control" rows="4"
@@ -300,20 +319,23 @@
                                 <!-- Genes and compound cards -->
                                 <div class="querygc-card" id="genes-compound-card">
                                     <h4 class="enhance-card-title"> Expand network from AOP Wiki </h4>
-                                    <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2" onclick="toggleOrgans()" title="Toggle organ visibility in the network">
-                                        Query Organs
-                                    </button>
                                     <div class="form-group mt-2">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="checkbox" id="include-proteins-checkbox">
+                                            <input class="form-check-input" type="checkbox"
+                                                id="include-proteins-checkbox">
                                             <label class="form-check-label" for="include-proteins-checkbox">
                                                 <small>Include UniProt proteins</small>
                                             </label>
                                         </div>
-                                        <small class="form-text text-muted">When unchecked, genes link directly to Key Events</small>
+                                        <small class="form-text text-muted">When unchecked, genes link directly to Key
+                                            Events</small>
                                     </div>
                                     <button id="see_genes" class="btn btn-info btn-block mt-2">
                                         <i class="fas fa-dna"></i> Get gene sets
+                                    </button>
+                                    <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2" onclick="toggleOrgans()"
+                                        title="Toggle organ visibility in the network">
+                                        <i class="fas fa-heart"></i> Query Organs
                                     </button>
                                     <button id="sidebar_toggle_compounds" class="btn btn-info btn-block mt-2">
                                         <i class="fas fa-flask"></i> Get chemical stressors
@@ -462,21 +484,25 @@
                                 <h4 class="enhance-card-title">Bgee Expression</h4>
                             </div>
                             <div class="enhance-card-content">
-                                Add gene expression data from Bgee database. Query by both genes and organs with customizable confidence levels.
+                                Add gene expression data from Bgee database. Query by both genes and organs with
+                                customizable confidence levels.
                                 <div class="alert alert-info mt-2" style="font-size: 0.75rem; padding: 0.5rem;">
-                                    <i class="fas fa-info-circle"></i> <strong>Note:</strong> Network must contain both genes (Ensembl nodes) and organs to query Bgee expression data.
+                                    <i class="fas fa-info-circle"></i> <strong>Note:</strong> Network must contain both
+                                    genes (Ensembl nodes) and organs to query Bgee expression data.
                                 </div>
                             </div>
                             <div class="enhance-card-controls">
                                 <div class="form-group mb-2">
 
                                     <div class="confidence-level-selector">
-                                    <div class="form-group mb-2">
-                                        <label for="bgee-confidence-level">Confidence level:</label>
-                                        <input type="number" step="0.1" class="form-control" id="bgee-confidence-level" value="80">
+                                        <div class="form-group mb-2">
+                                            <label for="bgee-confidence-level">Confidence level:</label>
+                                            <input type="number" step="0.1" class="form-control"
+                                                id="bgee-confidence-level" value="80">
+                                        </div>
                                     </div>
-                                    </div>
-                                    <small class="form-text text-muted">Higher levels include only more reliable expression data</small>
+                                    <small class="form-text text-muted">Higher levels include only more reliable
+                                        expression data</small>
                                 </div>
                                 <button id="bgee_query_expression" class="btn btn-primary btn-sm w-100">
                                     <i class="fas fa-dna"></i> Query Gene Expression
@@ -758,7 +784,7 @@
         confirmButton.parentNode.replaceChild(newConfirmButton, confirmButton);
 
         // Set up one-time event listener for confirmation
-        newConfirmButton.addEventListener('click', function() {
+        newConfirmButton.addEventListener('click', function () {
             const elementsToRemove = window.cy.$(':selected');
 
             // Remove elements from the network
