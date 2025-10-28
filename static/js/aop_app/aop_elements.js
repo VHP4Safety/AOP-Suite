@@ -811,7 +811,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 loadingOverlay.innerHTML = `
                     <div class="text-center">
                         <img width="100px" alt="icon" src="/static/images/aopapp_favicon.ico"/>
-                        <h4>AOP Network Builder</h4>
+                        <h4>AOP-Suite</h4>
                         <p>Start building your network by:</p>
                         <ul style="text-align: left; display: inline-block;">
                             <li>Adding nodes and edges manually</li>

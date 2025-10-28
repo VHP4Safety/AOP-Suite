@@ -15,9 +15,9 @@ app.register_blueprint(aop_app)
 
 @app.route('/')
 def index():
-    """Main AOP Network Builder application"""
+    """Main AOP-Suite application"""
     return render_template('services/AOPapp.html', 
-                         title='AOP Network Builder',
+                         title='AOP-Suite',
                          mie_query='',
                          qid='',
                          qid_wd='')
