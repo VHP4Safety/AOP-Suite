@@ -15,6 +15,7 @@
             <h1><img width="40px" alt="icon" src="{{ url_for('static', filename='images/aopapp_favicon.ico') }}" /> {{
                 title if title is defined else 'AOP-Suite' }}</h1>
         </div>
+
         <div class="nav-controls">
             <div class="control-group">
                 <label>Font Size:</label>
@@ -288,6 +289,25 @@
                                         <option value="ao">Add by Adverse Outcome</option>
                                     </select>
                                 </div>
+                                
+                                <div class="form-group">
+                                    <label for="status-checkboxes">Status:</label>
+                                    <div id="status-checkboxes" class="checkbox-group">
+                                        <label class="checkbox-item">
+                                            <input type="checkbox" value="WPHA/WNT Endorsed" checked>
+                                            WPHA/WNT Endorsed
+                                        </label>
+                                        <label class="checkbox-item">
+                                            <input type="checkbox" value="Under Review">
+                                            Under Review
+                                        </label>
+                                        <label class="checkbox-item">
+                                            <input type="checkbox" value="Under Development">
+                                            Under Development
+                                        </label>
+                                    </div>
+                                </div>
+                                
                                 <div class="form-group">
                                     <label for="query-values">AOP Identifiers or Names:</label>
                                     <textarea id="query-values" class="form-control" rows="4"
@@ -300,10 +320,6 @@
                                 <!-- Genes and compound cards -->
                                 <div class="querygc-card" id="genes-compound-card">
                                     <h4 class="enhance-card-title"> Expand network from AOP Wiki </h4>
-                                    <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2"
-                                        onclick="toggleOrgans()" title="Toggle organ visibility in the network">
-                                        Query Organs
-                                    </button>
                                     <div class="form-group mt-2">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox"
@@ -317,6 +333,10 @@
                                     </div>
                                     <button id="see_genes" class="btn btn-info btn-block mt-2">
                                         <i class="fas fa-dna"></i> Get gene sets
+                                    </button>
+                                    <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2" onclick="toggleOrgans()"
+                                        title="Toggle organ visibility in the network">
+                                        <i class="fas fa-heart"></i> Query Organs
                                     </button>
                                     <button id="sidebar_toggle_compounds" class="btn btn-info btn-block mt-2">
                                         <i class="fas fa-flask"></i> Get chemical stressors

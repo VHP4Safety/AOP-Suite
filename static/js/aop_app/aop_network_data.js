@@ -65,9 +65,14 @@ class AOPNetworkDataManager {
 
         const queryType = document.getElementById('query-type').value;
         const values = document.getElementById('query-values').value.trim();
+        
+        // Collect selected status checkboxes
+        const statusCheckboxes = document.querySelectorAll('#status-checkboxes input[type="checkbox"]:checked');
+        const selectedStatuses = Array.from(statusCheckboxes).map(cb => cb.value);
 
         console.log('Query type:', queryType);
         console.log('Values:', values);
+        console.log('Selected statuses:', selectedStatuses);
 
         if (!values) {
             console.warn('No values provided');
@@ -100,6 +105,7 @@ class AOPNetworkDataManager {
         const requestData = {
             query_type: queryType,
             values: validValues.join(' '), // Join with spaces for backend
+            status: selectedStatuses, // Add selected statuses to request
             cy_elements: window.cy ? { elements: window.cy.elements().jsons() } : { elements: [] } // Wrap in object with elements key
         };
 
