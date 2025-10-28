@@ -643,7 +643,7 @@ function updatePlaceholderText() {
         const placeholders = {
             'aop': 'Search by AOP name or enter identifiers (one per line)\nExamples:\nliver fibrosis\n1\naop:2\nhttps://identifiers.org/aop/3',
             'mie': 'Search by KE name or enter identifiers (one per line)\nExamples:\nAryl hydrocarbon receptor activation\n18\naop.events:18\nhttps://identifiers.org/aop.events/18',
-            'ao': 'Search by Adverse Outcome name or enter identifiers (one per line)\nExamples:\nParkinsonian motor deficits\n1395
+            'ao': 'Search by Adverse Outcome name or enter identifiers (one per line)\nExamples:\nParkinsonian motor deficits\n1395'
         };
         
         queryValuesElement.placeholder = placeholders[queryType] || placeholders['aop'];
