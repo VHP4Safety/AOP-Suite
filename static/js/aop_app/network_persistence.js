@@ -190,7 +190,7 @@ class NetworkState {
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
-            a.download = `aop_network_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `${this.getExportFilenamePrefix()}_network.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -206,6 +206,14 @@ class NetworkState {
     // Alias for legacy callers - download full Cytoscape JSON
     downloadCytoscapeJSON() {
         return this.downloadNetworkJSON();
+    }
+
+    // Helper function to generate consistent export filename prefix
+    getExportFilenamePrefix() {
+        const projectName = window.currentProjectName || 'aop_project';
+        const now = new Date();
+        const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19); // YYYY-MM-DDTHH-MM-SS
+        return `${projectName}-${dateStr}`;
     }
 
     // Download Cytoscape style specification as JSON
@@ -228,7 +236,7 @@ class NetworkState {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `aop_cytoscape_styles_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `${this.getExportFilenamePrefix()}_styles.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -310,7 +318,7 @@ class NetworkState {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${this.sanitizeFilename(networkName)}_cx2_${new Date().toISOString().split('T')[0]}.cx2`;
+            a.download = `${this.getExportFilenamePrefix()}_ndex.cx2`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -404,11 +412,12 @@ class NetworkState {
         return name.replace(/[^a-z0-9_\-]/gi, '_').substring(0, 50);
     }
 
-    // TODO
+    // TODO - implement PNG export with project name
     downloadNetworkPNG() {
         this.showNotification('PNG export not implemented', 'error');
     }
 
+    // TODO - implement SVG export with project name
     downloadNetworkSVG() {
         this.showNotification('SVG export not implemented', 'error');
     }

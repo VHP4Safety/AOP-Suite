@@ -2,13 +2,15 @@
 {% block content %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/aop_app.css') }}">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+<!-- Add Bootstrap CSS and JS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 
-<div class="dashboard-container" data-mies="{{ mie_query if mie_query is defined else '' }}"
-    data-qid="{{ qid if qid is defined else '' }}" data-qid-wd="{{ qid_wd if qid_wd is defined else '' }}"
-    data-title="{{ title if title is defined else 'AOP-Suite' }}" id="compound-container">
+<div class="dashboard-container" data-mies="{{ mie_query | default('') }}" data-qid="{{ qid | default('') }}"
+    data-qid-wd="{{ qid_wd | default('') }}" data-title="{{ title | default('AOP-Suite') }}" id="compound-container">
     <!-- Top Navigation Bar -->
     <header class="top-nav">
         <div class="nav-section">
@@ -28,6 +30,16 @@
             </button>
             <button id="toggle-workspace-sidebar" class="sidebar-toggle btn-secondary">
                 <i class="fas fa-briefcase"></i>
+            </button>
+            <button id="edit-project-btn" class="btn btn-outline-secondary btn-sm" title="Edit project details">
+                <i class="fas fa-edit"></i> Edit Project
+            </button>
+
+            <!-- Added operation log counter/button -->
+            <button id="operation-count-btn" class="btn btn-outline-secondary btn-sm" title="Open operation log">
+                <i class="fas fa-history"></i>
+                <!-- keep the numeric counter as its own element so JS can update .textContent -->
+                <span id="operation-count" style="margin-left:6px;">0</span>
             </button>
         </div>
     </header>
@@ -51,6 +63,13 @@
                                 </button>
                                 <button id="download_ndex" class="download-option">
                                     <i class="fas fa-cloud"></i> NDEx (CX2)
+                                </button>
+                                <div class="download-divider"></div>
+                                <button id="download_python_script" class="download-option">
+                                    <i class="fas fa-code"></i> Python Script
+                                </button>
+                                <button id="download_operation_log" class="download-option">
+                                    <i class="fas fa-file-alt"></i> Operation Log (JSON)
                                 </button>
                                 <div class="download-divider"></div>
                                 <button id="download_png" class="download-option">
@@ -250,6 +269,22 @@
             </div>
         </div>
 
+        <!-- Operation Log Sidebar -->
+        <aside class="operation-log-sidebar" id="operation-log-sidebar">
+            <div class="operation-log-header">
+                <h4><i class="fas fa-history"></i> Operation Log</h4>
+                <button class="operation-log-close" id="operation-log-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <!-- Keep the class for unified selection, but use a unique id -->
+            <div class="operation-log-content" id="operation-log-sidebar-content">
+                <div class="loading-indicator">
+                    <i class="fas fa-spinner fa-spin"></i> Loading operations...
+                </div>
+            </div>
+        </aside>
+
         <!-- Workspace Sidebar -->
         <aside class="workspace-sidebar" id="workspace-sidebar">
             <div class="workspace-header">
@@ -260,6 +295,16 @@
                     <button class="workspace-mode-btn" data-mode="enhance">
                         <i class="fas fa-magic"></i> Enrich network
                     </button>
+                    <button class="workspace-mode-btn" data-mode="operation-log">
+                        <i class="fas fa-history"></i> Operation Log
+                    </button>
+                </div>
+                <div class="operation-log-status" id="operation-log-status">
+                    <small class="text-muted">
+                        <button id="clear-log-btn" class="btn btn-link btn-sm p-0 ml-1" title="Clear operation log">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </small>
                 </div>
             </div>
 
@@ -288,7 +333,7 @@
                                         <option value="ao">Add by Adverse Outcome</option>
                                     </select>
                                 </div>
-                                
+
                                 <div class="form-group">
                                     <label for="status-checkboxes">Status:</label>
                                     <div id="status-checkboxes" class="checkbox-group">
@@ -306,7 +351,7 @@
                                         </label>
                                     </div>
                                 </div>
-                                
+
                                 <div class="form-group">
                                     <label for="query-values">AOP Identifiers or Names:</label>
                                     <textarea id="query-values" class="form-control" rows="4"
@@ -330,17 +375,17 @@
                                         <small class="form-text text-muted">When unchecked, genes link directly to Key
                                             Events</small>
                                     </div>
-                                    <button id="see_genes" class="btn btn-info btn-block mt-2">
+                                    <button id="see_genes" class="btn btn-info mt-2">
                                         <i class="fas fa-dna"></i> Get gene sets
                                     </button>
-                                    <button id="toggle-organs-btn" class="btn btn-info btn-block mt-2" onclick="toggleOrgans()"
+                                    <button id="toggle-organs-btn" class="btn btn-info mt-2" onclick="toggleOrgans()"
                                         title="Toggle organ visibility in the network">
-                                        <i class="fas fa-heart"></i> Query Organs
+                                        <i class="fas fa-child"></i> Query Organs
                                     </button>
-                                    <button id="sidebar_toggle_compounds" class="btn btn-info btn-block mt-2">
+                                    <button id="sidebar_toggle_compounds" class="btn btn-info mt-2">
                                         <i class="fas fa-flask"></i> Get chemical stressors
                                     </button>
-                                    <button id="sidebar_toggle_components" class="btn btn-info btn-block mt-2">
+                                    <button id="sidebar_toggle_components" class="btn btn-info mt-2">
                                         <i class="fas fa-cogs"></i> Get components
                                     </button>
                                 </div>
@@ -536,6 +581,19 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Operation Log Mode -->
+                <div class="workspace-mode operation-log-mode" id="operation-log-mode">
+                    <div class="mode-status info">
+                        <i class="fas fa-history"></i> View logged operations for this session.
+                    </div>
+                    <!-- Keep the class for unified selection, but use a unique id -->
+                    <div class="operation-log-content" id="operation-log-mode-content">
+                        <div class="loading-indicator">
+                            <i class="fas fa-spinner fa-spin"></i> Loading operations...
+                        </div>
+                    </div>
+                </div>
             </div>
         </aside>
     </div>
@@ -674,6 +732,48 @@
     </div>
 </div>
 
+<!-- Project Startup/Edit Modal -->
+<div class="modal fade" id="project-startup-modal" tabindex="-1" aria-labelledby="projectModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="projectModalLabel">
+                    <i class="fas fa-rocket"></i> <span id="modal-title">Start Your AOP Project</span>
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="project-name-input" class="form-label">Project Name:</label>
+                    <input type="text" id="project-name-input" class="form-control"
+                        placeholder="Enter your project name" maxlength="50" pattern="[a-zA-Z0-9\s\-_]+"
+                        title="Only letters, numbers, spaces, hyphens, and underscores allowed">
+                    <div class="form-text">
+                        This will be used for file names and session tracking
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label for="project-description-input" class="form-label">Description (optional):</label>
+                    <textarea id="project-description-input" class="form-control" rows="3"
+                        placeholder="Brief description of the project"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="project-author-input" class="form-label">Author (optional):</label>
+                    <input type="text" id="project-author-input" class="form-control"
+                        placeholder="Your name or organization">
+                </div>
+                <div id="project-startup-error" class="alert alert-danger" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancel-project-btn"
+                    style="display: none;">Cancel</button>
+                <button type="button" class="btn btn-primary" id="start-project-btn">
+                    <i class="fas fa-play"></i> <span id="submit-btn-text">Start Project</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     // Global variables
     let compound_data = {};
@@ -683,12 +783,247 @@
     let genesVisible = false;
     let boundingBoxesVisible = false;
     let compoundsVisible = false;
-    let selectedElements = []; // Track selected elements
+    let selectedElements = [];
+
+    // Project session management variables - declare early and only once
+    let currentProjectName = null;
+    let sessionActive = false;
 
     // Make sure cy is available globally from the start
     window.cy = null;
 
-    // Update activity display
+    // Store modal reference globally
+    let projectModal = null;
+
+    // Project session management functions
+    function checkSessionStatus() {
+        fetch('/session/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.active) {
+                    currentProjectName = data.project_name;
+                    sessionActive = true;
+                    updateProjectDisplay(data.project_name);
+                } else {
+                    sessionActive = false;
+                    showProjectStartupModal();
+                }
+            })
+            .catch(error => {
+                console.error('Error checking session status:', error);
+                sessionActive = false;
+                showProjectStartupModal();
+            });
+    }
+
+    function showProjectStartupModal() {
+        console.log('showProjectStartupModal called');
+
+        if (!projectModal) {
+            console.log('Creating new modal instance');
+            const modalElement = document.getElementById('project-startup-modal');
+            console.log('Modal element found:', !!modalElement);
+
+            if (modalElement) {
+                projectModal = new bootstrap.Modal(modalElement, {
+                    backdrop: 'static',
+                    keyboard: false
+                });
+                console.log('Modal instance created:', !!projectModal);
+            } else {
+                console.error('Modal element not found!');
+                return;
+            }
+        }
+
+        console.log('Attempting to show modal');
+        try {
+            projectModal.show();
+            console.log('Modal show() called successfully');
+        } catch (error) {
+            console.error('Error showing modal:', error);
+        }
+    }
+
+    function startProject() {
+        const projectName = document.getElementById('project-name-input').value.trim();
+        const errorDiv = document.getElementById('project-startup-error');
+
+        if (!projectName) {
+            errorDiv.textContent = 'Please enter a project name';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        if (!/^[a-zA-Z0-9\s\-_]+$/.test(projectName)) {
+            errorDiv.textContent = 'Project name can only contain letters, numbers, spaces, hyphens, and underscores';
+            errorDiv.style.display = 'block';
+            return;
+        }
+
+        fetch('/session/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                project_name: projectName
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentProjectName = data.project_name;
+                    sessionActive = true;
+
+                    if (projectModal) {
+                        projectModal.hide();
+                    }
+
+                    updateProjectDisplay(data.project_name);
+                    console.log('Project started:', data.project_name);
+                } else {
+                    errorDiv.textContent = data.error || 'Failed to start project';
+                    errorDiv.style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error starting project:', error);
+                errorDiv.textContent = 'Failed to start project. Please try again.';
+                errorDiv.style.display = 'block';
+            });
+    }
+
+    function updateProjectDisplay(projectName) {
+        const navSection = document.querySelector('.nav-section h1');
+        if (navSection) {
+            const img = navSection.querySelector('img');
+            const imgHtml = img ? img.outerHTML : '';
+            navSection.innerHTML = `${imgHtml} AOP-Suite - ${projectName}`;
+        }
+        updateOperationLogStatus();
+    }
+
+    function clearOperationLog() {
+        if (!sessionActive) {
+            alert('No active session');
+            return;
+        }
+
+        if (confirm('Are you sure you want to clear the current session log? This cannot be undone.')) {
+            fetch('/operation_log/clear', {
+                method: 'POST'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateOperationLogStatus();
+                        console.log('Operation log cleared');
+                    } else {
+                        alert(data.error || 'Failed to clear log');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error clearing operation log:', error);
+                });
+        }
+    }
+
+    function downloadPythonScript() {
+        if (!sessionActive) {
+            alert('No active session - please start a project first');
+            return;
+        }
+
+        fetch('/operation_log/script', {
+            method: 'GET'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to generate Python script');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const now = new Date();
+                const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const projectName = currentProjectName || 'aop_project';
+                a.download = `${projectName}-${dateStr}_operations.py`;
+                a.href = url;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                console.error('Error downloading Python script:', error);
+                alert('Failed to download Python script');
+            });
+    }
+
+    function downloadOperationLog() {
+        if (!sessionActive) {
+            alert('No active session - please start a project first');
+            return;
+        }
+
+        fetch('/operation_log/json', {
+            method: 'GET'
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to export operation log');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const now = new Date();
+                const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                const projectName = currentProjectName || 'aop_project';
+                a.download = `${projectName}-${dateStr}_log.json`;
+                a.href = url;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                console.error('Error downloading operation log:', error);
+                alert('Failed to download operation log');
+            });
+    }
+
+    function updateOperationLogStatus() {
+        if (!sessionActive) {
+            const countElement = document.getElementById('operation-count');
+            if (countElement) {
+                countElement.textContent = 0;
+            }
+            return;
+        }
+
+        fetch('/operation_log/summary')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.warn('No active session for operation log');
+                    return;
+                }
+                const countElement = document.getElementById('operation-count');
+                if (countElement) {
+                    countElement.textContent = data.total_operations || 0;
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching operation log status:', error);
+            });
+    }
+
+    // Update activity display for pChEMBL threshold
     function updateActivity() {
         const value = document.getElementById('threshold_pchembl').value;
         const activityDisplay = document.getElementById('activity_display');
@@ -696,6 +1031,12 @@
             activityDisplay.textContent = `-${value}`;
         }
     }
+
+    // Test function for modal
+    window.testModal = function () {
+        console.log('Test modal function called');
+        showProjectStartupModal();
+    };
 
     // Selection management functions
     function updateSelectionControls() {
@@ -858,7 +1199,6 @@
             }
         });
     }
-
     // Update network stats
     function updateNetworkStats() {
         if (window.cy) {
@@ -917,6 +1257,11 @@
             console.log('Showing mode element:', selectedMode.id); // Debug log
             selectedMode.style.display = 'block'; // Explicitly show selected mode
             selectedMode.classList.add('active');
+
+            // Load data if operation-log mode
+            if (mode === 'operation-log') {
+                loadOperationLog();
+            }
         } else {
             console.error('Mode element not found:', mode + '-mode'); // Debug log
         }
@@ -1196,12 +1541,57 @@
 
     // Sidebar collapse functionality
     document.addEventListener('DOMContentLoaded', function () {
+        console.log('DOM loaded - initializing...');
+        // Initialize edit button listener
+        document.getElementById('edit-project-btn')?.addEventListener('click', function () {
+            showProjectStartupModal(true);
+        });
         // Initialize threshold input event listener
         const thresholdInput = document.getElementById('threshold_pchembl');
         if (thresholdInput) {
             thresholdInput.addEventListener('input', updateActivity);
         }
+
         initializeSelectionHandlers();
+
+        // Project startup modal handlers
+        const startBtn = document.getElementById('start-project-btn');
+        const projectInput = document.getElementById('project-name-input');
+        const clearBtn = document.getElementById('clear-log-btn');
+
+        console.log('Modal elements found:', {
+            startBtn: !!startBtn,
+            projectInput: !!projectInput,
+            clearBtn: !!clearBtn
+        });
+
+        if (startBtn) {
+            startBtn.addEventListener('click', startProject);
+        }
+
+        if (projectInput) {
+            projectInput.addEventListener('keypress', function (e) {
+                if (e.key === 'Enter') {
+                    startProject();
+                }
+            });
+
+            projectInput.addEventListener('input', function () {
+                const errorDiv = document.getElementById('project-startup-error');
+                if (errorDiv) {
+                    errorDiv.style.display = 'none';
+                }
+            });
+        }
+
+        // Clear log handler
+        if (clearBtn) {
+            clearBtn.addEventListener('click', clearOperationLog);
+        }
+
+        // Download handlers
+        document.getElementById('download_python_script')?.addEventListener('click', downloadPythonScript);
+        document.getElementById('download_operation_log')?.addEventListener('click', downloadOperationLog);
 
         // Bottom panel tab buttons
         document.querySelectorAll('.bottom-tab-btn').forEach(btn => {
@@ -1250,21 +1640,15 @@
             });
         });
 
-        // Initialize all collapsible content as hidden
-        document.querySelectorAll('.collapsible-content').forEach(content => {
-            content.style.display = 'none';
+        // Operation log click handler
+        document.getElementById('operation-count')?.addEventListener('click', function () {
+            switchWorkspaceMode('operation-log');
         });
 
-        // Initialize default workspace mode (query mode should be visible by default)
-        setTimeout(() => {
-            switchWorkspaceMode('query');
-        }, 100);
-
-        // Initialize network stats update
-        if (window.cy) {
-            updateNetworkStats();
-            window.cy.on('add remove', updateNetworkStats);
-        }
+        // Also make the surrounding button clickable (in case user clicks icon area)
+        document.getElementById('operation-count-btn')?.addEventListener('click', function () {
+            switchWorkspaceMode('operation-log');
+        });
 
         // Initialize network selection when cy is ready
         if (window.cy) {
@@ -1285,6 +1669,14 @@
 
         // Initialize table heights
         setTimeout(updateTableContainerHeights, 200);
+
+        // Check session status with debugging
+        setTimeout(() => {
+            console.log('About to check session status...');
+            console.log('Bootstrap available:', typeof bootstrap !== 'undefined');
+            console.log('Modal element exists:', !!document.getElementById('project-startup-modal'));
+            checkSessionStatus();
+        }, 1000);
     });
 
     // Toggle buttons in nav - Fixed workspace toggle
@@ -1297,19 +1689,6 @@
         if (!sidebar) return;
 
         sidebar.classList.toggle('collapsed');
-
-        // Trigger resize event for Cytoscape to adjust
-        setTimeout(() => {
-            if (window.cy) {
-                window.cy.resize();
-                if (window.positionNodes) {
-                    window.positionNodes(window.cy);
-                }
-            }
-            // Also update table heights when sidebar toggles
-            updateTableContainerHeights();
-            redrawDataTables();
-        }, 300);
     }
 
     // Gene table row click handler
@@ -1367,91 +1746,141 @@
         }
     };
 
-    // Initialize table managers and their filters when DOM is ready
-    document.addEventListener('DOMContentLoaded', function () {
-        // Ensure table managers are initialized with proper delay
-        setTimeout(() => {
-            // Initialize gene table filter if not already done
-            if (window.geneTableManager && window.geneTableManager.setupFilterInput) {
-                window.geneTableManager.setupFilterInput();
-            }
+    // Operation log functions
+    function loadOperationLog() {
+        // Find ALL operation log containers (sidebar + workspace) and show loading state
+        const contentDivs = document.querySelectorAll('.operation-log-content');
+        if (!contentDivs || contentDivs.length === 0) {
+            console.error('No operation-log content containers found');
+        } else {
+            contentDivs.forEach(div => {
+                div.innerHTML = '<div class="loading-indicator"><i class="fas fa-spinner fa-spin"></i> Loading operations...</div>';
+            });
+        }
 
-            // Initialize compound table filter if not already done  
-            if (window.compoundTableManager && window.compoundTableManager.setupFilterInput) {
-                window.compoundTableManager.setupFilterInput();
-            }
+        fetch('/operation_log/json')
+            .then(response => {
+                console.log('Fetch operation log response status:', response.status);
+                if (!response.ok) {
+                    throw new Error('HTTP error! status: ' + response.status);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Fetched operation log data:', data);
+                displayOperationLog(data);
+            })
+            .catch(error => {
+                console.error('Error loading operation log:', error);
+                // Update all containers with error message
+                document.querySelectorAll('.operation-log-content').forEach(div => {
+                    div.innerHTML = '<div class="alert alert-danger">Failed to load operation log</div>';
+                });
+            });
+    }
 
-            // Initial population of tables
-            if (window.populateGeneTable) {
-                window.populateGeneTable();
-            }
+    function displayOperationLog(data) {
+        const contentDivs = document.querySelectorAll('.operation-log-content');
+        if (!contentDivs || contentDivs.length === 0) {
+            console.error('Operation log content container(s) not found in displayOperationLog');
+            return;
+        }
 
-            if (window.populateCompoundTable) {
-                window.populateCompoundTable();
-            }
-        }, 500);
-    });
+        console.log('Displaying operation log, data.entries:', data.entries);
 
-    // Gene table button handler - ensure filter is maintained
-    $(document).on('click', '#get-genes-table-btn', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (window.toggleGenes) {
-            window.toggleGenes();
+        let html;
+        if (!data.entries || data.entries.length === 0) {
+            html = '<div class="text-muted small">No operations logged yet.</div>';
+        } else {
+            html = '<div class="operation-log-list" style="max-height: 600px; overflow-y: auto;">';
+            data.entries.forEach((op, index) => {
+                // Build details with selected, parsed fields
+                let detailsHtml = '<div class="small" style="line-height: 1.4;">';
+                
+                // Description
+                if (op.description) {
+                    detailsHtml += `<p style="margin-bottom: 8px;"><strong>Description:</strong> ${op.description}</p>`;
+                }
+                
+                // Python Code in code block
+                if (op.python_code) {
+                    detailsHtml += `<div style="margin-bottom: 12px;"><strong>Python Code:</strong><pre style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; font-size: 0.85em; overflow-x: auto;"><code style="font-family: 'Courier New', monospace; color: #495057;">${op.python_code}</code></pre></div>`;
+                }
+                
+                // Comment
+                if (op.comment) {
+                    let parsedComment = op.comment;
+                    // Parse URIs in the values list and make them links
+                    const match = op.comment.match(/values: \[(.*)\]/);
+                    if (match) {
+                        const uris = match[1].split(',').map(s => s.trim().replace(/['"]/g, ''));
+                        const links = uris.map(uri => `<a href="${uri}" target="_blank" style="color: #007bff; text-decoration: underline;">${uri}</a>`).join(', ');
+                        parsedComment = op.comment.replace(match[0], `values: [${links}]`);
+                    }
+                    detailsHtml += `<p style="margin-bottom: 8px;"><strong>Comment:</strong> ${parsedComment}</p>`;
+                }
+                
+                // Result Summary as a nice list
+                if (op.result_summary && typeof op.result_summary === 'object') {
+                    detailsHtml += `<div style="margin-bottom: 12px;"><strong>Results:</strong><ul style="list-style: none; padding-left: 0; margin-top: 4px;">`;
+                    Object.entries(op.result_summary).forEach(([key, value]) => {
+                        detailsHtml += `<li style="padding: 2px 0;"><span style="font-weight: 500;">${key.replace(/_/g, ' ')}:</span> ${value}</li>`;
+                    });
+                    detailsHtml += '</ul></div>';
+                }
+                
+                detailsHtml += '</div>';
+
+                html += `
+                    <div class="operation-item" style="border: 1px solid #e9ecef; border-radius: 8px; margin-bottom: 12px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        <details style="padding: 12px;">
+                            <summary style="cursor: pointer; list-style: none; font-weight: 600; color: #495057; font-size: 0.95em;">
+                                Operation ${index + 1}: ${op.description || op.operation || 'Unknown'}
+                                <small style="color: #6c757d; margin-left: 8px;">${new Date(op.timestamp).toLocaleString()}</small>
+                            </summary>
+                            <div class="operation-details" style="margin-top: 12px; border-top: 1px solid #f8f9fa; padding-top: 8px;">
+                                ${detailsHtml}
+                            </div>
+                        </details>
+                    </div>
+                `;
+            });
+            html += '</div>';
+        }
+
+        // Set same HTML into all visible operation log containers
+        contentDivs.forEach(div => {
+            div.innerHTML = html;
+        });
+
+        console.log('Operation log HTML updated for', contentDivs.length, 'container(s)');
+    }
+
+    // Update operation log status periodically
+    setInterval(function () {
+        if (sessionActive) {
+            updateOperationLogStatus();
+        }
+    }, 10000); // Update every 10 seconds
+
+    // Handle page unload to end session
+    window.addEventListener('beforeunload', function () {
+        if (sessionActive) {
+            navigator.sendBeacon('/session/end');
         }
     });
-
-    // Compound table button handler - ensure filter is maintained  
-    $(document).on('click', '#toggle_compounds, #sidebar_toggle_compounds', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (window.toggleCompounds) {
-            window.toggleCompounds();
-        }
-    });
-
-    // Initialize table managers
-    if (typeof CompoundTableManager !== 'undefined') {
-        window.compoundTableManager = new CompoundTableManager();
-        console.log('Compound Table Manager initialized');
-    }
-
-    if (typeof GeneTableManager !== 'undefined') {
-        window.geneTableManager = new GeneTableManager();
-        console.log('Gene Table Manager initialized');
-    }
-
-    if (typeof AOPTableManager !== 'undefined') {
-        window.aopTableManager = new AOPTableManager();
-        console.log('AOP Table Manager initialized');
-    }
-
-    if (typeof GeneExpressionTableManager !== 'undefined') {
-        window.geneExpressionTableManager = new GeneExpressionTableManager();
-        console.log('Gene Expression Table Manager initialized');
-    }
-
-    if (typeof ComponentTableManager !== 'undefined') {
-        window.componentTableManager = new ComponentTableManager();
-        console.log('Component Table Manager initialized');
-    }
-
-    // Initialize History Table Manager
-    if (typeof HistoryTableManager !== 'undefined') {
-        window.historyTableManager = new HistoryTableManager();
-        console.log('History Table Manager initialized');
-    }
 </script>
 
+<!-- Cytoscape and related libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/qtip2/3.0.3/jquery.qtip.min.css">
 <script src="https://cdn.jsdelivr.net/npm/cytoscape-qtip@2.7.0/cytoscape-qtip.js"></script>
 
+<!-- Application scripts - load in correct order, only once -->
 <script src="{{ url_for('static', filename='js/aop_app/aop_name.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_elements.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_styles.js') }}"></script>
-<script src="{{ url_for('static', filename='js/aop_app/bdf.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/network_persistence.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/manual_controls.js') }}"></script>
 <script src="{{ url_for('static', filename='js/aop_app/aop_network_data.js') }}"></script>

@@ -1706,203 +1706,256 @@ edge[type="go_hierarchy"] {
 }
 
 .slider-labels span:nth-child(2) {
-    font-weight: bold;
-    color: #495057;
-    background: #f8f9fa;
-    padding: 2px 6px;
-    border-radius: 3px;
-    border: 1px solid #dee2e6;
-}
-
-#bgee-status {
-    min-height: 20px;
-    font-size: 0.8rem;
-}
-
-/* Gene expression filter */
-.gene-expression-table-panel .table-filter-container {
-    background: #f8f9fa;
-    padding: 10px;
-    border-radius: 5px;
-    margin-bottom: 10px;
-}
-
-/* Gene table expression styling */
-.gene-table-panel .expression-cell,
-.gene-table-panel .expression-level-cell,
-.gene-table-panel .expression-id-cell {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: help;
-}
-
-.gene-table-panel .expression-cell:hover,
-.gene-table-panel .expression-level-cell:hover,
-.gene-table-panel .expression-id-cell:hover {
-    white-space: normal;
-    word-wrap: break-word;
-}
-
-.gene-table-panel .expression-id-cell {
-    font-family: monospace;
-    font-size: 0.8em;
+    font-weight: 600;
     color: #495057;
 }
 
-/* Gene table expression styling */
-.gene-table-panel .expression-cell,
-.gene-table-panel .expression-level-cell {
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    cursor: help;
-}
-
-.gene-table-panel .expression-cell:hover,
-.gene-table-panel .expression-level-cell:hover {
-    white-space: normal;
-    word-wrap: break-word;
-}
-
-/* Bgee confidence slider styling */
-.confidence-slider-labels {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.7rem;
-    color: #6c757d;
-    margin-top: 5px;
-    position: relative;
-}
-
-.confidence-label {
-    flex: 1;
-    text-align: center;
-    padding: 2px 4px;
-    border-radius: 3px;
-    transition: all 0.2s ease;
-    cursor: pointer;
-}
-
-.confidence-label:first-child {
+.button-i {
     text-align: left;
 }
 
-.confidence-label:last-child {
-    text-align: right;
+/* Specific targeting for buttons to match their node colors */
+#see_genes,
+#get-genes-table-btn {
+    background-color: #ffffff !important;
+    border-color: #000000 !important;
+    color: #363636 !important;
 }
 
-.confidence-label.active {
-    background-color: #007bff;
-    color: white;
-    font-weight: bold;
+#see_genes:hover,
+#get-genes-table-btn:hover {
+    background-color: #e6b380 !important;
+    border-color: #cc9966 !important;
+    color: #654321 !important;
+    box-shadow: none !important;
 }
 
-.confidence-current {
-    text-align: center;
-    margin-top: 5px;
-    font-size: 0.8rem;
-    font-weight: bold;
-    color: #495057;
-    background: #f8f9fa;
-    padding: 4px 8px;
-    border-radius: 4px;
-    border: 1px solid #dee2e6;
+#see_genes.active,
+#get-genes-table-btn.active {
+    background-color: #cc9966 !important;
+    border-color: #b38652 !important;
+    color: white !important;
+    box-shadow: none !important;
 }
 
-#bgee-confidence-slider {
-    background: linear-gradient(to right, #ffc107 0%, #fd7e14 50%, #28a745 100%);
-    height: 8px;
-    border-radius: 4px;
-    outline: none;
-    -webkit-appearance: none;
+/* Compound/Chemical button - matches chemical nodes (#93d5f6 - light blue) */
+#sidebar_toggle_compounds,
+#toggle_compounds {
+    background-color: #93d5f6 !important;
+    border-color: #7ac0f0 !important;
+    color: #1e3a8a !important;
 }
 
-#bgee-confidence-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #007bff;
-    cursor: pointer;
-    border: 2px solid white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+#sidebar_toggle_compounds:hover,
+#toggle_compounds:hover {
+    background-color: #7ac0f0 !important;
+    border-color: #61abea !important;
+    color: #1e40af !important;
 }
 
-#bgee-confidence-slider::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #007bff;
-    cursor: pointer;
-    border: 2px solid white;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+#sidebar_toggle_compounds.active,
+#toggle_compounds.active {
+    background-color: #61abea !important;
+    border-color: #4896e4 !important;
+    color: white !important;
 }
 
-/* Organ toggle button styling - match other buttons in genes/compounds section */
+/* Organ button - matches organ nodes (#8e7cc3 - purple) */
 #toggle-organs-btn {
-    margin-bottom: 8px;
-    transition: all 0.3s ease;
-    /* Remove custom colors to match btn-info styling */
+    background-color: #8e7cc3 !important;
+    border-color: #7c6bb0 !important;
+    color: white !important;
 }
 
-/* Remove custom organ button styling to use default btn-info class */
 #toggle-organs-btn:hover {
-    /* Let Bootstrap btn-info handle hover state */
+    background-color: #7c6bb0 !important;
+    border-color: #6a5a9d !important;
+    color: white !important;
 }
 
 #toggle-organs-btn.active {
-    /* Let Bootstrap btn-info handle active state */
+    background-color: #6a5a9d !important;
+    border-color: #58498a !important;
+    color: white !important;
 }
 
-/* Button container styling for consistent spacing */
-.querygc-card .btn {
-    margin-bottom: 8px;
+/* Component button - matches component process nodes (#ffffff with border) */
+#sidebar_toggle_components,
+#get-components-table-btn {
+    background-color: #ffffff !important;
+    border-color: #2196f3 !important;
+    color: #2196f3 !important;
 }
 
-/* Form group inline layout for nav controls */
-.form-group-inline {
-    display: flex;
-    align-items: flex-start;
-    gap: 1.5rem;
+#sidebar_toggle_components:hover,
+#get-components-table-btn:hover {
+    background-color: #f5f5f5 !important;
+    border-color: #1976d2 !important;
+    color: #1976d2 !important;
 }
 
-.form-group-inline .control-group {
+#sidebar_toggle_components.active,
+#get-components-table-btn.active {
+    background-color: #2196f3 !important;
+    border-color: #1976d2 !important;
+    color: white !important;
+}
+
+/* Protein/UniProt related buttons - matches protein nodes (#e3f2fd - light blue) */
+.btn-protein,
+button[data-type="protein"] {
+    background-color: #e3f2fd !important;
+    border-color: #1976d2 !important;
+    color: #0d47a1 !important;
+}
+
+.btn-protein:hover,
+button[data-type="protein"]:hover {
+    background-color: #bbdefb !important;
+    border-color: #1565c0 !important;
+    color: #0d47a1 !important;
+}
+
+.btn-protein.active,
+button[data-type="protein"].active {
+    background-color: #1976d2 !important;
+    border-color: #1565c0 !important;
+    color: white !important;
+}
+
+/* MIE related buttons - matches MIE nodes (#ccffcc - light green) */
+.btn-mie,
+button[data-type="mie"] {
+    background-color: #ccffcc !important;
+    border-color: #4caf50 !important;
+    color: #2e7d32 !important;
+}
+
+.btn-mie:hover,
+button[data-type="mie"]:hover {
+    background-color: #a8f0a8 !important;
+    border-color: #43a047 !important;
+    color: #2e7d32 !important;
+}
+
+.btn-mie.active,
+button[data-type="mie"].active {
+    background-color: #4caf50 !important;
+    border-color: #43a047 !important;
+    color: white !important;
+}
+
+/* AO related buttons - matches AO nodes (#ffe6e6 - light red) */
+.btn-ao,
+button[data-type="ao"] {
+    background-color: #ffe6e6 !important;
+    border-color: #f44336 !important;
+    color: #c62828 !important;
+}
+
+.btn-ao:hover,
+button[data-type="ao"]:hover {
+    background-color: #ffcccc !important;
+    border-color: #e53935 !important;
+    color: #c62828 !important;
+}
+
+.btn-ao.active,
+button[data-type="ao"].active {
+    background-color: #f44336 !important;
+    border-color: #e53935 !important;
+    color: white !important;
+}
+
+/* Specific styling for sidebar buttons to align text left, reduce width, and smaller font */
+#see_genes,
+#toggle-organs-btn,
+#sidebar_toggle_compounds,
+#sidebar_toggle_components {
+    text-align: left !important;
+    width: auto !important;
+    max-width: 250px !important;
+    font-size: 0.85em !important;
+    padding: 0.375rem 0.75rem !important;
+}
+
+/* Operation Log Sidebar */
+.operation-log-sidebar {
+    position: fixed;
+    top: 0;
+    right: -400px; /* Hidden by default */
+    width: 400px;
+    height: 100vh;
+    background: #f8f9fa;
+    border-left: 1px solid #dee2e6;
+    transition: right 0.3s ease;
+    z-index: 1050;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
 }
 
-.form-group-inline .control-group label {
-    font-size: 0.8rem;
-    color: #6c757d;
-    margin: 0;
-    font-weight: 500;
+.operation-log-sidebar.open {
+    right: 0;
 }
 
-/* Status checkbox styling - simple native checkboxes */
-.checkbox-group {
+.operation-log-header {
+    padding: 1rem;
+    border-bottom: 1px solid #dee2e6;
     display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    margin-top: 0.25rem;
-}
-
-.checkbox-item {
-    display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 0.4rem;
-    font-size: 0.75rem;
-    color: #495057;
-    cursor: pointer;
-    padding: 0.1rem 0;
-    margin: 0;
+    background: #fff;
 }
 
-.checkbox-item input[type="checkbox"] {
+.operation-log-header h4 {
     margin: 0;
+    font-size: 1.1rem;
+}
+
+.operation-log-close {
+    background: none;
+    border: none;
+    font-size: 1.2rem;
     cursor: pointer;
+    color: #6c757d;
+}
+
+.operation-log-content {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+}
+
+/* Operation Log Mode */
+.operation-log-mode {
+    padding: 1rem;
+}
+
+.operation-log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.operation-item {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    padding: 0.75rem;
+}
+
+.operation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.operation-details pre {
+    background: #f8f9fa;
+    padding: 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.8rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
 }

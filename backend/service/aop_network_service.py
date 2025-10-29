@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 
 from pyaop.aop.builder import AOPNetworkBuilder
+from .aop_suite_logger_manager import logger_manager
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +19,8 @@ class AOPNetworkService:
     def __init__(self):
         self.state_manager = NetworkStateManager()
         self.builder = AOPNetworkBuilder()
+        # Use session-based logger
+        self.logger = logger_manager.get_current_logger()
 
     def add_aop_network_data(self, request_data) -> Tuple[Dict[str, Any], int]:
         """Add AOP network data using the proper data model"""
@@ -35,12 +38,18 @@ class AOPNetworkService:
             logger.debug(f"Status {stype}")
             self.builder.update_from_json(cy_elements)
 
+            # Log the operation
+            self._log_aop_query_operation(query_type, values, status)
+
             # Use the AOP data model via the query service
             network, query = self.builder.query_by_identifier(query_type, values, status)
 
             # Get summary and elements
             summary = network.get_summary()
             elements = network.to_cytoscape_elements()
+
+            # Log the result
+            self._log_operation_result("aop_query", summary)
 
             response_data = {
                 "success": True,
@@ -94,11 +103,18 @@ class AOPNetworkService:
 
             self.builder.update_from_json(cy_elements)
 
+            # Log the operation
+            self._log_component_query_operation(go_only)
+
             logger.info(f"Loading components for KEs: Gene Ontology only={go_only}")
             _, query = self.builder.query_components_for_network(go_only=go_only)
 
             # Get updated network elements - return as list, not wrapped in object
             component_elements = self.builder.network.to_cytoscape_elements()
+
+            # Log the result
+            component_count = len([el for el in component_elements["elements"] if el.get('data', {}).get('type') in ['component_process', 'component_object']])
+            self._log_operation_result("component_query", {"component_count": component_count})
 
             return {
                 "component_elements": component_elements,
@@ -127,11 +143,18 @@ class AOPNetworkService:
 
             self.builder.update_from_json(cy_elements)
 
+            # Log the operation
+            self._log_gene_query_operation(include_proteins)
+
             # Query genes for this network with include_proteins parameter
             _, query = self.builder.query_genes_for_ke(include_proteins)
 
             # Get updated network elements - return as list, not wrapped in object
             gene_elements = self.builder.network.to_cytoscape_elements()
+
+            # Log the result
+            gene_count = len([el for el in gene_elements['elements'] if el.get('data', {}).get('type') in ['gene', 'protein']])
+            self._log_operation_result("gene_query", {"gene_count": gene_count})
 
             return {
                 "gene_elements": gene_elements,
@@ -155,11 +178,18 @@ class AOPNetworkService:
 
             self.builder.update_from_json(cy_elements)
 
+            # Log the operation
+            self._log_compound_query_operation()
+
             # Query compounds for this network
             _, query = self.builder.query_compounds_for_network()
 
             # Get updated network elements - return as list, not wrapped in object
             compound_elements = self.builder.network.to_cytoscape_elements()
+
+            # Log the result
+            compound_count = len([el for el in compound_elements["elements"] if el.get('data', {}).get('type') == 'chemical'])
+            self._log_operation_result("compound_query", {"compound_count": compound_count})
 
             return {"compound_elements": compound_elements,
                     "compound_table": self.builder.network.compound_table(),
@@ -186,11 +216,18 @@ class AOPNetworkService:
 
             self.builder.update_from_json(cy_elements)
 
+            # Log the operation
+            self._log_organ_query_operation()
+
             # Query organs for this network
             _, query = self.builder.query_organs_for_kes()
 
             # Get updated network elements - return as list, not wrapped in object
             organ_elements = self.builder.network.to_cytoscape_elements()
+
+            # Log the result
+            organ_count = len([el for el in organ_elements["elements"] if el.get('data', {}).get('type') == 'organ'])
+            self._log_operation_result("organ_query", {"organ_count": organ_count})
 
             return {
                 "organ_elements": organ_elements,
@@ -219,10 +256,17 @@ class AOPNetworkService:
 
             self.builder.update_from_json(cy_elements)
 
+            # Log the operation
+            self._log_bgee_query_operation(confidence_level)
+
             _, query = self.builder.query_gene_expression(confidence_level)
 
             # Get updated network elements - return as list, not wrapped in object
             expression_elements = self.builder.network.to_cytoscape_elements()
+
+            # Log the result
+            expression_count = len(self.builder.network.gene_expression_table())
+            self._log_operation_result("bgee_query", {"expression_count": expression_count})
 
             return {
                 "expression_elements": expression_elements,
@@ -291,6 +335,125 @@ class AOPNetworkService:
         except Exception as e:
             logger.error(f"Error in populate_aop_table: {e}")
             return {"error": str(e)}, 500
+
+    def get_operation_log(self) -> Dict[str, Any]:
+        """Get the current operation log summary"""
+        if not self.logger:
+            return {"total_operations": 0, "session_id": None, "project_name": None}
+        
+        summary = self.logger.get_operation_summary()
+        summary["project_name"] = logger_manager.get_project_name()
+        return summary
+
+    def generate_python_script(self) -> str:
+        """Generate Python script from logged operations"""
+        if not self.logger:
+            return "# No active session - please start a project first\n"
+        return self.logger.generate_python_script()
+
+    def clear_operation_log(self) -> None:
+        """Clear the operation log"""
+        logger_manager.clear_current_session_log()
+
+    def export_log_json(self) -> str:
+        """Export operation log as JSON"""
+        if not self.logger:
+            return '{"error": "No active session"}'
+        return self.logger.export_log_json()
+
+    def has_active_session(self) -> bool:
+        """Check if there's an active session"""
+        return self.logger is not None
+
+    # Private logging methods
+    def _log_aop_query_operation(self, query_type: str, values: str, status: str):
+        """Log AOP query operation"""
+        # Clean up values for Python code
+        values_list = [v.strip() for v in values.split() if v.strip()]
+        values_repr = repr(' '.join(values_list))
+        
+        python_code = f"""# Query AOP network by {query_type}
+network, query = builder.query_by_identifier('{query_type}', {values_repr}, {repr(status)})"""
+        
+        self.logger.log_operation(
+            operation_type="aop_query",
+            description=f"Query AOP network by {query_type}",
+            python_code=python_code,
+            comment=f"Query AOP-Wiki RDF for {query_type} using values: {values_list}",
+            parameters={
+                "query_type": query_type,
+                "values": values_list,
+                "status": status
+            }
+        )
+
+    def _log_gene_query_operation(self, include_proteins: bool):
+        """Log gene query operation"""
+        python_code = f"""# Query genes for Key Events in the network
+_, query = builder.query_genes_for_ke(include_proteins={include_proteins})"""
+        
+        self.logger.log_operation(
+            operation_type="gene_query",
+            description="Query genes for Key Events",
+            python_code=python_code,
+            comment=f"Query genes associated with KEs, include proteins: {include_proteins}",
+            parameters={"include_proteins": include_proteins}
+        )
+
+    def _log_compound_query_operation(self):
+        """Log compound query operation"""
+        python_code = """# Query compounds for AOPs in the network
+_, query = builder.query_compounds_for_network()"""
+        
+        self.logger.log_operation(
+            operation_type="compound_query",
+            description="Query compounds for AOPs",
+            python_code=python_code,
+            comment="Query chemical compounds associated with AOPs in the network"
+        )
+
+    def _log_component_query_operation(self, go_only: bool):
+        """Log component query operation"""
+        python_code = f"""# Query components for the network
+_, query = builder.query_components_for_network(go_only={go_only})"""
+        
+        self.logger.log_operation(
+            operation_type="component_query",
+            description="Query components for KEs",
+            python_code=python_code,
+            comment=f"Query GO components for Key Events, GO only: {go_only}",
+            parameters={"go_only": go_only}
+        )
+
+    def _log_organ_query_operation(self):
+        """Log organ query operation"""
+        python_code = """# Query organs for Key Events in the network
+_, query = builder.query_organs_for_kes()"""
+        
+        self.logger.log_operation(
+            operation_type="organ_query",
+            description="Query organs for Key Events",
+            python_code=python_code,
+            comment="Query organ/tissue information for Key Events"
+        )
+
+    def _log_bgee_query_operation(self, confidence_level: int):
+        """Log Bgee query operation"""
+        python_code = f"""# Query gene expression data from Bgee
+_, query = builder.query_gene_expression(confidence_level={confidence_level})"""
+        
+        self.logger.log_operation(
+            operation_type="bgee_query",
+            description="Query Bgee gene expression",
+            python_code=python_code,
+            comment=f"Query gene expression data from Bgee with confidence level {confidence_level}",
+            parameters={"confidence_level": confidence_level}
+        )
+
+    def _log_operation_result(self, operation_type: str, result_summary: Dict[str, Any]):
+        """Update the last log entry with result information"""
+        if self.logger.entries and self.logger.entries[-1].operation_type == operation_type:
+            self.logger.entries[-1].result_summary = str(result_summary)
 
 @dataclass
 class ServiceResponse:
